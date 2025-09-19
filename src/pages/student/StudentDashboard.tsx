@@ -395,11 +395,18 @@ export default function StudentDashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold">Minha Área</h1>
-        <p className="text-muted-foreground">
-          Acompanhe suas pré-matrículas e acesse seus documentos
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Minha Área</h1>
+          <p className="text-muted-foreground">
+            Acompanhe suas pré-matrículas e acesse seus documentos
+          </p>
+        </div>
+        <Link to="/student/profile">
+          <Button variant="outline">
+            Editar Perfil
+          </Button>
+        </Link>
       </div>
 
       {enrollments.length === 0 ? (

@@ -104,6 +104,13 @@ serve(async (req) => {
       .eq('id', pre_enrollment_id)
       .single();
 
+    // Get user profile data as fallback
+    const { data: userProfile } = await serviceClient
+      .from('profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+
     if (enrollmentError || !preEnrollment) {
       console.error("Pre-enrollment query failed:", enrollmentError);
       console.error("Pre-enrollment ID:", pre_enrollment_id);
@@ -175,8 +182,13 @@ serve(async (req) => {
       return "00000000000";
     };
 
+    // Helper function to get value with fallback from profile
+    const getValueWithFallback = (preEnrollmentValue: any, profileValue: any, defaultValue: any) => {
+      return preEnrollmentValue || profileValue || defaultValue;
+    };
+
     console.log('Preparing customer data with validation...');
-    console.log('Original data:', {
+    console.log('Pre-enrollment data:', {
       whatsapp: preEnrollment.whatsapp,
       postal_code: preEnrollment.postal_code,
       cpf: preEnrollment.cpf,
@@ -184,6 +196,15 @@ serve(async (req) => {
       state: preEnrollment.state,
       city: preEnrollment.city
     });
+    
+    console.log('Profile data:', userProfile ? {
+      whatsapp: userProfile.whatsapp,
+      postal_code: userProfile.postal_code,
+      cpf: userProfile.cpf,
+      address: userProfile.address,
+      state: userProfile.state,
+      city: userProfile.city
+    } : 'No profile data');
 
     // Create Asaas checkout following official documentation
     const checkoutData = {
@@ -203,15 +224,15 @@ serve(async (req) => {
         value: enrollmentFee
       }],
       customerData: {
-        name: preEnrollment.full_name,
-        cpfCnpj: cleanCPF(preEnrollment.cpf),
-        email: preEnrollment.email,
-        phoneNumber: cleanPhone(preEnrollment.whatsapp),
-        address: preEnrollment.address || "Rua não informada",
-        addressNumber: preEnrollment.address_number || "S/N",
-        postalCode: cleanPostalCode(preEnrollment.postal_code),
-        province: preEnrollment.state || "SP",
-        city: preEnrollment.city || "São Paulo"
+        name: getValueWithFallback(preEnrollment.full_name, userProfile?.full_name, "Nome não informado"),
+        cpfCnpj: cleanCPF(getValueWithFallback(preEnrollment.cpf, userProfile?.cpf, null)),
+        email: getValueWithFallback(preEnrollment.email, userProfile?.email, "email@exemplo.com"),
+        phoneNumber: cleanPhone(getValueWithFallback(preEnrollment.whatsapp, userProfile?.whatsapp, null)),
+        address: getValueWithFallback(preEnrollment.address, userProfile?.address, "Rua não informada"),
+        addressNumber: getValueWithFallback(preEnrollment.address_number, userProfile?.address_number, "S/N"),
+        postalCode: cleanPostalCode(getValueWithFallback(preEnrollment.postal_code, userProfile?.postal_code, null)),
+        province: getValueWithFallback(preEnrollment.state, userProfile?.state, "SP"),
+        city: getValueWithFallback(preEnrollment.city, userProfile?.city, "São Paulo")
       }
     };
 

@@ -20,6 +20,7 @@ import EnrollmentsPage from "./pages/admin/EnrollmentsPage";
 import SystemSettingsPage from "./pages/admin/SystemSettings";
 import PaymentSettingsPage from "./pages/admin/PaymentSettingsPage";
 import StudentDashboard from "./pages/student/StudentDashboard";
+import ProfilePage from "./pages/student/ProfilePage";
 import NotFound from "./pages/NotFound";
 import VerifyCertificate from "./pages/VerifyCertificate";
 import CertificatesPage from "./pages/admin/CertificatesPage";
@@ -98,6 +99,19 @@ const App = () => (
                       <Header />
                       <main className="container mx-auto px-4 py-8">
                         <StudentDashboard />
+                      </main>
+                    </div>
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/student/profile" 
+                element={
+                  <AuthGuard>
+                    <div className="min-h-screen bg-background">
+                      <Header />
+                      <main className="container mx-auto px-4 py-8">
+                        <ProfilePage />
                       </main>
                     </div>
                   </AuthGuard>
