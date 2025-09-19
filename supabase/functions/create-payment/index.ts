@@ -1,0 +1,361 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    console.log('Create payment function called');
+    
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    // Helper function to clean CPF
+    const cleanCPF = (cpf: string | null): string | null => {
+      if (!cpf) return null;
+      return cpf.replace(/[^\d]/g, '');
+    };
+
+    // Helper function to validate phone
+    const getValidPhone = (phone: string | null, whatsapp: string | null): string | null => {
+      if (phone && phone.trim() !== '') return phone;
+      if (whatsapp && whatsapp.trim() !== '') return whatsapp;
+      return null;
+    };
+
+    // Validate request has body
+    const contentLength = req.headers.get('content-length');
+    if (!contentLength || contentLength === '0') {
+      throw new Error('Request body is empty');
+    }
+
+    let requestBody;
+    try {
+      const bodyText = await req.text();
+      console.log('Request body text:', bodyText);
+      
+      if (!bodyText || bodyText.trim() === '') {
+        throw new Error('Request body is empty or invalid');
+      }
+      
+      requestBody = JSON.parse(bodyText);
+      console.log('Parsed request body:', requestBody);
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      throw new Error(`Invalid JSON in request body: ${parseError.message}`);
+    }
+
+    const { pre_enrollment_id, amount, kind = 'pre_enrollment', enrollment_id } = requestBody;
+
+    // Validate required fields
+    if (!pre_enrollment_id) {
+      throw new Error('Campo obrigatório: pre_enrollment_id');
+    }
+    
+    console.log('Creating payment', { pre_enrollment_id, amount, kind, enrollment_id });
+
+    // Get payment settings
+    const { data: paymentSettings, error: settingsError } = await supabaseClient
+      .from('payment_settings')
+      .select('*')
+      .maybeSingle();
+
+    if (settingsError) {
+      console.error('Error fetching payment settings:', settingsError);
+      throw new Error('Erro ao buscar configurações de pagamento');
+    }
+
+    if (!paymentSettings) {
+      throw new Error('Configurações de pagamento não encontradas. Configure no painel administrativo.');
+    }
+
+    if (!paymentSettings.asaas_api_key) {
+      throw new Error('Chave API do Asaas não configurada. Configure no painel administrativo.');
+    }
+
+    if (!paymentSettings.enabled) {
+      throw new Error('Sistema de pagamentos está desabilitado.');
+    }
+
+    console.log('Payment settings loaded:', { enabled: paymentSettings.enabled });
+
+    // Get pre-enrollment data
+    const { data: preEnrollment, error: enrollmentError } = await supabaseClient
+      .from('pre_enrollments')
+      .select(`
+        *,
+        courses (
+          name,
+          price,
+          pre_enrollment_fee,
+          enrollment_fee
+        )
+      `)
+      .eq('id', pre_enrollment_id)
+      .single();
+
+    if (enrollmentError) {
+      console.error('Error fetching pre-enrollment:', enrollmentError);
+      throw new Error('Pré-matrícula não encontrada');
+    }
+
+    if (!preEnrollment) {
+      throw new Error('Dados da pré-matrícula não encontrados');
+    }
+
+    // Validate pre-enrollment data
+    if (!preEnrollment.full_name || !preEnrollment.email) {
+      throw new Error('Dados obrigatórios da pré-matrícula estão faltando (nome ou email)');
+    }
+
+    console.log('Pre-enrollment data:', preEnrollment);
+
+    // Determine the correct amount based on payment kind and course fees
+    let finalAmount = amount; // fallback to provided amount
+    
+    if (kind === 'pre_enrollment' && preEnrollment.courses?.pre_enrollment_fee) {
+      finalAmount = Number(preEnrollment.courses.pre_enrollment_fee);
+    } else if (kind === 'enrollment' && preEnrollment.courses?.enrollment_fee) {
+      finalAmount = Number(preEnrollment.courses.enrollment_fee);
+    }
+
+    // Validate final amount
+    if (!finalAmount || finalAmount <= 0) {
+      const paymentType = kind === 'pre_enrollment' ? 'pré-matrícula' : 'matrícula';
+      throw new Error(`Valor inválido para ${paymentType}. Configure o valor no curso.`);
+    }
+
+    // Minimum amount validation (Asaas requires at least R$ 5.00)
+    if (finalAmount < 5) {
+      throw new Error("Valor mínimo para pagamento é R$ 5,00");
+    }
+
+    console.log('Final amount determined:', { kind, finalAmount, courseFees: preEnrollment.courses });
+
+    // Prepare customer data with validation and cleaning
+    const cleanedCPF = cleanCPF(preEnrollment.cpf);
+    const validPhone = getValidPhone(preEnrollment.phone, preEnrollment.whatsapp);
+
+    if (!cleanedCPF) {
+      throw new Error('CPF é obrigatório para criar o pagamento');
+    }
+
+    if (cleanedCPF.length !== 11) {
+      throw new Error('CPF deve ter 11 dígitos');
+    }
+
+    const customerData = {
+      name: preEnrollment.full_name.trim(),
+      email: preEnrollment.email.trim(),
+      cpfCnpj: cleanedCPF,
+      ...(validPhone && { phone: validPhone })
+    };
+
+    console.log('Creating customer with data:', customerData);
+
+    console.log('Making request to Asaas API - Create Customer');
+    const customerResponse = await fetch('https://api.asaas.com/v3/customers', {
+      method: 'POST',
+      headers: {
+        'access_token': paymentSettings.asaas_api_key,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(customerData),
+    });
+
+    console.log('Customer response status:', customerResponse.status);
+    console.log('Customer response headers:', Object.fromEntries(customerResponse.headers.entries()));
+    
+    let customer;
+    try {
+      const customerResponseText = await customerResponse.text();
+      console.log('Customer response body text:', customerResponseText);
+      
+      if (!customerResponseText || customerResponseText.trim() === '') {
+        throw new Error('Empty response from Asaas customer API');
+      }
+      
+      customer = JSON.parse(customerResponseText);
+      console.log('Parsed customer response:', customer);
+    } catch (parseError) {
+      console.error('Error parsing customer response:', parseError);
+      throw new Error(`Failed to parse customer API response: ${parseError.message}`);
+    }
+    
+    if (!customerResponse.ok) {
+      console.error('Asaas customer creation error:', {
+        status: customerResponse.status,
+        statusText: customerResponse.statusText,
+        response: customer
+      });
+      const errorMessage = customer.errors?.[0]?.description || 
+        customer.message || 
+        `Customer creation failed (${customerResponse.status})`;
+      throw new Error(errorMessage);
+    }
+
+    console.log('Customer created:', customer.id);
+
+    // Create payment in Asaas
+    const paymentData = {
+      customer: customer.id,
+      billingType: 'PIX',
+      value: parseFloat(finalAmount.toString()),
+      dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Tomorrow
+      description: paymentSettings.payment_description || `Pagamento - ${preEnrollment.courses?.name || 'Curso'}`,
+      postalService: false
+    };
+
+    console.log('Creating payment with data:', paymentData);
+
+    console.log('Making request to Asaas API - Create Payment');
+    const paymentResponse = await fetch('https://api.asaas.com/v3/payments', {
+      method: 'POST',
+      headers: {
+        'access_token': paymentSettings.asaas_api_key,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(paymentData),
+    });
+
+    console.log('Payment response status:', paymentResponse.status);
+    console.log('Payment response headers:', Object.fromEntries(paymentResponse.headers.entries()));
+    
+    let payment;
+    try {
+      const paymentResponseText = await paymentResponse.text();
+      console.log('Payment response body text:', paymentResponseText);
+      
+      if (!paymentResponseText || paymentResponseText.trim() === '') {
+        throw new Error('Empty response from Asaas payment API');
+      }
+      
+      payment = JSON.parse(paymentResponseText);
+      console.log('Parsed payment response:', payment);
+    } catch (parseError) {
+      console.error('Error parsing payment response:', parseError);
+      throw new Error(`Failed to parse payment API response: ${parseError.message}`);
+    }
+    
+    if (!paymentResponse.ok) {
+      console.error('Asaas payment creation error:', {
+        status: paymentResponse.status,
+        statusText: paymentResponse.statusText,
+        response: payment
+      });
+      const errorMessage = payment.errors?.[0]?.description || 
+        payment.message || 
+        `Payment creation failed (${paymentResponse.status})`;
+      throw new Error(errorMessage);
+    }
+
+    console.log('Payment created:', payment.id);
+
+    // Get PIX QR Code
+    console.log('Making request to Asaas API - Get PIX QR Code for payment:', payment.id);
+    
+    const qrCodeResponse = await fetch(`https://api.asaas.com/v3/payments/${payment.id}/pixQrCode`, {
+      headers: {
+        'access_token': paymentSettings.asaas_api_key,
+      },
+    });
+
+    console.log('QR Code response status:', qrCodeResponse.status);
+    console.log('QR Code response headers:', Object.fromEntries(qrCodeResponse.headers.entries()));
+    
+    let qrCodeData;
+    try {
+      const qrCodeResponseText = await qrCodeResponse.text();
+      console.log('QR Code response body text:', qrCodeResponseText);
+      
+      if (!qrCodeResponseText || qrCodeResponseText.trim() === '') {
+        throw new Error('Empty response from Asaas QR code API');
+      }
+      
+      qrCodeData = JSON.parse(qrCodeResponseText);
+      console.log('Parsed QR Code response:', qrCodeData);
+    } catch (parseError) {
+      console.error('Error parsing QR Code response:', parseError);
+      throw new Error(`Failed to parse QR code API response: ${parseError.message}`);
+    }
+    
+    if (!qrCodeResponse.ok) {
+      console.error('Asaas QR code error:', {
+        status: qrCodeResponse.status,
+        statusText: qrCodeResponse.statusText,
+        response: qrCodeData
+      });
+      const errorMessage = qrCodeData.errors?.[0]?.description || 
+        qrCodeData.message || 
+        `Failed to generate QR code (${qrCodeResponse.status})`;
+      throw new Error(errorMessage);
+    }
+
+    console.log('QR Code generated for payment:', payment.id);
+
+    // Save payment to database
+    const { data: dbPayment, error: dbError } = await supabaseClient
+      .from('payments')
+      .insert({
+        pre_enrollment_id,
+        enrollment_id: enrollment_id || null,
+        kind,
+        asaas_payment_id: payment.id,
+        amount: finalAmount,
+        status: 'pending',
+        pix_qr_code: qrCodeData.encodedImage,
+        pix_payload: qrCodeData.payload,
+        pix_expiration_date: qrCodeData.expirationDate,
+      })
+      .select()
+      .single();
+
+    if (dbError) {
+      console.error('Database error:', dbError);
+      throw new Error('Failed to save payment');
+    }
+
+    // Update pre-enrollment status
+    const { error: updateError } = await supabaseClient
+      .from('pre_enrollments')
+      .update({ status: 'pending_payment' })
+      .eq('id', pre_enrollment_id);
+
+    if (updateError) {
+      console.error('Error updating pre-enrollment status:', updateError);
+      // Don't throw here as payment was created successfully
+    }
+
+    console.log('Payment created successfully:', dbPayment.id);
+
+    return new Response(JSON.stringify(dbPayment), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
+  } catch (error) {
+    console.error('Error in create-payment function:', error);
+    
+    // Ensure we always return valid JSON
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    const errorResponse = { 
+      error: errorMessage,
+      details: error instanceof Error ? error.stack : 'Unknown error'
+    };
+    
+    console.log('Returning error response:', errorResponse);
+    
+    return new Response(JSON.stringify(errorResponse), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});

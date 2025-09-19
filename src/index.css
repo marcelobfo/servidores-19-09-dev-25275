@@ -1,0 +1,250 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 224 71.4% 4.1%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 224 71.4% 4.1%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71.4% 4.1%;
+
+    --primary: 262.1 83.3% 57.8%;
+    --primary-foreground: 210 20% 98%;
+
+    --secondary: 220 14.3% 95.9%;
+    --secondary-foreground: 220.9 39.3% 11%;
+
+    --muted: 220 14.3% 95.9%;
+    --muted-foreground: 220 8.9% 46.1%;
+
+    --accent: 220 14.3% 95.9%;
+    --accent-foreground: 220.9 39.3% 11%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 20% 98%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 262.1 83.3% 57.8%;
+
+    --radius: 0.75rem;
+    
+    /* Modern gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(262.1 83.3% 57.8%), hsl(252.1 83.3% 67.8%));
+    --gradient-secondary: linear-gradient(135deg, hsl(220 14.3% 95.9%), hsl(220 14.3% 90%));
+    --gradient-hero: linear-gradient(135deg, hsl(262.1 83.3% 57.8%) 0%, hsl(252.1 83.3% 67.8%) 50%, hsl(242.1 83.3% 77.8%) 100%);
+    
+    /* Shadows with primary color tint */
+    --shadow-lg: 0 10px 25px -3px hsl(262.1 83.3% 57.8% / 0.1), 0 4px 6px -2px hsl(262.1 83.3% 57.8% / 0.05);
+    --shadow-xl: 0 20px 25px -5px hsl(262.1 83.3% 57.8% / 0.1), 0 10px 10px -5px hsl(262.1 83.3% 57.8% / 0.04);
+    --shadow-glow: 0 0 40px hsl(262.1 83.3% 57.8% / 0.15);
+    
+    /* Smooth transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-spring: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 224 71.4% 4.1%;
+    --foreground: 210 20% 98%;
+
+    --card: 224 71.4% 4.1%;
+    --card-foreground: 210 20% 98%;
+
+    --popover: 224 71.4% 4.1%;
+    --popover-foreground: 210 20% 98%;
+
+    --primary: 263.4 70% 50.4%;
+    --primary-foreground: 210 20% 98%;
+
+    --secondary: 215 27.9% 16.9%;
+    --secondary-foreground: 210 20% 98%;
+
+    --muted: 215 27.9% 16.9%;
+    --muted-foreground: 217.9 10.6% 64.9%;
+
+    --accent: 215 27.9% 16.9%;
+    --accent-foreground: 210 20% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 20% 98%;
+
+    --border: 215 27.9% 16.9%;
+    --input: 215 27.9% 16.9%;
+    --ring: 263.4 70% 50.4%;
+    
+    /* Dark mode gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(263.4 70% 50.4%), hsl(253.4 70% 60.4%));
+    --gradient-secondary: linear-gradient(135deg, hsl(215 27.9% 16.9%), hsl(215 27.9% 20%));
+    --gradient-hero: linear-gradient(135deg, hsl(263.4 70% 50.4%) 0%, hsl(253.4 70% 60.4%) 50%, hsl(243.4 70% 70.4%) 100%);
+    
+    /* Dark shadows */
+    --shadow-lg: 0 10px 25px -3px hsl(0 0% 0% / 0.25), 0 4px 6px -2px hsl(0 0% 0% / 0.1);
+    --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.25), 0 10px 10px -5px hsl(0 0% 0% / 0.1);
+    --shadow-glow: 0 0 40px hsl(263.4 70% 50.4% / 0.2);
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* React Quill editor styles */
+.ql-toolbar {
+  color: hsl(var(--foreground)) !important;
+  border-color: hsl(var(--border)) !important;
+  background: hsl(var(--background)) !important;
+}
+
+.ql-container {
+  border-color: hsl(var(--border)) !important;
+  background: hsl(var(--background)) !important;
+}
+
+.ql-editor {
+  color: hsl(var(--foreground)) !important;
+  background: hsl(var(--background)) !important;
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 120px;
+}
+
+.ql-toolbar .ql-stroke {
+  stroke: hsl(var(--foreground)) !important;
+}
+
+.ql-toolbar .ql-fill {
+  fill: hsl(var(--foreground)) !important;
+}
+
+.ql-toolbar .ql-picker-label {
+  color: hsl(var(--foreground)) !important;
+}
+
+.ql-editor.ql-blank::before {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/* Better responsive behavior for quill editor */
+.ql-toolbar {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .ql-toolbar .ql-formats {
+    margin-right: 8px;
+    margin-bottom: 4px;
+  }
+}
+
+/* Prose styles for rendered HTML content */
+.prose {
+  @apply text-foreground;
+}
+
+.prose h1,
+.prose h2, 
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  @apply text-foreground font-semibold mb-4 leading-tight;
+}
+
+.prose h1 { @apply text-2xl; }
+.prose h2 { @apply text-xl; }
+.prose h3 { @apply text-lg; }
+.prose h4 { @apply text-base; }
+
+.prose p {
+  @apply text-foreground leading-relaxed mb-4;
+}
+
+.prose ul,
+.prose ol {
+  @apply text-foreground mb-4 pl-6;
+}
+
+.prose li {
+  @apply text-foreground mb-2;
+}
+
+.prose strong {
+  @apply font-semibold text-foreground;
+}
+
+.prose em {
+  @apply italic text-foreground;
+}
+
+.prose blockquote {
+  @apply border-l-4 border-primary pl-4 italic text-muted-foreground mb-4;
+}
+
+.prose code {
+  @apply bg-muted px-2 py-1 rounded text-sm font-mono text-foreground;
+}
+
+.prose pre {
+  @apply bg-muted p-4 rounded overflow-x-auto mb-4;
+}
+
+.prose a {
+  @apply text-primary hover:underline;
+}
+
+.prose img {
+  @apply rounded-lg max-w-full h-auto mb-4;
+}
+
+.prose table {
+  @apply border-collapse border border-border mb-4 w-full;
+}
+
+.prose th,
+.prose td {
+  @apply border border-border px-4 py-2 text-left;
+}
+
+.prose th {
+  @apply bg-muted font-semibold;
+}

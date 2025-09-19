@@ -1,0 +1,206 @@
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ThemeProvider } from "next-themes";
+import { AuthProvider } from "@/hooks/useAuth";
+import { AuthGuard } from "@/components/auth/AuthGuard";
+import { Header } from "@/components/layout/Header";
+import { AdminLayout } from "@/components/layout/AdminLayout";
+import Index from "./pages/Index";
+import Auth from "./pages/Auth";
+import CoursesPage from "./pages/CoursesPage";
+import CourseDetailPage from "./pages/CourseDetailPage";
+import PreEnrollmentPage from "./pages/PreEnrollmentPage";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import CoursesPageAdmin from "./pages/admin/CoursesPage";
+import AreasPage from "./pages/admin/AreasPage";
+import EnrollmentsPage from "./pages/admin/EnrollmentsPage";
+import SystemSettingsPage from "./pages/admin/SystemSettings";
+import PaymentSettingsPage from "./pages/admin/PaymentSettingsPage";
+import StudentDashboard from "./pages/student/StudentDashboard";
+import NotFound from "./pages/NotFound";
+import VerifyCertificate from "./pages/VerifyCertificate";
+import CertificatesPage from "./pages/admin/CertificatesPage";
+import EnrollmentsManagementPage from "./pages/admin/EnrollmentsManagementPage";
+
+const queryClient = new QueryClient();
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              {/* Public routes with header */}
+              <Route path="/" element={
+                <div className="min-h-screen bg-background">
+                  <Header />
+                  <main className="container mx-auto px-4 py-8">
+                    <Index />
+                  </main>
+                </div>
+              } />
+              <Route path="/auth" element={
+                <div className="min-h-screen bg-background">
+                  <Header />
+                  <main className="container mx-auto px-4 py-8">
+                    <Auth />
+                  </main>
+                </div>
+              } />
+              <Route path="/courses" element={
+                <div className="min-h-screen bg-background">
+                  <Header />
+                  <main className="container mx-auto px-4 py-8">
+                    <CoursesPage />
+                  </main>
+                </div>
+              } />
+              <Route path="/course/:slug" element={
+                <div className="min-h-screen bg-background">
+                  <Header />
+                  <main className="container mx-auto px-4 py-8">
+                    <CourseDetailPage />
+                  </main>
+                </div>
+              } />
+              <Route path="/verify-certificate/:code?" element={
+                <div className="min-h-screen bg-background">
+                  <Header />
+                  <main className="container mx-auto px-4 py-8">
+                    <VerifyCertificate />
+                  </main>
+                </div>
+              } />
+              <Route 
+                path="/pre-enrollment" 
+                element={
+                  <AuthGuard>
+                    <div className="min-h-screen bg-background">
+                      <Header />
+                      <main className="container mx-auto px-4 py-8">
+                        <PreEnrollmentPage />
+                      </main>
+                    </div>
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/student" 
+                element={
+                  <AuthGuard>
+                    <div className="min-h-screen bg-background">
+                      <Header />
+                      <main className="container mx-auto px-4 py-8">
+                        <StudentDashboard />
+                      </main>
+                    </div>
+                  </AuthGuard>
+                } 
+              />
+
+              {/* Admin routes with sidebar */}
+              <Route 
+                path="/admin" 
+                element={
+                  <AuthGuard adminOnly>
+                    <AdminLayout>
+                      <AdminDashboard />
+                    </AdminLayout>
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/admin/courses" 
+                element={
+                  <AuthGuard adminOnly>
+                    <AdminLayout>
+                      <CoursesPageAdmin />
+                    </AdminLayout>
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/admin/areas" 
+                element={
+                  <AuthGuard adminOnly>
+                    <AdminLayout>
+                      <AreasPage />
+                    </AdminLayout>
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/admin/enrollments" 
+                element={
+                  <AuthGuard adminOnly>
+                    <AdminLayout>
+                      <EnrollmentsPage />
+                    </AdminLayout>
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/admin/certificates" 
+                element={
+                  <AuthGuard adminOnly>
+                    <AdminLayout>
+                      <CertificatesPage />
+                    </AdminLayout>
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/admin/settings" 
+                element={
+                  <AuthGuard adminOnly>
+                    <AdminLayout>
+                      <SystemSettingsPage />
+                    </AdminLayout>
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/admin/payment-settings" 
+                element={
+                  <AuthGuard adminOnly>
+                    <AdminLayout>
+                      <PaymentSettingsPage />
+                    </AdminLayout>
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/admin/matriculas" 
+                element={
+                  <AuthGuard adminOnly>
+                    <AdminLayout>
+                      <EnrollmentsManagementPage />
+                    </AdminLayout>
+                  </AuthGuard>
+                } 
+              />
+
+              {/* 404 route */}
+              <Route path="*" element={
+                <div className="min-h-screen bg-background">
+                  <Header />
+                  <main className="container mx-auto px-4 py-8">
+                    <NotFound />
+                  </main>
+                </div>
+              } />
+            </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
+  </ThemeProvider>
+  </QueryClientProvider>
+);
+
+export default App;
