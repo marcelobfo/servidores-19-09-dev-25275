@@ -17,6 +17,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 import { ExtendedProfile } from "@/types/profile";
+import { DateOfBirthPicker } from "@/components/ui/date-of-birth-picker";
 
 // CPF validation function
 const validateCPF = (cpf: string): boolean => {
@@ -335,40 +336,15 @@ export default function ProfilePage() {
                   control={form.control}
                   name="birth_date"
                   render={({ field }) => (
-                    <FormItem className="flex flex-col">
+                    <FormItem>
                       <FormLabel>Data de Nascimento</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "pl-3 text-left font-normal",
-                                !field.value && "text-muted-foreground"
-                              )}
-                            >
-                              {field.value ? (
-                                format(field.value, "PPP")
-                              ) : (
-                                <span>Selecione uma data</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) =>
-                              date > new Date() || date < new Date("1900-01-01")
-                            }
-                            initialFocus
-                            className={cn("p-3 pointer-events-auto")}
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      <FormControl>
+                        <DateOfBirthPicker
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder="Selecione sua data de nascimento"
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
