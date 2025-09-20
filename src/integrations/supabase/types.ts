@@ -490,31 +490,58 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address: string | null
+          address_number: string | null
+          birth_date: string | null
+          city: string | null
+          complement: string | null
+          cpf: string | null
           created_at: string
           email: string | null
           full_name: string | null
           id: string
+          phone: string | null
+          postal_code: string | null
           role: Database["public"]["Enums"]["user_role"]
+          state: string | null
           updated_at: string
           user_id: string
           whatsapp: string | null
         }
         Insert: {
+          address?: string | null
+          address_number?: string | null
+          birth_date?: string | null
+          city?: string | null
+          complement?: string | null
+          cpf?: string | null
           created_at?: string
           email?: string | null
           full_name?: string | null
           id?: string
+          phone?: string | null
+          postal_code?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          state?: string | null
           updated_at?: string
           user_id: string
           whatsapp?: string | null
         }
         Update: {
+          address?: string | null
+          address_number?: string | null
+          birth_date?: string | null
+          city?: string | null
+          complement?: string | null
+          cpf?: string | null
           created_at?: string
           email?: string | null
           full_name?: string | null
           id?: string
+          phone?: string | null
+          postal_code?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          state?: string | null
           updated_at?: string
           user_id?: string
           whatsapp?: string | null
