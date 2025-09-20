@@ -204,6 +204,8 @@ export default function ProfilePage() {
           ...data,
           birth_date: data.birth_date ? data.birth_date.toISOString().split('T')[0] : null,
           updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id'
         });
 
       if (error) throw error;
