@@ -264,6 +264,7 @@ serve(async (req) => {
     }
 
     const checkoutResult = await asaasResponse.json();
+    console.log('Asaas checkout response:', checkoutResult);
 
     // Store checkout info in payments table
     const { error: paymentError } = await serviceClient
@@ -281,8 +282,20 @@ serve(async (req) => {
       console.error("Error storing payment:", paymentError);
     }
 
+    // Construct checkout URL if not provided directly
+    const checkoutUrl = checkoutResult.url || 
+      `https://${environment === 'production' ? 'asaas.com' : 'sandbox.asaas.com'}/checkoutSession/show?id=${checkoutResult.id}`;
+
+    if (!checkoutResult.id) {
+      console.error("Asaas did not return checkout ID:", checkoutResult);
+      return new Response(JSON.stringify({ error: "Failed to create checkout - no ID returned" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     return new Response(JSON.stringify({
-      checkout_url: checkoutResult.url,
+      checkout_url: checkoutUrl,
       checkout_id: checkoutResult.id
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
