@@ -251,6 +251,31 @@ export const generateStudyPlan = async (
   return pdf.output('blob');
 };
 
+export const generateDocument = async (
+  content: string,
+  filename: string
+): Promise<void> => {
+  const pdf = new jsPDF();
+  
+  // Simple text document generation
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'normal');
+  
+  const lines = pdf.splitTextToSize(content, 170);
+  let yPosition = 20;
+  
+  lines.forEach((line: string) => {
+    if (yPosition > 280) {
+      pdf.addPage();
+      yPosition = 20;
+    }
+    pdf.text(line, 20, yPosition);
+    yPosition += 6;
+  });
+  
+  pdf.save(filename);
+};
+
 export const generateEnrollmentDeclaration = async (
   enrollment: PreEnrollment,
   settings: SystemSettings

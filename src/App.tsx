@@ -16,11 +16,16 @@ import PreEnrollmentPage from "./pages/PreEnrollmentPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import CoursesPageAdmin from "./pages/admin/CoursesPage";
 import AreasPage from "./pages/admin/AreasPage";
-import EnrollmentsPage from "./pages/admin/EnrollmentsPage";
+import AdminEnrollmentsPage from "./pages/admin/EnrollmentsPage";
 import SystemSettingsPage from "./pages/admin/SystemSettings";
 import PaymentSettingsPage from "./pages/admin/PaymentSettingsPage";
 import StudentDashboard from "./pages/student/StudentDashboard";
 import ProfilePage from "./pages/student/ProfilePage";
+import { PreEnrollmentsPage } from "./pages/student/PreEnrollmentsPage";
+import { EnrollmentsPage as StudentEnrollmentsPage } from "./pages/student/EnrollmentsPage";
+import { CertificatesPage as StudentCertificatesPage } from "./pages/student/CertificatesPage";
+import { DocumentsPage } from "./pages/student/DocumentsPage";
+import { StudentLayout } from "./components/layout/StudentLayout";
 import NotFound from "./pages/NotFound";
 import VerifyCertificate from "./pages/VerifyCertificate";
 import CertificatesPage from "./pages/admin/CertificatesPage";
@@ -92,28 +97,19 @@ const App = () => (
                 } 
               />
               <Route 
-                path="/student" 
+                path="/student/*" 
                 element={
                   <AuthGuard>
-                    <div className="min-h-screen bg-background">
-                      <Header />
-                      <main className="container mx-auto px-4 py-8">
-                        <StudentDashboard />
-                      </main>
-                    </div>
-                  </AuthGuard>
-                } 
-              />
-              <Route 
-                path="/student/profile" 
-                element={
-                  <AuthGuard>
-                    <div className="min-h-screen bg-background">
-                      <Header />
-                      <main className="container mx-auto px-4 py-8">
-                        <ProfilePage />
-                      </main>
-                    </div>
+                    <StudentLayout>
+                      <Routes>
+                        <Route index element={<StudentDashboard />} />
+                        <Route path="pre-enrollments" element={<PreEnrollmentsPage />} />
+                        <Route path="enrollments" element={<StudentEnrollmentsPage />} />
+                        <Route path="certificates" element={<StudentCertificatesPage />} />
+                        <Route path="documents" element={<DocumentsPage />} />
+                        <Route path="profile" element={<ProfilePage />} />
+                      </Routes>
+                    </StudentLayout>
                   </AuthGuard>
                 } 
               />
@@ -154,7 +150,7 @@ const App = () => (
                 element={
                   <AuthGuard adminOnly>
                     <AdminLayout>
-                      <EnrollmentsPage />
+                      <AdminEnrollmentsPage />
                     </AdminLayout>
                   </AuthGuard>
                 } 

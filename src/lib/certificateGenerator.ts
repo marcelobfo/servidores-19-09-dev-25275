@@ -82,6 +82,35 @@ const numberToWords = (num: number): string => {
 };
 
 export const generateCertificate = async (
+  certificateData: Pick<CertificateData, 'studentName' | 'courseName' | 'completionDate' | 'certificateCode'>,
+  settings?: SystemSettings
+): Promise<void> => {
+  // Simple certificate generation without full data
+  const pdf = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+
+  // Certificate content
+  pdf.setFontSize(24);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('CERTIFICADO', pageWidth / 2, 50, { align: 'center' });
+
+  pdf.setFontSize(16);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(`Certificamos que ${certificateData.studentName}`, pageWidth / 2, 80, { align: 'center' });
+  pdf.text(`concluiu o curso ${certificateData.courseName}`, pageWidth / 2, 100, { align: 'center' });
+  pdf.text(`em ${certificateData.completionDate.toLocaleDateString('pt-BR')}`, pageWidth / 2, 120, { align: 'center' });
+  pdf.text(`Código: ${certificateData.certificateCode}`, pageWidth / 2, 140, { align: 'center' });
+
+  pdf.save(`certificado-${certificateData.certificateCode}.pdf`);
+};
+
+export const generateCertificateWithFullData = async (
   certificateData: CertificateData,
   settings: SystemSettings
 ): Promise<Blob> => {

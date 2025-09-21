@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { generateCertificate } from './certificateGenerator';
+import { generateCertificateWithFullData } from './certificateGenerator';
 
 interface CreateCertificateData {
   enrollmentId: string;
@@ -60,7 +60,7 @@ export const createCertificate = async (data: CreateCertificateData) => {
   }
 
   // Generate PDF
-  const pdfBlob = await generateCertificate({
+  const pdfBlob = await generateCertificateWithFullData({
     id: certificate.id,
     studentName: data.studentName,
     courseName: data.courseName,
