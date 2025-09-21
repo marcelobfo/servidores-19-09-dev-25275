@@ -227,7 +227,7 @@ serve(async (req) => {
         name: getValueWithFallback(preEnrollment.full_name, userProfile?.full_name, "Nome não informado"),
         cpfCnpj: cleanCPF(getValueWithFallback(preEnrollment.cpf, userProfile?.cpf, null)),
         email: getValueWithFallback(preEnrollment.email, userProfile?.email, "email@exemplo.com"),
-        phoneNumber: cleanPhone(getValueWithFallback(preEnrollment.whatsapp, userProfile?.whatsapp, null)),
+        phone: cleanPhone(getValueWithFallback(preEnrollment.whatsapp, userProfile?.whatsapp, null)),
         address: getValueWithFallback(preEnrollment.address, userProfile?.address, "Rua não informada"),
         addressNumber: getValueWithFallback(preEnrollment.address_number, userProfile?.address_number, "S/N"),
         postalCode: cleanPostalCode(getValueWithFallback(preEnrollment.postal_code, userProfile?.postal_code, null)),
