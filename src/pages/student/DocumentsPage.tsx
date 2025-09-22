@@ -49,6 +49,7 @@ export function DocumentsPage() {
   const [declarations, setDeclarations] = useState<EnrollmentDeclaration[]>([]);
   const [studyPlans, setStudyPlans] = useState<StudyPlan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("generated_at_desc");
 
@@ -119,6 +120,44 @@ export function DocumentsPage() {
       toast.error("Erro ao carregar documentos");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateDocuments = async () => {
+    try {
+      setGenerating(true);
+      
+      // Get approved pre-enrollments without documents
+      const { data: approvedPreEnrollments, error: enrollmentsError } = await supabase
+        .from('pre_enrollments')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('status', 'approved');
+
+      if (enrollmentsError) {
+        throw enrollmentsError;
+      }
+
+      if (!approvedPreEnrollments?.length) {
+        toast.error("Nenhuma matrícula aprovada encontrada");
+        return;
+      }
+
+      // Generate documents for each approved pre-enrollment
+      for (const enrollment of approvedPreEnrollments) {
+        await supabase.functions.invoke('generate-enrollment-documents', {
+          body: { preEnrollmentId: enrollment.id }
+        });
+      }
+
+      toast.success("Documentos gerados com sucesso!");
+      await fetchDocuments(); // Refresh the documents list
+      
+    } catch (error) {
+      console.error('Error generating documents:', error);
+      toast.error("Erro ao gerar documentos");
+    } finally {
+      setGenerating(false);
     }
   };
 

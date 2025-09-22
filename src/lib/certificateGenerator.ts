@@ -338,11 +338,24 @@ try {
   pdf.line(courseLineStart, 50, courseLineEnd, 50);
 
   // Modules content with improved formatting
-  pdf.setFontSize(12);
+  pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(0, 0, 0);
   
-  const modules = certificateData.courseModules.split('\n');
+  // Parse modules from JSON string and format properly
+  let modules: any[] = [];
+  try {
+    const parsedModules = JSON.parse(certificateData.courseModules);
+    modules = Array.isArray(parsedModules) ? parsedModules : [];
+  } catch (e) {
+    console.warn('Could not parse modules JSON:', e);
+    // Fallback: treat as plain text
+    modules = certificateData.courseModules.split('\n').map((text, index) => ({
+      id: index + 1,
+      title: text.trim(),
+      description: ''
+    }));
+  }
   let yPosition = 65;
   
   // Preload back background once for subsequent pages
@@ -356,7 +369,10 @@ try {
   }
   
   modules.forEach((module, index) => {
-    if (module.trim()) {
+    const moduleTitle = typeof module === 'string' ? module.trim() : module.title || `Módulo ${index + 1}`;
+    const moduleDescription = typeof module === 'object' ? module.description || '' : '';
+    
+    if (moduleTitle) {
       if (yPosition > pageHeight - 40) {
         pdf.addPage();
         if (backBg) {
