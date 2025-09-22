@@ -105,18 +105,14 @@ export function EnrollmentsPage() {
 
   const handleEnrollmentCheckout = async (enrollment: Enrollment) => {
     try {
-      const response = await fetch("/api/create-enrollment-checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
+        body: {
           enrollment_id: enrollment.id,
           amount: enrollment.courses.enrollment_fee || 0,
-        }),
+        }
       });
 
-      const data = await response.json();
+      if (error) throw error;
       
       if (data.checkout_url) {
         window.open(data.checkout_url, "_blank");

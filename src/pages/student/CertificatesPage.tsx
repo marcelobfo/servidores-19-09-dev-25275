@@ -70,12 +70,48 @@ export function CertificatesPage() {
 
   const handleDownloadCertificate = async (certificate: Certificate) => {
     try {
-      await generateCertificate({
+      // Get system settings for proper certificate generation
+      const { data: settings } = await supabase
+        .from('system_settings')
+        .select('*')
+        .single();
+
+      if (!settings) {
+        throw new Error('System settings not found');
+      }
+
+      // Use the proper certificate generation with full data
+      const { generateCertificateWithFullData } = await import('@/lib/certificateGenerator');
+      
+      // Get course details
+      const { data: courseData } = await supabase
+        .from('courses')
+        .select('modules, duration_hours')
+        .in('name', [certificate.course_name])
+        .single();
+
+      const pdfBlob = await generateCertificateWithFullData({
+        id: certificate.id,
         studentName: certificate.student_name,
         courseName: certificate.course_name,
+        courseModules: courseData?.modules || 'Módulos do curso conforme programa.',
+        issueDate: new Date(certificate.issue_date),
         completionDate: new Date(certificate.completion_date),
         certificateCode: certificate.certificate_code,
-      });
+        verificationUrl: certificate.verification_url,
+        courseHours: courseData?.duration_hours || 390
+      }, settings);
+
+      // Create download link
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `certificado-${certificate.certificate_code}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
       toast.success("Certificado baixado com sucesso!");
     } catch (error) {
       console.error("Error downloading certificate:", error);
@@ -84,7 +120,8 @@ export function CertificatesPage() {
   };
 
   const handleViewCertificate = (certificate: Certificate) => {
-    window.open(certificate.verification_url, "_blank");
+    const verificationUrl = `${window.location.origin}/verify-certificate/${certificate.certificate_code}`;
+    window.open(verificationUrl, "_blank");
   };
 
   const filteredAndSortedCertificates = certificates

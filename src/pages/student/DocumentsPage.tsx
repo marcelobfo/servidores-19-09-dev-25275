@@ -60,6 +60,23 @@ export function DocumentsPage() {
 
   const fetchDocuments = async () => {
     try {
+      // First get user's pre-enrollments
+      const { data: preEnrollments, error: preEnrollmentsError } = await supabase
+        .from("pre_enrollments")
+        .select("id")
+        .eq("user_id", user?.id);
+
+      if (preEnrollmentsError) throw preEnrollmentsError;
+      
+      const preEnrollmentIds = preEnrollments?.map(pe => pe.id) || [];
+      
+      if (preEnrollmentIds.length === 0) {
+        setDeclarations([]);
+        setStudyPlans([]);
+        setLoading(false);
+        return;
+      }
+
       // Fetch enrollment declarations
       const { data: declarationsData, error: declarationsError } = await supabase
         .from("enrollment_declarations")
@@ -73,13 +90,7 @@ export function DocumentsPage() {
             )
           )
         `)
-        .in("pre_enrollment_id", 
-          await supabase
-            .from("pre_enrollments")
-            .select("id")
-            .eq("user_id", user?.id)
-            .then(res => res.data?.map(pe => pe.id) || [])
-        )
+        .in("pre_enrollment_id", preEnrollmentIds)
         .order("generated_at", { ascending: false });
 
       if (declarationsError) throw declarationsError;
@@ -98,13 +109,7 @@ export function DocumentsPage() {
             )
           )
         `)
-        .in("pre_enrollment_id", 
-          await supabase
-            .from("pre_enrollments")
-            .select("id")
-            .eq("user_id", user?.id)
-            .then(res => res.data?.map(pe => pe.id) || [])
-        )
+        .in("pre_enrollment_id", preEnrollmentIds)
         .order("generated_at", { ascending: false });
 
       if (studyPlansError) throw studyPlansError;

@@ -20,7 +20,8 @@ import {
   FolderOpen,
   Award,
   User,
-  LogOut
+  LogOut,
+  Home
 } from "lucide-react";
 
 const studentMenuItems = [
@@ -91,6 +92,30 @@ export function StudentSidebar() {
       </div>
 
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Navegação</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to="/" end className={getNavClass("/")}>
+                    <Home className="h-4 w-4" />
+                    {!collapsed && <span>Página Inicial</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to="/courses" end className={getNavClass("/courses")}>
+                    <BookOpen className="h-4 w-4" />
+                    {!collapsed && <span>Ver Todos os Cursos</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         <SidebarGroup>
           <SidebarGroupLabel>Área do Estudante</SidebarGroupLabel>
           <SidebarGroupContent>
