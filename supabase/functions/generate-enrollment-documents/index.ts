@@ -60,29 +60,20 @@ serve(async (req) => {
     const declarationContent = `
 DECLARAÇÃO DE MATRÍCULA
 
-${institutionName}, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº ${institutionCNPJ}, com sede em ${institutionAddress}, DECLARA para os devidos fins que:
+Declaramos para os devidos fins que ${preEnrollment.full_name.toUpperCase()}, portador(a) do CPF nº ${preEnrollment.cpf || 'não informado'}, ${preEnrollment.organization || ''}, encontra-se regularmente matriculado(a) no curso de "${preEnrollment.courses.name.toUpperCase()}".
 
-${preEnrollment.full_name}, CPF nº ${preEnrollment.cpf || 'não informado'}, encontra-se MATRICULADO(A) no curso de ${preEnrollment.courses.name}.
+O referido curso possui carga horária de ${preEnrollment.courses.duration_hours || 390} (${numberToWords(preEnrollment.courses.duration_hours || 390)}) horas, sendo realizado na modalidade de Ensino a Distância (EAD), com datas a serem definidas.
 
-DADOS DO CURSO:
-- Curso: ${preEnrollment.courses.name}
-- Carga Horária: ${preEnrollment.courses.duration_hours || 390} horas
-- Modalidade: Ensino a Distância
-- Data de Início: ${preEnrollment.license_start_date ? new Date(preEnrollment.license_start_date).toLocaleDateString('pt-BR') : 'A definir'}
-- Data de Término: ${preEnrollment.license_end_date ? new Date(preEnrollment.license_end_date).toLocaleDateString('pt-BR') : 'A definir'}
+O curso está devidamente registrado em nossa instituição e atende aos requisitos necessários para fins de capacitação profissional e licença para capacitação.
 
-DADOS DO ALUNO:
-- Nome: ${preEnrollment.full_name}
-- CPF: ${preEnrollment.cpf || 'não informado'}
-- E-mail: ${preEnrollment.email}
-- Telefone: ${preEnrollment.phone || 'não informado'}
+Declaramos ainda que o estudante terá acompanhamento pedagógico especializado durante todo o período do curso, com acesso a materiais didáticos atualizados e suporte técnico-pedagógico.
 
-Esta declaração é emitida para comprovação de matrícula e poderá ser utilizada para os fins que se fizerem necessários.
+Esta declaração é válida para todos os fins de direito.
 
-Data: ${new Date().toLocaleDateString('pt-BR')}
+São Paulo, ${new Date().toLocaleDateString('pt-BR')}.
 
-${institutionName}
 ${settings?.director_name || 'Diretor Acadêmico'}
+${settings?.director_title || 'Diretor Acadêmico Infomar Cursos Livres'}
     `.trim();
 
     // Generate study plan content with formatted modules
@@ -112,33 +103,33 @@ ${settings?.director_name || 'Diretor Acadêmico'}
     const studyPlanContent = `
 PLANO DE ESTUDOS
 
-${institutionName}
+DADOS DO CURSO
+Curso: ${preEnrollment.courses.name.toUpperCase()}
+Carga Horária Total: ${preEnrollment.courses.duration_hours || 390} horas
+Modalidade: Ensino à Distância (EAD)
 
-CURSO: ${preEnrollment.courses.name}
-ALUNO: ${preEnrollment.full_name}
-CARGA HORÁRIA: ${preEnrollment.courses.duration_hours || 390} horas
-DURAÇÃO: ${preEnrollment.courses.duration_days || 'A definir'} dias
+DADOS DO ESTUDANTE
+Nome: ${preEnrollment.full_name}
+CPF: ${preEnrollment.cpf || 'não informado'}
+${preEnrollment.organization ? `Instituição: ${preEnrollment.organization}` : ''}
 
-DESCRIÇÃO DO CURSO:
-${preEnrollment.courses.description || 'Descrição não disponível'}
+CONTEÚDO PROGRAMÁTICO
+${modulesText || 'Conteúdo a ser definido'}
 
-CONTEÚDO PROGRAMÁTICO:
+CARGA HORÁRIA TOTAL: ${preEnrollment.courses.duration_hours || 390}h
 
-${modulesText || 'Módulos não especificados'}
+METODOLOGIA
+O curso será desenvolvido na modalidade de Ensino a Distância (EAD), com aulas online, materiais didáticos digitais e acompanhamento tutorial. As atividades incluem videoaulas, exercícios práticos, fóruns de discussão e avaliações online.
 
-METODOLOGIA:
-O curso será ministrado na modalidade de Ensino a Distância (EaD), através da plataforma online da instituição, com aulas gravadas, materiais didáticos digitais e avaliações online.
+CRONOGRAMA DE ESTUDOS
+Carga horária semanal recomendada: 20 horas
+Horário de atendimento: Segunda a Sexta, 8h às 18h
+Plataforma: Sistema EAD Infomar Cursos
 
-AVALIAÇÃO:
-A avaliação será realizada através de atividades práticas e teóricas distribuídas ao longo do curso, com aprovação mediante nota mínima de 70%.
+São Paulo, ${new Date().toLocaleDateString('pt-BR')}.
 
-CERTIFICAÇÃO:
-Ao final do curso, o aluno receberá certificado de conclusão, desde que tenha cumprido todos os requisitos estabelecidos.
-
-Data: ${new Date().toLocaleDateString('pt-BR')}
-
-${institutionName}
 ${settings?.director_name || 'Diretor Acadêmico'}
+${settings?.director_title || 'Diretor Acadêmico Infomar Cursos Livres'}
     `.trim();
 
     // Check if documents already exist
@@ -198,7 +189,7 @@ ${settings?.director_name || 'Diretor Acadêmico'}
     console.error('Error generating documents:', error);
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'Erro interno do servidor' 
+        error: error instanceof Error ? error.message : 'Erro interno do servidor' 
       }),
       { 
         status: 500,
@@ -207,3 +198,36 @@ ${settings?.director_name || 'Diretor Acadêmico'}
     );
   }
 });
+
+// Helper function to convert numbers to words (simplified Portuguese version)
+const numberToWords = (num: number): string => {
+  const ones = ['', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove'];
+  const tens = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
+  const teens = ['dez', 'onze', 'doze', 'treze', 'quatorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove'];
+  const hundreds = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos'];
+
+  if (num === 0) return 'zero';
+  if (num === 100) return 'cem';
+
+  let result = '';
+
+  if (num >= 100) {
+    result += hundreds[Math.floor(num / 100)];
+    if (num % 100 !== 0) result += ' e ';
+  }
+
+  const remainder = num % 100;
+  if (remainder >= 10 && remainder < 20) {
+    result += teens[remainder - 10];
+  } else {
+    if (remainder >= 20) {
+      result += tens[Math.floor(remainder / 10)];
+      if (remainder % 10 !== 0) result += ' e ';
+    }
+    if (remainder % 10 !== 0 || remainder < 10) {
+      result += ones[remainder % 10];
+    }
+  }
+
+  return result.trim();
+};

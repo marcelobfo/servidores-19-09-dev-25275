@@ -321,9 +321,9 @@ export const generateEnrollmentDeclaration = async (
   pdf.setFontSize(12);
   pdf.setFont('helvetica', 'normal');
 
-  const declarationText = `Declaramos para os devidos fins que ${enrollment.full_name.toUpperCase()}, ${enrollment.cpf ? `portador(a) do CPF nº ${enrollment.cpf}, ` : ''}${enrollment.organization ? `${enrollment.organization}, ` : ''}encontra-se regularmente matriculado(a) no curso de "${enrollment.course.name}".
+  const declarationText = `Declaramos para os devidos fins que ${enrollment.full_name.toUpperCase()}, portador(a) do CPF nº ${enrollment.cpf || 'não informado'}, ${enrollment.organization || ''}, encontra-se regularmente matriculado(a) no curso de "${enrollment.course.name.toUpperCase()}".
 
-O referido curso possui carga horária de ${enrollment.course.duration_hours} (${numberToWords(enrollment.course.duration_hours)}) horas, sendo realizado na modalidade de Ensino a Distância (EAD), ${enrollment.course.start_date && enrollment.course.end_date ? `com início em ${new Date(enrollment.course.start_date).toLocaleDateString('pt-BR')} e término previsto para ${new Date(enrollment.course.end_date).toLocaleDateString('pt-BR')}` : 'com datas a serem definidas'}.
+O referido curso possui carga horária de ${enrollment.course.duration_hours || 390} (${numberToWords(enrollment.course.duration_hours || 390)}) horas, sendo realizado na modalidade de Ensino a Distância (EAD), com datas a serem definidas.
 
 O curso está devidamente registrado em nossa instituição e atende aos requisitos necessários para fins de capacitação profissional e licença para capacitação.
 
