@@ -392,7 +392,7 @@ try {
       }
       
       // Add module number if it's not already numbered
-      const moduleText = module.trim();
+      const moduleText = moduleTitle;
       const isNumbered = /^\d+[\.\)\-]/.test(moduleText);
       const displayText = isNumbered ? moduleText : `${index + 1}. ${moduleText}`;
       
