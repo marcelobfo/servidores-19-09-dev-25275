@@ -47,6 +47,7 @@ export type Database = {
           enrollment_id: string
           id: string
           issue_date: string
+          pdf_url: string | null
           qr_code_data: string
           status: string
           student_name: string
@@ -61,6 +62,7 @@ export type Database = {
           enrollment_id: string
           id?: string
           issue_date?: string
+          pdf_url?: string | null
           qr_code_data: string
           status?: string
           student_name: string
@@ -75,6 +77,7 @@ export type Database = {
           enrollment_id?: string
           id?: string
           issue_date?: string
+          pdf_url?: string | null
           qr_code_data?: string
           status?: string
           student_name?: string

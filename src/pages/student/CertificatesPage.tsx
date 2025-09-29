@@ -87,7 +87,7 @@ export function CertificatesPage() {
       const { data: courseData } = await supabase
         .from('courses')
         .select('modules, duration_hours')
-        .in('name', [certificate.course_name])
+        .eq('name', certificate.course_name)
         .single();
 
       const pdfBlob = await generateCertificateWithFullData({

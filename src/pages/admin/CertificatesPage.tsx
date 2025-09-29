@@ -122,22 +122,63 @@ export default function CertificatesPage() {
 
   const handleDownloadCertificate = async (certificateCode: string) => {
     try {
-      const { data } = supabase.storage
-        .from('documents')
-        .getPublicUrl(`certificates/${certificateCode}.pdf`);
+      // Get certificate data
+      const { data: certificate, error } = await supabase
+        .from('certificates')
+        .select('*')
+        .eq('certificate_code', certificateCode)
+        .single();
+
+      if (error || !certificate) throw new Error('Certificado não encontrado');
+
+      // Get system settings and course data for proper generation
+      const { data: settings } = await supabase.from('system_settings').select('*').single();
+      const { data: courseData } = await supabase.from('courses').select('modules, duration_hours').eq('name', certificate.course_name).single();
+
+      if (!settings) throw new Error('Configurações do sistema não encontradas');
+
+      // Generate PDF locally to avoid browser blocking
+      const { generateCertificateWithFullData } = await import('@/lib/certificateGenerator');
       
-      window.open(data.publicUrl, '_blank');
-    } catch (error) {
+      const pdfBlob = await generateCertificateWithFullData({
+        id: certificate.id,
+        studentName: certificate.student_name,
+        courseName: certificate.course_name,
+        courseModules: courseData?.modules || 'Módulos do curso conforme programa.',
+        issueDate: new Date(certificate.issue_date),
+        completionDate: new Date(certificate.completion_date),
+        certificateCode: certificate.certificate_code,
+        verificationUrl: `${window.location.origin}/verify-certificate/${certificate.certificate_code}`,
+        courseHours: courseData?.duration_hours || 390
+      }, settings);
+
+      // Create download
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `certificado-${certificateCode}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Sucesso',
+        description: 'Certificado baixado com sucesso'
+      });
+    } catch (error: any) {
+      console.error('Error downloading certificate:', error);
       toast({
         title: 'Erro',
-        description: 'Falha ao baixar certificado',
+        description: error.message || 'Falha ao baixar certificado',
         variant: 'destructive'
       });
     }
   };
 
   const handleViewCertificate = (certificateCode: string) => {
-    navigate(`/verify-certificate/${certificateCode}`);
+    const verificationUrl = `${window.location.origin}/verify-certificate/${certificateCode}`;
+    window.open(verificationUrl, '_blank');
   };
 
   const filteredCertificates = certificates.filter(cert => {

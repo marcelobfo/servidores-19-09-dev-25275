@@ -124,38 +124,54 @@ export function DocumentsPage() {
   };
 
   const handleGenerateDocuments = async () => {
+    setGenerating(true);
     try {
-      setGenerating(true);
-      
-      // Get approved pre-enrollments without documents
-      const { data: approvedPreEnrollments, error: enrollmentsError } = await supabase
+      // Get approved pre-enrollments that don't have documents
+      const { data: preEnrollments, error: preError } = await supabase
         .from('pre_enrollments')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('user_id', user?.id)
         .eq('status', 'approved');
 
-      if (enrollmentsError) {
-        throw enrollmentsError;
-      }
-
-      if (!approvedPreEnrollments?.length) {
-        toast.error("Nenhuma matrícula aprovada encontrada");
+      if (preError) throw preError;
+      if (!preEnrollments?.length) {
+        toast.error('Não há pré-matrículas aprovadas para gerar documentos');
         return;
       }
 
       // Generate documents for each approved pre-enrollment
-      for (const enrollment of approvedPreEnrollments) {
-        await supabase.functions.invoke('generate-enrollment-documents', {
-          body: { preEnrollmentId: enrollment.id }
-        });
+      let generatedCount = 0;
+      for (const preEnrollment of preEnrollments) {
+        // Check if documents already exist
+        const { data: existingDeclaration } = await supabase
+          .from('enrollment_declarations')
+          .select('id')
+          .eq('pre_enrollment_id', preEnrollment.id)
+          .single();
+
+        const { data: existingStudyPlan } = await supabase
+          .from('study_plans')
+          .select('id')
+          .eq('pre_enrollment_id', preEnrollment.id)
+          .single();
+
+        if (!existingDeclaration || !existingStudyPlan) {
+          const { error } = await supabase.functions.invoke('generate-enrollment-documents', {
+            body: { preEnrollmentId: preEnrollment.id }
+          });
+          if (!error) generatedCount++;
+        }
       }
 
-      toast.success("Documentos gerados com sucesso!");
-      await fetchDocuments(); // Refresh the documents list
-      
-    } catch (error) {
+      if (generatedCount > 0) {
+        toast.success(`${generatedCount} documento(s) gerado(s) com sucesso!`);
+        fetchDocuments();
+      } else {
+        toast.info('Todos os documentos já foram gerados anteriormente');
+      }
+    } catch (error: any) {
       console.error('Error generating documents:', error);
-      toast.error("Erro ao gerar documentos");
+      toast.error('Erro ao gerar documentos: ' + error.message);
     } finally {
       setGenerating(false);
     }
@@ -237,7 +253,7 @@ export function DocumentsPage() {
         </p>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col sm:flex-row gap-4 items-end">
         <SearchFilter
           value={searchTerm}
           onChange={setSearchTerm}
@@ -248,6 +264,13 @@ export function DocumentsPage() {
           onChange={setSortBy}
           options={sortOptions}
         />
+        <Button
+          onClick={handleGenerateDocuments}
+          disabled={generating}
+          className="whitespace-nowrap"
+        >
+          {generating ? "Gerando..." : "Gerar Documentos"}
+        </Button>
       </div>
 
       <Tabs defaultValue="declarations" className="space-y-4">
