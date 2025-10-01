@@ -203,13 +203,16 @@ export const generateStudyPlan = async (
     return currentY;
   };
 
-  // Module table
+  // Module table with actual module names
   pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
   modules.forEach((module, index) => {
     yPosition = addPageBreakIfNeeded(yPosition, 10);
     
-    pdf.text(`${index + 1}. ${module.nome}`, 25, yPosition);
-    pdf.text(`${module.carga_horaria}h`, 150, yPosition);
+    // Use actual module name, not generic "Módulo X"
+    const moduleName = module.nome || `Módulo ${index + 1}`;
+    pdf.text(`${index + 1}. ${moduleName}`, 25, yPosition);
+    pdf.text(`${module.carga_horaria}h`, 155, yPosition);
     yPosition += 6;
   });
 
@@ -338,12 +341,12 @@ export const generateEnrollmentDeclaration = async (
 
   yPosition += 50;
 
-  // Title
-  pdf.setFontSize(18);
+  // Title - centered and bold
+  pdf.setFontSize(16);
   pdf.setFont('helvetica', 'bold');
   pdf.text('DECLARAÇÃO DE MATRÍCULA', 105, yPosition, { align: 'center' });
 
-  yPosition += 30;
+  yPosition += 25;
 
   // Declaration content
   pdf.setFontSize(12);
