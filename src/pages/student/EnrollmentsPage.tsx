@@ -107,7 +107,7 @@ export function EnrollmentsPage() {
     try {
       const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
         body: {
-          enrollment_id: enrollment.id,
+          pre_enrollment_id: enrollment.pre_enrollments.id,
           amount: enrollment.courses.enrollment_fee || 0,
         }
       });

@@ -137,29 +137,57 @@ export const generateStudyPlan = async (
 
   yPosition += 8;
 
-  // Parse modules
-  let modules = [];
+  // Parse modules with better handling
+  let modules: Array<{ nome: string; carga_horaria: number }> = [];
   if (enrollment.course.modules) {
     try {
       const parsedModules = JSON.parse(enrollment.course.modules);
+      
+      // Handle new format with módulos key
       if (parsedModules.módulos && Array.isArray(parsedModules.módulos)) {
-        modules = parsedModules.módulos;
-      } else if (Array.isArray(parsedModules)) {
-        modules = parsedModules;
+        modules = parsedModules.módulos.map((m: any) => ({
+          nome: m.nome || m.title || 'Módulo',
+          carga_horaria: m.carga_horaria || m.hours || 0
+        }));
+      } 
+      // Handle array format
+      else if (Array.isArray(parsedModules)) {
+        modules = parsedModules.map((m: any) => {
+          if (typeof m === 'string') {
+            return { nome: m, carga_horaria: 0 };
+          }
+          return {
+            nome: m.nome || m.title || 'Módulo',
+            carga_horaria: m.carga_horaria || m.hours || 0
+          };
+        });
       }
     } catch {
       // Use default if parsing fails
     }
   }
 
-  // Default modules if none provided
+  // Default modules if none provided or calculate hours if missing
   if (modules.length === 0) {
+    const hoursPerModule = Math.floor(enrollment.course.duration_hours / 4);
     modules = [
-      { nome: 'Módulo Introdutório', carga_horaria: Math.floor(enrollment.course.duration_hours * 0.2) },
-      { nome: 'Módulo Básico', carga_horaria: Math.floor(enrollment.course.duration_hours * 0.3) },
-      { nome: 'Módulo Intermediário', carga_horaria: Math.floor(enrollment.course.duration_hours * 0.3) },
-      { nome: 'Módulo Avançado', carga_horaria: Math.floor(enrollment.course.duration_hours * 0.2) }
+      { nome: 'Módulo Introdutório', carga_horaria: hoursPerModule },
+      { nome: 'Módulo Básico', carga_horaria: hoursPerModule },
+      { nome: 'Módulo Intermediário', carga_horaria: hoursPerModule },
+      { nome: 'Módulo Avançado', carga_horaria: enrollment.course.duration_hours - (hoursPerModule * 3) }
     ];
+  } else {
+    // Calculate missing hours proportionally
+    const totalHours = modules.reduce((sum, m) => sum + m.carga_horaria, 0);
+    if (totalHours === 0) {
+      const hoursPerModule = Math.floor(enrollment.course.duration_hours / modules.length);
+      modules = modules.map((m, i) => ({
+        ...m,
+        carga_horaria: i === modules.length - 1 
+          ? enrollment.course.duration_hours - (hoursPerModule * (modules.length - 1))
+          : hoursPerModule
+      }));
+    }
   }
 
   // Helper function to check page break needs - improved

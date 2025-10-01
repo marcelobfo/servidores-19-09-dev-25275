@@ -237,8 +237,9 @@ try {
   const hoursTextWidth = pdf.getTextWidth(hoursText);
   pdf.text(hoursText, (pageWidth - hoursTextWidth) / 2, 148);
 
-  // Completion period
-  const periodText = `realizado no período de ${formatDate(certificateData.completionDate)}.`;
+  // Completion period with proper date
+  const issueYear = certificateData.issueDate.getFullYear();
+  const periodText = `realizado no ano de ${issueYear}.`;
   const periodTextWidth = pdf.getTextWidth(periodText);
   pdf.text(periodText, (pageWidth - periodTextWidth) / 2, 158);
 
@@ -346,7 +347,16 @@ try {
   let modules: any[] = [];
   try {
     const parsedModules = JSON.parse(certificateData.courseModules);
-    modules = Array.isArray(parsedModules) ? parsedModules : [];
+    
+    // Check if it's the new format with módulos key
+    if (parsedModules.módulos && Array.isArray(parsedModules.módulos)) {
+      modules = parsedModules.módulos.map((m: any) => ({
+        title: m.nome || m.title || '',
+        description: m.descricao || m.description || ''
+      }));
+    } else if (Array.isArray(parsedModules)) {
+      modules = parsedModules;
+    }
   } catch (e) {
     console.warn('Could not parse modules JSON:', e);
     // Fallback: treat as plain text
@@ -369,7 +379,9 @@ try {
   }
   
   modules.forEach((module, index) => {
-    const moduleTitle = typeof module === 'string' ? module.trim() : module.title || `Módulo ${index + 1}`;
+    const moduleTitle = typeof module === 'string' 
+      ? module.trim() 
+      : (typeof module.title === 'string' ? module.title.trim() : '') || `Módulo ${index + 1}`;
     const moduleDescription = typeof module === 'object' ? module.description || '' : '';
     
     if (moduleTitle) {
