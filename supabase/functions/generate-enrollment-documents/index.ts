@@ -57,7 +57,12 @@ serve(async (req) => {
     const institutionCNPJ = settings?.institution_cnpj || '41.651.963/0001-32';
 
     // Generate enrollment declaration content
-    const declarationContent = `
+    const declarationContent = `JVR TREINAMENTOS
+Infomar Cursos Livres/JMR Empreendimentos digitais
+Av. Paulista, 1636 CJ 4 – São Paulo - SP
+CEP: ${settings?.institution_cep || '01310-200'} - CNPJ: ${settings?.institution_cnpj || '41.651.963/0001-32'}
+Tel: ${settings?.institution_phone || '(61) 99296-8232'} - Email: ${settings?.institution_email || 'infomarcursos@infomarcursos.com.br'}
+
 DECLARAÇÃO DE MATRÍCULA
 
 Declaramos para os devidos fins que ${preEnrollment.full_name.toUpperCase()}, portador(a) do CPF nº ${preEnrollment.cpf || 'não informado'}, ${preEnrollment.organization || ''}, encontra-se regularmente matriculado(a) no curso de "${preEnrollment.courses.name.toUpperCase()}".
@@ -72,7 +77,8 @@ Esta declaração é válida para todos os fins de direito.
 
 São Paulo, ${new Date().toLocaleDateString('pt-BR')}.
 
-${settings?.director_name || 'Diretor Acadêmico'}
+${settings?.director_name || 'José Victor Furtado J. F de Oliveira'}
+(CARIMBO E ASSINATURA)
 ${settings?.director_title || 'Diretor Acadêmico Infomar Cursos Livres'}
     `.trim();
 
@@ -91,22 +97,18 @@ ${settings?.director_title || 'Diretor Acadêmico Infomar Cursos Livres'}
         }
         
         if (modulesList.length > 0) {
-          modulesText = modulesList.map((module, index) => {
+          // Create table format
+          modulesText = 'MÓDULO                                    CARGA HORÁRIA\n';
+          modulesText += '─'.repeat(60) + '\n';
+          modulesList.forEach((module, index) => {
             const title = typeof module === 'string' 
               ? module 
-              : (module.nome || module.title || `Módulo ${index + 1}`);
-            const hours = typeof module === 'object' && module.carga_horaria 
-              ? ` - ${module.carga_horaria}h` 
+              : (module.nome || module.title || module.name || `Módulo ${index + 1}`);
+            const hours = typeof module === 'object' 
+              ? (module.carga_horaria || module.workload || module.horas || module.hours || '') 
               : '';
-            const description = typeof module === 'object' && module.description ? 
-              module.description.replace(/<[^>]*>/g, '').trim() : '';
-            
-            let moduleText = `${index + 1}. ${title}${hours}`;
-            if (description) {
-              moduleText += `\n   ${description}`;
-            }
-            return moduleText;
-          }).join('\n\n');
+            modulesText += `${index + 1}. ${title.padEnd(40)} ${hours ? hours + 'h' : ''}\n`;
+          });
         }
       } catch (e) {
         console.warn('Could not parse modules JSON:', e);
@@ -114,7 +116,12 @@ ${settings?.director_title || 'Diretor Acadêmico Infomar Cursos Livres'}
       }
     }
 
-    const studyPlanContent = `
+    const studyPlanContent = `JVR TREINAMENTOS
+Infomar Cursos Livres/JMR Empreendimentos digitais
+Av. Paulista, 1636 CJ 4 – São Paulo - SP
+CEP: ${settings?.institution_cep || '01310-200'} - CNPJ: ${settings?.institution_cnpj || '41.651.963/0001-32'}
+Tel: ${settings?.institution_phone || '(61) 99296-8232'} - Email: ${settings?.institution_email || 'infomarcursos@infomarcursos.com.br'}
+
 PLANO DE ESTUDOS
 
 DADOS DO CURSO
@@ -142,7 +149,7 @@ Plataforma: Sistema EAD Infomar Cursos
 
 São Paulo, ${new Date().toLocaleDateString('pt-BR')}.
 
-${settings?.director_name || 'Diretor Acadêmico'}
+${settings?.director_name || 'José Victor Furtado J. F de Oliveira'}
 ${settings?.director_title || 'Diretor Acadêmico Infomar Cursos Livres'}
     `.trim();
 
