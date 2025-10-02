@@ -208,24 +208,11 @@ export default function VerifyCertificate() {
                       Data de Conclusão
                     </label>
                     <p className="text-lg">
-                      {(() => {
-                        const completionDate = new Date(certificate.completion_date);
-                        // Check if date is invalid (1969/1970 or epoch 0)
-                        if (completionDate.getFullYear() < 2000) {
-                          // Use issue date as fallback
-                          const issueDate = new Date(certificate.issue_date);
-                          return issueDate.toLocaleDateString('pt-BR', {
-                            day: '2-digit',
-                            month: 'long',
-                            year: 'numeric'
-                          });
-                        }
-                        return completionDate.toLocaleDateString('pt-BR', {
-                          day: '2-digit',
-                          month: 'long',
-                          year: 'numeric'
-                        });
-                      })()}
+                      {new Date(certificate.completion_date).toLocaleDateString('pt-BR', {
+                        day: '2-digit',
+                        month: 'long',
+                        year: 'numeric'
+                      })}
                     </p>
                   </div>
                   
