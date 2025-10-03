@@ -21,6 +21,7 @@ export function DurationFilter({ value, onChange, placeholder = "Filtrar por dur
       <SelectContent>
         <SelectItem value="all">Todas as durações</SelectItem>
         <SelectItem value="15">15 dias</SelectItem>
+        <SelectItem value="30">30 dias</SelectItem>
         <SelectItem value="45">45 dias</SelectItem>
         <SelectItem value="60">60 dias</SelectItem>
         <SelectItem value="90">90 dias</SelectItem>

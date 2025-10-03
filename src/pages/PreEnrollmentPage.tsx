@@ -61,6 +61,17 @@ const PreEnrollmentPage = () => {
     fetchCourses();
   }, []);
 
+  // Pre-populate course name when course_id comes from URL
+  useEffect(() => {
+    const courseIdFromUrl = searchParams.get("course");
+    if (courseIdFromUrl && courses.length > 0) {
+      const selectedCourse = courses.find(c => c.id === courseIdFromUrl);
+      if (selectedCourse) {
+        setSelectedCourseName(selectedCourse.name);
+      }
+    }
+  }, [searchParams, courses]);
+
   const fetchCourses = async () => {
     try {
       // Fetch published courses including duration_days only; do not derive from hours

@@ -142,9 +142,17 @@ const CoursesPage = () => {
             <CardHeader>
               <div className="flex justify-between items-start mb-2">
                 <Badge variant="secondary">{course.areas?.name}</Badge>
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Clock className="h-4 w-4 mr-1" />
-                  {course.duration_hours}h
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center">
+                    <Clock className="h-4 w-4 mr-1" />
+                    {course.duration_hours}h
+                  </div>
+                  {course.duration_days && (
+                    <div className="flex items-center border-l pl-2">
+                      <Calendar className="h-4 w-4 mr-1" />
+                      {course.duration_days} dias
+                    </div>
+                  )}
                 </div>
               </div>
               <CardTitle className="line-clamp-2">{course.name}</CardTitle>
