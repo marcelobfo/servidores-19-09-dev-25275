@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Search, Clock, Calendar } from "lucide-react";
 import { Link } from "react-router-dom";
+import { DurationFilter } from "@/components/student/filters/DurationFilter";
 
 interface Course {
   id: string;
@@ -16,6 +17,7 @@ interface Course {
   brief_description: string;
   image_url: string;
   duration_hours: number;
+  duration_days: number;
   start_date: string;
   end_date: string;
   areas?: { name: string };
@@ -32,6 +34,7 @@ const CoursesPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedArea, setSelectedArea] = useState<string>("all");
+  const [selectedDuration, setSelectedDuration] = useState<string>("all");
 
   useEffect(() => {
     fetchCourses();
@@ -76,7 +79,8 @@ const CoursesPage = () => {
     const matchesSearch = course.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          course.brief_description?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesArea = selectedArea === "all" || course.areas?.name === selectedArea;
-    return matchesSearch && matchesArea;
+    const matchesDuration = selectedDuration === "all" || course.duration_days === parseInt(selectedDuration);
+    return matchesSearch && matchesArea && matchesDuration;
   });
 
   if (loading) {
@@ -116,6 +120,10 @@ const CoursesPage = () => {
               ))}
             </SelectContent>
           </Select>
+          <DurationFilter
+            value={selectedDuration}
+            onChange={setSelectedDuration}
+          />
         </div>
       </div>
 
