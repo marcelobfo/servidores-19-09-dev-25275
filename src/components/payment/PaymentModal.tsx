@@ -114,7 +114,10 @@ export function PaymentModal({
       // Validate required fields
       if (!data.pix_qr_code || !data.pix_payload) {
         console.error('Invalid payment data:', data);
-        throw new Error('Dados de pagamento incompletos. QR Code ou código PIX não gerado.');
+        throw new Error(
+          data.error || 
+          'QR Code não foi gerado. Isso pode acontecer devido a problemas temporários com o sistema de pagamento. Tente novamente em alguns instantes ou entre em contato com o suporte.'
+        );
       }
 
       console.log('Payment created successfully:', data);

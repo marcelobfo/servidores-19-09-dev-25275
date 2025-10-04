@@ -78,8 +78,13 @@ serve(async (req) => {
       throw new Error('Configurações de pagamento não encontradas. Configure no painel administrativo.');
     }
 
-    if (!paymentSettings.asaas_api_key) {
-      throw new Error('Chave API do Asaas não configurada. Configure no painel administrativo.');
+    // Select correct API key based on environment
+    const apiKey = paymentSettings.environment === 'production'
+      ? paymentSettings.asaas_api_key_production
+      : paymentSettings.asaas_api_key_sandbox;
+
+    if (!apiKey) {
+      throw new Error(`Chave API do Asaas não configurada para ambiente ${paymentSettings.environment}. Configure no painel administrativo.`);
     }
 
     if (!paymentSettings.enabled) {
@@ -166,7 +171,7 @@ serve(async (req) => {
     const customerResponse = await fetch('https://api.asaas.com/v3/customers', {
       method: 'POST',
       headers: {
-        'access_token': paymentSettings.asaas_api_key,
+        'access_token': apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(customerData),
@@ -221,7 +226,7 @@ serve(async (req) => {
     const paymentResponse = await fetch('https://api.asaas.com/v3/payments', {
       method: 'POST',
       headers: {
-        'access_token': paymentSettings.asaas_api_key,
+        'access_token': apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(paymentData),
@@ -260,12 +265,16 @@ serve(async (req) => {
 
     console.log('Payment created:', payment.id);
 
+    // Wait 2 seconds for Asaas to generate QR Code
+    console.log('Waiting 2 seconds for QR Code generation...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
     // Get PIX QR Code
     console.log('Making request to Asaas API - Get PIX QR Code for payment:', payment.id);
     
     const qrCodeResponse = await fetch(`https://api.asaas.com/v3/payments/${payment.id}/pixQrCode`, {
       headers: {
-        'access_token': paymentSettings.asaas_api_key,
+        'access_token': apiKey,
       },
     });
 
@@ -289,20 +298,49 @@ serve(async (req) => {
     }
     
     if (!qrCodeResponse.ok) {
-      console.error('Asaas QR code error:', {
+      console.error('Asaas QR code error - saving payment without QR code:', {
         status: qrCodeResponse.status,
         statusText: qrCodeResponse.statusText,
         response: qrCodeData
       });
-      const errorMessage = qrCodeData.errors?.[0]?.description || 
-        qrCodeData.message || 
-        `Failed to generate QR code (${qrCodeResponse.status})`;
-      throw new Error(errorMessage);
+      
+      // Save payment without QR code - user can try again
+      const { data: dbPayment, error: dbError } = await supabaseClient
+        .from('payments')
+        .insert({
+          pre_enrollment_id,
+          enrollment_id: enrollment_id || null,
+          kind,
+          asaas_payment_id: payment.id,
+          amount: finalAmount,
+          status: 'pending',
+          error_message: 'QR Code não gerado automaticamente. Entre em contato com o suporte.',
+        })
+        .select()
+        .single();
+
+      if (dbError) {
+        console.error('Database error:', dbError);
+        throw new Error('Failed to save payment');
+      }
+
+      // Update pre-enrollment status
+      await supabaseClient
+        .from('pre_enrollments')
+        .update({ status: 'pending_payment' })
+        .eq('id', pre_enrollment_id);
+
+      return new Response(JSON.stringify({ 
+        ...dbPayment,
+        error: 'QR Code não pôde ser gerado. Por favor, atualize a página ou entre em contato com o suporte.'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     console.log('QR Code generated for payment:', payment.id);
 
-    // Save payment to database
+    // Save payment to database with QR code
     const { data: dbPayment, error: dbError } = await supabaseClient
       .from('payments')
       .insert({
