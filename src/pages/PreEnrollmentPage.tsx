@@ -12,14 +12,24 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { PaymentModal } from "@/components/payment/PaymentModal";
-import { Shield, User, Calendar, GraduationCap, DollarSign, FileText } from "lucide-react";
+import { Shield, User, Calendar, GraduationCap, DollarSign, FileText, Clock, Award, ArrowRight } from "lucide-react";
 import { triggerEnrollmentWebhook } from "@/lib/webhookService";
+import { DateOfBirthPicker } from "@/components/ui/date-of-birth-picker";
+import { Badge } from "@/components/ui/badge";
 
 interface Course {
   id: string;
   name: string;
   duration_hours: number;
   duration_days?: number;
+}
+
+interface CourseDetails extends Course {
+  area_id?: string;
+  pre_enrollment_fee?: number;
+  areas?: {
+    name: string;
+  };
 }
 
 const PreEnrollmentPage = () => {
@@ -30,11 +40,13 @@ const PreEnrollmentPage = () => {
   
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingCourseDetails, setLoadingCourseDetails] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [preEnrollmentId, setPreEnrollmentId] = useState<string>("");
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [selectedCourseName, setSelectedCourseName] = useState<string>("");
+  const [selectedCourseDetails, setSelectedCourseDetails] = useState<CourseDetails | null>(null);
 
   const [formData, setFormData] = useState({
     course_id: searchParams.get("course") || "",
@@ -42,6 +54,7 @@ const PreEnrollmentPage = () => {
     email: user?.email || "",
     whatsapp: "",
     cpf: "",
+    birth_date: "",
     organization: "",
     postal_code: "",
     address: "",
@@ -61,16 +74,61 @@ const PreEnrollmentPage = () => {
     fetchCourses();
   }, []);
 
-  // Pre-populate course name when course_id comes from URL
+  // Fetch full course details when course_id comes from URL
   useEffect(() => {
     const courseIdFromUrl = searchParams.get("course");
-    if (courseIdFromUrl && courses.length > 0) {
-      const selectedCourse = courses.find(c => c.id === courseIdFromUrl);
-      if (selectedCourse) {
-        setSelectedCourseName(selectedCourse.name);
-      }
+    if (courseIdFromUrl) {
+      fetchCourseDetails(courseIdFromUrl);
     }
-  }, [searchParams, courses]);
+  }, [searchParams]);
+
+  const fetchCourseDetails = async (courseId: string) => {
+    setLoadingCourseDetails(true);
+    try {
+      const { data, error } = await supabase
+        .from("courses")
+        .select(`
+          id,
+          name,
+          duration_hours,
+          duration_days,
+          pre_enrollment_fee,
+          area_id,
+          areas (
+            name
+          )
+        `)
+        .eq("id", courseId)
+        .eq("published", true)
+        .single();
+
+      if (error) {
+        console.error("Error fetching course details:", error);
+        toast({
+          title: "Erro",
+          description: "Curso não encontrado ou não está disponível",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setSelectedCourseDetails(data);
+      setSelectedCourseName(data.name);
+
+      // Auto-select license duration based on course duration_days
+      if (data.duration_days) {
+        setFormData(prev => ({
+          ...prev,
+          course_id: courseId,
+          license_duration: data.duration_days.toString()
+        }));
+      }
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setLoadingCourseDetails(false);
+    }
+  };
 
   const fetchCourses = async () => {
     try {
@@ -181,6 +239,7 @@ const PreEnrollmentPage = () => {
           email: formData.email,
           whatsapp: formData.whatsapp,
           cpf: formData.cpf,
+          birth_date: formData.birth_date || null,
           organization: formData.organization,
           postal_code: formData.postal_code,
           address: formData.address,
@@ -273,6 +332,62 @@ const PreEnrollmentPage = () => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-8">
             
+            {/* CURSO SELECIONADO */}
+            {selectedCourseDetails && (
+              <Card className="border-primary bg-primary/5">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge variant="secondary" className="text-xs">
+                            {selectedCourseDetails.areas?.name || "Curso"}
+                          </Badge>
+                        </div>
+                        <h3 className="text-xl font-bold text-foreground mb-3">
+                          {selectedCourseDetails.name}
+                        </h3>
+                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-4 w-4" />
+                            <span>{selectedCourseDetails.duration_hours}h de carga horária</span>
+                          </div>
+                          {selectedCourseDetails.duration_days && (
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-4 w-4" />
+                              <span>{selectedCourseDetails.duration_days} dias</span>
+                            </div>
+                          )}
+                          {selectedCourseDetails.pre_enrollment_fee && selectedCourseDetails.pre_enrollment_fee > 0 && (
+                            <div className="flex items-center gap-1">
+                              <DollarSign className="h-4 w-4" />
+                              <span>Taxa: R$ {selectedCourseDetails.pre_enrollment_fee.toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate("/courses")}
+                      >
+                        Trocar curso
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {loadingCourseDetails && (
+              <Alert>
+                <AlertDescription>
+                  Carregando informações do curso...
+                </AlertDescription>
+              </Alert>
+            )}
+            
             {/* SEÇÃO 1 - AVISO DE PRIVACIDADE */}
             <Card className="border-primary/20">
               <CardHeader>
@@ -347,16 +462,27 @@ const PreEnrollmentPage = () => {
                   </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="whatsapp">WhatsApp (formato (xx) xxxxx-xxxx) *</Label>
-                  <Input
-                    id="whatsapp"
-                    value={formData.whatsapp}
-                    onChange={(e) => setFormData({ ...formData, whatsapp: formatWhatsApp(e.target.value) })}
-                    placeholder="(00) 00000-0000"
-                    maxLength={15}
-                    required
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="birth_date">Data de Nascimento *</Label>
+                    <DateOfBirthPicker
+                      value={formData.birth_date ? new Date(formData.birth_date) : undefined}
+                      onChange={(date) => setFormData({ ...formData, birth_date: date ? date.toISOString().split('T')[0] : "" })}
+                      placeholder="Selecione sua data de nascimento"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="whatsapp">WhatsApp (formato (xx) xxxxx-xxxx) *</Label>
+                    <Input
+                      id="whatsapp"
+                      value={formData.whatsapp}
+                      onChange={(e) => setFormData({ ...formData, whatsapp: formatWhatsApp(e.target.value) })}
+                      placeholder="(00) 00000-0000"
+                      maxLength={15}
+                      required
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -536,9 +662,10 @@ const PreEnrollmentPage = () => {
                     <Select 
                       value={formData.course_id} 
                       onValueChange={(value) => setFormData({ ...formData, course_id: value })}
+                      disabled={!!selectedCourseDetails}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione um curso" />
+                        <SelectValue placeholder={selectedCourseDetails ? selectedCourseDetails.name : "Selecione um curso"} />
                       </SelectTrigger>
                       <SelectContent className="z-50">
                         {filteredCourses.map((course) => (
@@ -548,6 +675,11 @@ const PreEnrollmentPage = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                    {selectedCourseDetails && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Curso pré-selecionado. Use o botão "Trocar curso" acima para mudar.
+                      </p>
+                    )}
                   </div>
                 )}
               </CardContent>
