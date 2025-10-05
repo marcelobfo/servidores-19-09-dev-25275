@@ -28,16 +28,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Check if user is admin
+          // Check if user is admin using secure user_roles table
           setTimeout(async () => {
             try {
-              const { data: profile } = await supabase
-                .from('profiles')
+              const { data: userRole } = await supabase
+                .from('user_roles')
                 .select('role')
                 .eq('user_id', session.user.id)
-                .single();
+                .eq('role', 'admin')
+                .maybeSingle();
               
-              setIsAdmin(profile?.role === 'admin');
+              setIsAdmin(!!userRole);
             } catch (error) {
               console.error('Error checking user role:', error);
               setIsAdmin(false);

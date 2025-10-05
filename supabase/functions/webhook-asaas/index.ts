@@ -89,9 +89,33 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
+    // CRITICAL SECURITY: Validate webhook token from Asaas
+    const webhookToken = req.headers.get('asaas-access-token');
+    if (!webhookToken) {
+      console.error('Missing Asaas webhook token');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized: Missing webhook token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verify token against stored webhook token
+    const { data: settings } = await supabaseClient
+      .from('payment_settings')
+      .select('asaas_webhook_token')
+      .maybeSingle();
+
+    if (!settings?.asaas_webhook_token || settings.asaas_webhook_token !== webhookToken) {
+      console.error('Invalid Asaas webhook token');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized: Invalid webhook token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const webhookData = await req.json();
     
-    console.log('Received webhook:', JSON.stringify(webhookData, null, 2));
+    console.log('Received authenticated webhook:', JSON.stringify(webhookData, null, 2));
 
     const { event, payment } = webhookData;
 

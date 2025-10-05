@@ -56,9 +56,27 @@ serve(async (req) => {
 
     const { pre_enrollment_id, amount, kind = 'pre_enrollment', enrollment_id } = requestBody;
 
-    // Validate required fields
-    if (!pre_enrollment_id) {
-      throw new Error('Campo obrigatório: pre_enrollment_id');
+    // SECURITY: Validate required fields and types
+    if (!pre_enrollment_id || typeof pre_enrollment_id !== 'string') {
+      throw new Error('Campo obrigatório: pre_enrollment_id (string UUID)');
+    }
+    
+    // Validate kind parameter
+    if (kind !== 'pre_enrollment' && kind !== 'enrollment') {
+      throw new Error('Campo kind inválido. Deve ser "pre_enrollment" ou "enrollment"');
+    }
+
+    // Check for duplicate payment attempts (idempotency)
+    const { data: existingPayment } = await supabaseClient
+      .from('payments')
+      .select('id, status')
+      .eq('pre_enrollment_id', pre_enrollment_id)
+      .eq('kind', kind)
+      .in('status', ['pending', 'received', 'confirmed'])
+      .maybeSingle();
+
+    if (existingPayment) {
+      throw new Error('Já existe um pagamento pendente ou confirmado para esta matrícula');
     }
     
     console.log('Creating payment', { pre_enrollment_id, amount, kind, enrollment_id });
@@ -145,6 +163,19 @@ serve(async (req) => {
     }
 
     console.log('Final amount determined:', { kind, finalAmount, courseFees: preEnrollment.courses });
+
+    // SECURITY: Validate the payment amount matches the expected course fee
+    const expectedAmount = kind === 'pre_enrollment' 
+      ? preEnrollment.courses?.pre_enrollment_fee 
+      : preEnrollment.courses?.enrollment_fee;
+
+    if (expectedAmount && Math.abs(Number(expectedAmount) - finalAmount) > 0.01) {
+      console.error('Payment amount mismatch:', { 
+        expected: expectedAmount, 
+        received: finalAmount 
+      });
+      throw new Error('Valor do pagamento não corresponde à taxa do curso');
+    }
 
     // Prepare customer data with validation and cleaning
     const cleanedCPF = cleanCPF(preEnrollment.cpf);

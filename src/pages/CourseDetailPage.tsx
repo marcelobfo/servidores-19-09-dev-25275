@@ -230,10 +230,9 @@ const CourseDetailPage = () => {
             {course.description && (
               <div>
                 <h2 className="text-xl font-semibold mb-3">Sobre o Curso</h2>
-                <div 
-                  className="prose prose-sm max-w-none text-foreground"
-                  dangerouslySetInnerHTML={{ __html: course.description }}
-                />
+                <div className="prose prose-sm max-w-none text-foreground whitespace-pre-wrap">
+                  {course.description}
+                </div>
               </div>
             )}
 
