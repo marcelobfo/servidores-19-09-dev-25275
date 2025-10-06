@@ -589,6 +589,7 @@ export type Database = {
           director_name: string | null
           director_signature_url: string | null
           director_title: string | null
+          gemini_api_key: string | null
           id: string
           institution_address: string | null
           institution_cep: string | null
@@ -610,6 +611,7 @@ export type Database = {
           director_name?: string | null
           director_signature_url?: string | null
           director_title?: string | null
+          gemini_api_key?: string | null
           id?: string
           institution_address?: string | null
           institution_cep?: string | null
@@ -631,6 +633,7 @@ export type Database = {
           director_name?: string | null
           director_signature_url?: string | null
           director_title?: string | null
+          gemini_api_key?: string | null
           id?: string
           institution_address?: string | null
           institution_cep?: string | null

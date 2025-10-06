@@ -1,1 +1,16 @@
 project_id = "lavqzqqfsdtduwphzehr"
+
+[functions.webhook-asaas]
+verify_jwt = false
+
+[functions.create-payment]
+verify_jwt = false
+
+[functions.create-enrollment-checkout]
+verify_jwt = false
+
+[functions.generate-enrollment-documents]
+verify_jwt = true
+
+[functions.generate-course-image]
+verify_jwt = true

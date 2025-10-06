@@ -25,6 +25,7 @@ interface SystemSettings {
   director_signature_url: string;
   n8n_webhook_url?: string;
   webhook_events?: string[];
+  gemini_api_key?: string;
 }
 
 interface WebhookLog {
@@ -500,6 +501,47 @@ const SystemSettingsPage = () => {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ImageIcon className="h-5 w-5" />
+              Integração com IA (Gemini)
+            </CardTitle>
+            <CardDescription>
+              Configure a chave API do Google Gemini para gerar capas de cursos com IA
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="gemini_api_key">Chave API do Gemini</Label>
+              <Input
+                id="gemini_api_key"
+                type="password"
+                value={settings.gemini_api_key || ""}
+                onChange={(e) => updateField("gemini_api_key", e.target.value)}
+                placeholder="AIza..."
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Obtenha sua chave em{" "}
+                <a 
+                  href="https://aistudio.google.com/app/apikey" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  Google AI Studio
+                </a>
+              </p>
+              {settings.gemini_api_key && (
+                <div className="flex items-center space-x-2 mt-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span className="text-sm text-green-500">Chave API configurada</span>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 

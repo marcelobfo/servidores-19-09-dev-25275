@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Edit, Trash2 } from "lucide-react";
+import { Plus, Edit, Trash2, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import ModuleEditor from "@/components/admin/ModuleEditor";
@@ -17,6 +17,7 @@ import { FilterBar } from "@/components/admin/filters/FilterBar";
 import { SearchInput } from "@/components/admin/filters/SearchInput";
 import { StatusFilter } from "@/components/admin/filters/StatusFilter";
 import { AreaFilter } from "@/components/admin/filters/AreaFilter";
+import { CourseImageGenerator } from "@/components/admin/CourseImageGenerator";
 interface Course {
   id: string;
   name: string;
@@ -50,6 +51,7 @@ const CoursesPage = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [fullScreen, setFullScreen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState("");
@@ -473,12 +475,45 @@ setEditingCourse(null);
 
               <div>
                 <Label htmlFor="image_url">URL da Imagem</Label>
-                <Input
-                  id="image_url"
-                  value={formData.image_url}
-                  onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                  placeholder="https://..."
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="image_url"
+                    value={formData.image_url}
+                    onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+                    placeholder="https://..."
+                  />
+                  <Dialog open={isGeneratorOpen} onOpenChange={setIsGeneratorOpen}>
+                    <DialogTrigger asChild>
+                      <Button type="button" variant="outline" size="icon">
+                        <Sparkles className="h-4 w-4" />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Gerar Capa com IA</DialogTitle>
+                      </DialogHeader>
+                      <CourseImageGenerator
+                        courseName={formData.name}
+                        areaName={areas.find(a => a.id === formData.area_id)?.name}
+                        description={formData.brief_description.replace(/<[^>]*>/g, '')}
+                        onImageGenerated={(url) => {
+                          setFormData({ ...formData, image_url: url });
+                          setIsGeneratorOpen(false);
+                        }}
+                        onCancel={() => setIsGeneratorOpen(false)}
+                      />
+                    </DialogContent>
+                  </Dialog>
+                </div>
+                {formData.image_url && (
+                  <div className="mt-2">
+                    <img 
+                      src={formData.image_url} 
+                      alt="Preview" 
+                      className="w-full h-32 object-cover rounded border"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center space-x-2">
