@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Clock, Calendar } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DurationFilter } from "@/components/student/filters/DurationFilter";
+import { SafeHTML } from "@/components/SafeHTML";
 
 interface Course {
   id: string;
@@ -157,7 +158,9 @@ const CoursesPage = () => {
               </div>
               <CardTitle className="line-clamp-2">{course.name}</CardTitle>
               <CardDescription className="line-clamp-3">
-                {course.brief_description}
+                {course.brief_description ? (
+                  course.brief_description.replace(/<[^>]*>/g, '')
+                ) : ''}
               </CardDescription>
             </CardHeader>
             <CardContent>

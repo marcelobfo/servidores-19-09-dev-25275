@@ -25,7 +25,6 @@ interface SystemSettings {
   director_signature_url: string;
   n8n_webhook_url?: string;
   webhook_events?: string[];
-  gemini_api_key?: string;
 }
 
 interface WebhookLog {
@@ -511,36 +510,23 @@ const SystemSettingsPage = () => {
               Integração com IA (Gemini)
             </CardTitle>
             <CardDescription>
-              Configure a chave API do Google Gemini para gerar capas de cursos com IA
+              Geração de capas de cursos com IA usando Lovable AI
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="gemini_api_key">Chave API do Gemini</Label>
-              <Input
-                id="gemini_api_key"
-                type="password"
-                value={settings.gemini_api_key || ""}
-                onChange={(e) => updateField("gemini_api_key", e.target.value)}
-                placeholder="AIza..."
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Obtenha sua chave em{" "}
-                <a 
-                  href="https://aistudio.google.com/app/apikey" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  Google AI Studio
-                </a>
-              </p>
-              {settings.gemini_api_key && (
-                <div className="flex items-center space-x-2 mt-2">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span className="text-sm text-green-500">Chave API configurada</span>
+            <div className="bg-muted/50 p-4 rounded-lg border">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium mb-1">Integração Ativa</p>
+                  <p className="text-sm text-muted-foreground">
+                    A geração de capas com IA usa Lovable AI (Gemini) automaticamente. Não é necessário configurar chaves API.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    <strong>Nota:</strong> Gemini está gratuito até 13/10/2025.
+                  </p>
                 </div>
-              )}
+              </div>
             </div>
           </CardContent>
         </Card>

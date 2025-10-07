@@ -22,21 +22,14 @@ serve(async (req) => {
       );
     }
 
-    // Buscar a chave API do Gemini das configurações do sistema
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const { data: settings, error: settingsError } = await supabase
-      .from('system_settings')
-      .select('gemini_api_key')
-      .single();
-
-    if (settingsError || !settings?.gemini_api_key) {
-      console.error('Settings error:', settingsError);
+    // Usar a chave API do Lovable AI (Gemini gratuito até 13/10/2025)
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    
+    if (!LOVABLE_API_KEY) {
+      console.error('LOVABLE_API_KEY not configured');
       return new Response(
-        JSON.stringify({ error: 'Chave API do Gemini não configurada. Configure em Configurações do Sistema.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Serviço de IA não configurado. Entre em contato com o suporte.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -51,11 +44,11 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
 
     console.log('Generating image with Gemini for course:', courseName);
 
-    // Chamar API do Gemini
+    // Chamar Lovable AI Gateway (Gemini)
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${settings.gemini_api_key}`,
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -83,13 +76,13 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
       
       if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: 'Créditos insuficientes. Adicione créditos em sua conta Lovable.' }),
+          JSON.stringify({ error: 'Créditos insuficientes da Lovable AI. Entre em contato com o suporte.' }),
           { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
       return new Response(
-        JSON.stringify({ error: 'Erro ao gerar imagem com IA. Verifique sua chave API.' }),
+        JSON.stringify({ error: 'Erro ao gerar imagem com IA. Tente novamente.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
