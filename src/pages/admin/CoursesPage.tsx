@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Edit, Trash2, Sparkles } from "lucide-react";
+import { Plus, Edit, Trash2, Sparkles, FileText, Clock, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import ModuleEditor from "@/components/admin/ModuleEditor";
@@ -17,6 +17,7 @@ import { FilterBar } from "@/components/admin/filters/FilterBar";
 import { SearchInput } from "@/components/admin/filters/SearchInput";
 import { StatusFilter } from "@/components/admin/filters/StatusFilter";
 import { AreaFilter } from "@/components/admin/filters/AreaFilter";
+import { PeriodFilter } from "@/components/admin/filters/PeriodFilter";
 import { CourseImageGenerator } from "@/components/admin/CourseImageGenerator";
 interface Course {
   id: string;
@@ -57,6 +58,7 @@ const CoursesPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedArea, setSelectedArea] = useState("all");
   const [publishedFilter, setPublishedFilter] = useState("all");
+  const [periodFilter, setPeriodFilter] = useState("all");
   
   const { toast } = useToast();
 
@@ -291,13 +293,17 @@ setEditingCourse(null);
       (publishedFilter === "published" && course.published) ||
       (publishedFilter === "draft" && !course.published);
     
-    return matchesSearch && matchesArea && matchesPublished;
+    const matchesPeriod = periodFilter === "all" || 
+      String(course.duration_days) === periodFilter;
+    
+    return matchesSearch && matchesArea && matchesPublished && matchesPeriod;
   });
 
   const clearFilters = () => {
     setSearchTerm("");
     setSelectedArea("all");
     setPublishedFilter("all");
+    setPeriodFilter("all");
   };
 
   const statusOptions = [
@@ -549,6 +555,10 @@ setEditingCourse(null);
           value={selectedArea}
           onChange={setSelectedArea}
         />
+        <PeriodFilter
+          value={periodFilter}
+          onChange={setPeriodFilter}
+        />
         <StatusFilter
           value={publishedFilter}
           onChange={setPublishedFilter}
@@ -561,43 +571,96 @@ setEditingCourse(null);
         Mostrando {filteredCourses.length} de {courses.length} cursos
       </div>
 
-      <div className="grid gap-4">
+      <div className="space-y-4">
         {filteredCourses.map((course) => (
-    <Card key={course.id}>
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <div>
-            <CardTitle>{course.name}</CardTitle>
-            <CardDescription>
-              {course.areas?.name} • {course.duration_hours}h
-              {course.published ? " • Publicado" : " • Rascunho"}
-            </CardDescription>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleEdit(course)}>
-              <Edit className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => handleDelete(course.id)}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">{course.brief_description}</p>
-        {course.duration_days ? (
-          <p className="text-sm mt-2">Duração: {course.duration_days} dias</p>
-        ) : (
-          course.start_date && course.end_date && (
-            <p className="text-sm mt-2">
-              {new Date(course.start_date).toLocaleDateString()} - {new Date(course.end_date).toLocaleDateString()}
-            </p>
-          )
-        )}
-      </CardContent>
-    </Card>
-  ))}
-</div>
+          <Card key={course.id} className="overflow-hidden">
+            <div className="grid grid-cols-1 md:grid-cols-[280px_1fr_auto] gap-0">
+              {/* Imagem com overlay */}
+              <div className="relative aspect-video md:aspect-auto md:h-full">
+                <img 
+                  src={course.image_url || "/placeholder.svg"} 
+                  alt={course.name}
+                  className="object-cover w-full h-full"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <Button 
+                  variant="secondary" 
+                  size="sm"
+                  className="absolute bottom-3 left-3 gap-2"
+                  onClick={() => handleEdit(course)}
+                >
+                  <FileText className="h-4 w-4" />
+                  Gerenciar Conteúdo
+                </Button>
+              </div>
+
+              {/* Informações do curso */}
+              <CardContent className="p-6 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <CardTitle className="line-clamp-2 text-xl">{course.name}</CardTitle>
+                  </div>
+                  
+                  {course.areas?.name && (
+                    <div>
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                        {course.areas.name}
+                      </span>
+                    </div>
+                  )}
+                  
+                  <div 
+                    className="text-sm text-muted-foreground line-clamp-2"
+                    dangerouslySetInnerHTML={{ __html: course.brief_description || "" }}
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <span>{course.duration_hours}h</span>
+                  </div>
+                  {course.duration_days && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span>{course.duration_days} dias</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className={`px-2 py-0.5 rounded-full text-xs ${
+                      course.published 
+                        ? 'bg-green-500/10 text-green-700 dark:text-green-400' 
+                        : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
+                    }`}>
+                      {course.published ? "Publicado" : "Rascunho"}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+
+              {/* Botões de ação */}
+              <div className="flex md:flex-col gap-2 p-4 items-center md:items-start justify-center">
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => handleEdit(course)}
+                  title="Editar curso"
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => handleDelete(course.id)}
+                  title="Excluir curso"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 };

@@ -42,8 +42,10 @@ export function CourseImageGenerator({
 
     setGenerating(true);
     setGeneratedImage(null);
+    console.log('🎨 Starting image generation for:', courseName);
 
     try {
+      console.log('📤 Invoking generate-course-image function...');
       const { data, error } = await supabase.functions.invoke('generate-course-image', {
         body: {
           courseName,
@@ -52,12 +54,19 @@ export function CourseImageGenerator({
         }
       });
 
-      if (error) throw error;
+      console.log('📥 Function response:', { data, error });
 
-      if (!data?.imageUrl) {
-        throw new Error('Nenhuma imagem foi gerada');
+      if (error) {
+        console.error('❌ Function returned error:', error);
+        throw error;
       }
 
+      if (!data?.imageUrl) {
+        console.error('❌ No imageUrl in response:', data);
+        throw new Error(data?.error || 'Nenhuma imagem foi gerada');
+      }
+
+      console.log('✅ Image generated successfully');
       setGeneratedImage(data.imageUrl);
       
       toast({
@@ -65,10 +74,11 @@ export function CourseImageGenerator({
         description: "Imagem gerada com sucesso!"
       });
     } catch (error: any) {
-      console.error('Error generating image:', error);
+      console.error('❌ Error generating image:', error);
+      const errorMessage = error.message || 'Falha ao gerar imagem. Verifique a configuração do Lovable AI.';
       toast({
         title: "Erro",
-        description: error.message || "Falha ao gerar imagem. Verifique se a chave API do Gemini está configurada.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
