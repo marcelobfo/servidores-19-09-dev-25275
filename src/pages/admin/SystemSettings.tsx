@@ -25,6 +25,7 @@ interface SystemSettings {
   director_signature_url: string;
   n8n_webhook_url?: string;
   webhook_events?: string[];
+  gemini_api_key?: string;
 }
 
 interface WebhookLog {
@@ -510,22 +511,33 @@ const SystemSettingsPage = () => {
               Integração com IA (Gemini)
             </CardTitle>
             <CardDescription>
-              Geração de capas de cursos com IA usando Lovable AI
+              Geração de capas de cursos com IA usando Google AI Studio
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="bg-muted/50 p-4 rounded-lg border">
-              <div className="flex items-start gap-3">
-                <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium mb-1">Integração Ativa</p>
-                  <p className="text-sm text-muted-foreground">
-                    A geração de capas com IA usa Lovable AI (Gemini) automaticamente. Não é necessário configurar chaves API.
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    <strong>Nota:</strong> Gemini está gratuito até 13/10/2025.
-                  </p>
-                </div>
+            <div>
+              <Label htmlFor="gemini_api_key">Google AI Studio API Key</Label>
+              <div className="space-y-2">
+                <Input
+                  id="gemini_api_key"
+                  type="password"
+                  value={settings.gemini_api_key || ""}
+                  onChange={(e) => updateField("gemini_api_key", e.target.value)}
+                  placeholder="Digite sua chave API do Google AI Studio"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Modelo: <strong>gemini-2.5-flash-image-preview</strong> (Nano Banana)
+                  <br />
+                  Obtenha sua chave em:{" "}
+                  <a 
+                    href="https://aistudio.google.com/apikey" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    Google AI Studio
+                  </a>
+                </p>
               </div>
             </div>
           </CardContent>

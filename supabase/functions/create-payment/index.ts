@@ -51,7 +51,8 @@ serve(async (req) => {
       console.log('Parsed request body:', requestBody);
     } catch (parseError) {
       console.error('JSON parsing error:', parseError);
-      throw new Error(`Invalid JSON in request body: ${parseError.message}`);
+      const errorMessage = parseError instanceof Error ? parseError.message : 'Invalid JSON';
+      throw new Error(`Invalid JSON in request body: ${errorMessage}`);
     }
 
     const { pre_enrollment_id, amount, kind = 'pre_enrollment', enrollment_id } = requestBody;
@@ -224,7 +225,8 @@ serve(async (req) => {
       console.log('Parsed customer response:', customer);
     } catch (parseError) {
       console.error('Error parsing customer response:', parseError);
-      throw new Error(`Failed to parse customer API response: ${parseError.message}`);
+      const errorMessage = parseError instanceof Error ? parseError.message : 'Parse error';
+      throw new Error(`Failed to parse customer API response: ${errorMessage}`);
     }
     
     if (!customerResponse.ok) {
@@ -279,7 +281,8 @@ serve(async (req) => {
       console.log('Parsed payment response:', payment);
     } catch (parseError) {
       console.error('Error parsing payment response:', parseError);
-      throw new Error(`Failed to parse payment API response: ${parseError.message}`);
+      const errorMessage = parseError instanceof Error ? parseError.message : 'Parse error';
+      throw new Error(`Failed to parse payment API response: ${errorMessage}`);
     }
     
     if (!paymentResponse.ok) {
@@ -325,7 +328,8 @@ serve(async (req) => {
       console.log('Parsed QR Code response:', qrCodeData);
     } catch (parseError) {
       console.error('Error parsing QR Code response:', parseError);
-      throw new Error(`Failed to parse QR code API response: ${parseError.message}`);
+      const errorMessage = parseError instanceof Error ? parseError.message : 'Parse error';
+      throw new Error(`Failed to parse QR code API response: ${errorMessage}`);
     }
     
     if (!qrCodeResponse.ok) {
