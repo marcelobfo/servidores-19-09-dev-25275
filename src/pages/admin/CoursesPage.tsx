@@ -53,6 +53,8 @@ const CoursesPage = () => {
   const [fullScreen, setFullScreen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
+  const [autoGenerateCover, setAutoGenerateCover] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState("");
@@ -82,6 +84,27 @@ useEffect(() => {
   const total = modules.reduce((sum, m) => sum + (Number(m.hours) || 0), 0);
   setFormData(prev => ({ ...prev, duration_hours: total }));
 }, [modules]);
+
+// Calcular taxas automaticamente baseado em duration_days
+useEffect(() => {
+  const calculateFees = (days: number) => {
+    const fees = {
+      15: { enrollment: 267.00, preEnrollment: 57.00 },
+      30: { enrollment: 294.00, preEnrollment: 57.00 },
+      45: { enrollment: 367.00, preEnrollment: 57.00 },
+      60: { enrollment: 437.00, preEnrollment: 57.00 },
+      90: { enrollment: 597.00, preEnrollment: 57.00 }
+    };
+    return fees[days as keyof typeof fees] || { enrollment: 0, preEnrollment: 57.00 };
+  };
+  
+  const fees = calculateFees(formData.duration_days);
+  setFormData(prev => ({
+    ...prev,
+    enrollment_fee: fees.enrollment,
+    pre_enrollment_fee: fees.preEnrollment
+  }));
+}, [formData.duration_days]);
 
 useEffect(() => {
   fetchCourses();
@@ -135,12 +158,83 @@ useEffect(() => {
       .replace(/\s+/g, "-");
   };
 
+  const generateCourseImage = async (courseName: string, areaName?: string, description?: string) => {
+    try {
+      setIsGenerating(true);
+      const { data, error } = await supabase.functions.invoke('generate-course-image', {
+        body: { courseName, areaName, description }
+      });
+      
+      if (error) throw error;
+      if (!data?.imageUrl) throw new Error('Nenhuma imagem gerada');
+      
+      // Converter base64 para blob e fazer upload
+      const base64Data = data.imageUrl.split(',')[1];
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'image/png' });
+      
+      const fileName = `course-cover-${Date.now()}.png`;
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(fileName, blob);
+      
+      if (uploadError) throw uploadError;
+      
+      const { data: urlData } = supabase.storage
+        .from('documents')
+        .getPublicUrl(fileName);
+      
+      return urlData.publicUrl;
+    } catch (error) {
+      console.error('Erro ao gerar capa:', error);
+      toast({
+        title: "Erro",
+        description: error instanceof Error ? error.message : "Erro ao gerar capa automaticamente",
+        variant: "destructive"
+      });
+      return null;
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
+      let finalImageUrl = formData.image_url;
+      
+      // Se o toggle está ativado e não há imagem, gerar automaticamente
+      if (autoGenerateCover && !finalImageUrl && formData.name) {
+        toast({
+          title: "Gerando capa com IA...",
+          description: "Por favor, aguarde.",
+        });
+        
+        const areaName = areas.find(a => a.id === formData.area_id)?.name;
+        const cleanDescription = formData.brief_description.replace(/<[^>]*>/g, '');
+        finalImageUrl = await generateCourseImage(
+          formData.name,
+          areaName,
+          cleanDescription
+        );
+        
+        if (finalImageUrl) {
+          toast({
+            title: "Capa gerada!",
+            description: "A capa foi gerada automaticamente com IA.",
+          });
+        }
+      }
+
       const courseDataWithDays = {
         ...formData,
+        image_url: finalImageUrl || formData.image_url,
         slug: generateSlug(formData.name),
         area_id: formData.area_id || null,
         modules: JSON.stringify(modules),
@@ -479,6 +573,20 @@ setEditingCourse(null);
                 </div>
               </div>
 
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="auto_generate">Gerar capa automaticamente com IA</Label>
+                  <Switch
+                    id="auto_generate"
+                    checked={autoGenerateCover}
+                    onCheckedChange={setAutoGenerateCover}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Se ativado, uma capa será gerada automaticamente ao salvar o curso (caso não haja imagem).
+                </p>
+              </div>
+
               <div>
                 <Label htmlFor="image_url">URL da Imagem</Label>
                 <div className="flex gap-2">
@@ -490,7 +598,7 @@ setEditingCourse(null);
                   />
                   <Dialog open={isGeneratorOpen} onOpenChange={setIsGeneratorOpen}>
                     <DialogTrigger asChild>
-                      <Button type="button" variant="outline" size="icon">
+                      <Button type="button" variant="outline" size="icon" title="Gerar capa manualmente">
                         <Sparkles className="h-4 w-4" />
                       </Button>
                     </DialogTrigger>
@@ -532,10 +640,10 @@ setEditingCourse(null);
               </div>
 
               <div className="flex gap-2">
-                <Button type="submit">
-                  {editingCourse ? "Atualizar" : "Criar"}
+                <Button type="submit" disabled={isGenerating}>
+                  {isGenerating ? "Gerando capa..." : editingCourse ? "Atualizar" : "Criar"}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isGenerating}>
                   Cancelar
                 </Button>
               </div>
