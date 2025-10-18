@@ -198,7 +198,7 @@ const CourseDetailPage = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-[350px_1fr] gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[500px_1fr] gap-8">
           {/* Side Banner - Left Column */}
           <div className="lg:sticky lg:top-6 h-fit space-y-4">
             <Link 
@@ -209,7 +209,7 @@ const CourseDetailPage = () => {
               Voltar aos Cursos
             </Link>
             
-            <div className="relative rounded-lg overflow-hidden aspect-[3/4] bg-muted">
+            <div className="relative rounded-lg overflow-hidden aspect-[16/10] bg-muted">
               {course.image_url ? (
                 <img 
                   src={course.image_url} 
@@ -217,7 +217,7 @@ const CourseDetailPage = () => {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                <div className="w-full h-full bg-muted flex items-center justify-center">
                   <BookOpen className="h-16 w-16 text-muted-foreground" />
                 </div>
               )}
@@ -230,75 +230,25 @@ const CourseDetailPage = () => {
 
           {/* Main Content - Right Column */}
           <div className="space-y-6">
-            {/* Course Title */}
-            <div className="space-y-2">
-              <h1 className="text-4xl font-bold tracking-tight">
-                {course.name}
-              </h1>
-              <div className="flex items-center gap-4 text-muted-foreground">
-                <div className="flex items-center gap-2">
+            {/* Top Section: Title + Sidebar */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-8">
+              {/* Title Section */}
+              <div className="space-y-3">
+                <Badge className="w-fit">
+                  {course.areas?.name || 'Área não especificada'}
+                </Badge>
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
                   <Clock className="h-4 w-4" />
                   <span>{course.duration_hours} horas</span>
                 </div>
-              </div>
-            </div>
-
-            {/* Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* About and Modules - 2/3 */}
-              <div className="lg:col-span-2 space-y-8">
-                {/* About Course */}
-                <div>
-                  <h2 className="text-2xl font-bold text-primary mb-4">Sobre o Curso</h2>
-                  {course.brief_description && (
-                    <p className="text-lg text-muted-foreground mb-4">
-                      {course.brief_description}
-                    </p>
-                  )}
-                  {course.description && (
-                    <SafeHTML html={course.description} />
-                  )}
-                </div>
-
-                {/* Modules */}
-                {modules.length > 0 && (
-                  <div>
-                    <h2 className="text-2xl font-bold text-primary mb-6">Módulos do Curso</h2>
-                    <div className="space-y-4">
-                      {modules.map((module, index) => (
-                        <Card key={index} className="border-l-4 border-l-primary">
-                          <CardContent className="p-6">
-                            <div className="flex items-start gap-4">
-                              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                                <BookOpen className="h-6 w-6 text-primary" />
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex items-start justify-between mb-2">
-                                  <h3 className="text-lg font-semibold">
-                                    {module.name || `Módulo ${index + 1}`}
-                                  </h3>
-                                  {module.hours && (
-                                    <Badge variant="secondary" className="ml-4">
-                                      {module.hours} horas
-                                    </Badge>
-                                  )}
-                                </div>
-                                {module.description && (
-                                  <SafeHTML html={module.description} className="text-muted-foreground" />
-                                )}
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <h1 className="text-4xl font-bold tracking-tight">
+                  {course.name}
+                </h1>
               </div>
 
-              {/* Sidebar - Course Details - 1/3 */}
+              {/* Sidebar - Course Details */}
               <div className="space-y-6">
-                <Card className="sticky top-4">
+                <Card>
                   <CardContent className="p-6 space-y-6">
                     <div>
                       <h3 className="text-lg font-semibold mb-4">Informações do Curso</h3>
@@ -478,6 +428,57 @@ const CourseDetailPage = () => {
                   </CardContent>
                 </Card>
               </div>
+            </div>
+
+            {/* Main Content Below */}
+            <div className="space-y-8">
+              {/* About Course */}
+              <div>
+                <h2 className="text-2xl font-bold text-primary mb-4">Sobre o Curso</h2>
+                {course.brief_description && (
+                  <p className="text-lg text-muted-foreground mb-4">
+                    {course.brief_description}
+                  </p>
+                )}
+                {course.description && (
+                  <SafeHTML html={course.description} />
+                )}
+              </div>
+
+              {/* Modules */}
+              {modules.length > 0 && (
+                <div>
+                  <h2 className="text-2xl font-bold text-primary mb-6">Módulos do Curso</h2>
+                  <div className="space-y-4">
+                    {modules.map((module, index) => (
+                      <Card key={index} className="border-l-4 border-l-primary">
+                        <CardContent className="p-6">
+                          <div className="flex items-start gap-4">
+                            <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                              <BookOpen className="h-6 w-6 text-primary" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-start justify-between mb-2">
+                                <h3 className="text-lg font-semibold">
+                                  {module.name || `Módulo ${index + 1}`}
+                                </h3>
+                                {module.hours && (
+                                  <Badge variant="secondary" className="ml-4">
+                                    {module.hours} horas
+                                  </Badge>
+                                )}
+                              </div>
+                              {module.description && (
+                                <SafeHTML html={module.description} className="text-muted-foreground" />
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
