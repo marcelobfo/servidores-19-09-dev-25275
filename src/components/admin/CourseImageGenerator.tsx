@@ -40,41 +40,6 @@ export function CourseImageGenerator({
       return;
     }
 
-    // Verificar se a API key está configurada
-    try {
-      const { data: settings, error: settingsError } = await supabase
-        .from('system_settings')
-        .select('gemini_api_key')
-        .single();
-
-      if (settingsError) {
-        console.error('Error fetching settings:', settingsError);
-        toast({
-          title: "Erro ao verificar configurações",
-          description: "Não foi possível verificar as configurações do sistema.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (!settings?.gemini_api_key) {
-        toast({
-          title: "API Key não configurada",
-          description: "Configure a chave do Google AI Studio em Admin → Configurações do Sistema.",
-          variant: "destructive",
-        });
-        return;
-      }
-    } catch (error) {
-      console.error('Error checking API key:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao verificar configurações.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setGenerating(true);
     setGeneratedImage(null);
     console.log('🎨 Starting image generation for:', courseName);
@@ -114,12 +79,10 @@ export function CourseImageGenerator({
       
       let errorMessage = "Não foi possível gerar a imagem. Tente novamente.";
       
-      if (error.message?.includes('API Key')) {
-        errorMessage = "Chave API inválida ou não configurada.";
-      } else if (error.message?.includes('429')) {
+      if (error.message?.includes('429')) {
         errorMessage = "Limite de requisições atingido. Tente novamente em alguns instantes.";
-      } else if (error.message?.includes('403')) {
-        errorMessage = "Chave API inválida. Verifique as configurações.";
+      } else if (error.message?.includes('402')) {
+        errorMessage = "Créditos insuficientes. Adicione créditos em Settings → Workspace → Usage.";
       } else if (error.message) {
         errorMessage = error.message;
       }
