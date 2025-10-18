@@ -138,20 +138,49 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
 
     const data = await response.json();
     console.log('Google Gemini response received');
-    console.log('Response data structure:', JSON.stringify(data, null, 2));
+    console.log('Full response structure:', JSON.stringify(data, null, 2));
 
-    // Extrair a imagem base64 da resposta do Google Gemini
-    const imageBase64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    const mimeType = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.mimeType || 'image/png';
+    // Tentar extrair a imagem de múltiplas formas possíveis
+    let imageBase64 = null;
+    let mimeType = 'image/png';
+
+    // Formato 1: candidates[0].content.parts[0].inlineData
+    if (data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
+      imageBase64 = data.candidates[0].content.parts[0].inlineData.data;
+      mimeType = data.candidates[0].content.parts[0].inlineData.mimeType || 'image/png';
+      console.log('Image found in format 1 (inlineData)');
+    }
+    // Formato 2: candidates[0].content.parts[0].image
+    else if (data.candidates?.[0]?.content?.parts?.[0]?.image?.data) {
+      imageBase64 = data.candidates[0].content.parts[0].image.data;
+      mimeType = data.candidates[0].content.parts[0].image.mimeType || 'image/png';
+      console.log('Image found in format 2 (image)');
+    }
+    // Formato 3: image direto
+    else if (data.image?.data) {
+      imageBase64 = data.image.data;
+      mimeType = data.image.mimeType || 'image/png';
+      console.log('Image found in format 3 (direct image)');
+    }
     
-    console.log('Extracted imageBase64:', imageBase64 ? 'Image data present' : 'No image data');
+    console.log('Image extraction result:', {
+      hasImage: !!imageBase64,
+      mimeType: mimeType,
+      dataLength: imageBase64 ? imageBase64.length : 0
+    });
 
     if (!imageBase64) {
-      console.error('No image in response. Full response:', JSON.stringify(data, null, 2));
+      console.error('Failed to extract image from response');
+      console.error('Response structure:', JSON.stringify(data, null, 2));
+      
+      // Verificar se há erro na resposta
+      const errorMessage = data.error?.message || data.candidates?.[0]?.finishReason;
+      
       return new Response(
         JSON.stringify({ 
-          error: 'Nenhuma imagem foi gerada. Tente novamente.',
-          details: 'Response structure did not contain image data'
+          error: 'Nenhuma imagem foi gerada pela IA.',
+          details: errorMessage || 'A resposta da API não contém dados de imagem',
+          geminiResponse: data
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

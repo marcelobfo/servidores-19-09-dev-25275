@@ -160,13 +160,40 @@ useEffect(() => {
 
   const generateCourseImage = async (courseName: string, areaName?: string, description?: string) => {
     try {
+      // Verificar se a API key está configurada
+      const { data: settings } = await supabase
+        .from('system_settings')
+        .select('gemini_api_key')
+        .single();
+
+      if (!settings?.gemini_api_key) {
+        toast({
+          title: "API Key não configurada",
+          description: "Configure a chave do Google AI Studio nas Configurações do Sistema.",
+          variant: "destructive",
+        });
+        return null;
+      }
+
       setIsGenerating(true);
+      
+      toast({
+        title: "Gerando capa com IA...",
+        description: "Aguarde enquanto a imagem é criada.",
+      });
+
       const { data, error } = await supabase.functions.invoke('generate-course-image', {
         body: { courseName, areaName, description }
       });
       
-      if (error) throw error;
-      if (!data?.imageUrl) throw new Error('Nenhuma imagem gerada');
+      if (error) {
+        console.error('Error invoking function:', error);
+        throw new Error(error.message || 'Erro ao chamar função de geração');
+      }
+      
+      if (!data?.imageUrl) {
+        throw new Error(data?.error || 'Nenhuma imagem foi retornada pela função');
+      }
       
       // Converter base64 para blob e fazer upload
       const base64Data = data.imageUrl.split(',')[1];

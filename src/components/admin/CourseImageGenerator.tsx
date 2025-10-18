@@ -33,9 +33,44 @@ export function CourseImageGenerator({
   const handleGenerate = async () => {
     if (!courseName.trim()) {
       toast({
+        title: "Nome do curso obrigatório",
+        description: "Por favor, preencha o nome do curso.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Verificar se a API key está configurada
+    try {
+      const { data: settings, error: settingsError } = await supabase
+        .from('system_settings')
+        .select('gemini_api_key')
+        .single();
+
+      if (settingsError) {
+        console.error('Error fetching settings:', settingsError);
+        toast({
+          title: "Erro ao verificar configurações",
+          description: "Não foi possível verificar as configurações do sistema.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!settings?.gemini_api_key) {
+        toast({
+          title: "API Key não configurada",
+          description: "Configure a chave do Google AI Studio em Admin → Configurações do Sistema.",
+          variant: "destructive",
+        });
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking API key:', error);
+      toast({
         title: "Erro",
-        description: "Nome do curso é obrigatório",
-        variant: "destructive"
+        description: "Erro ao verificar configurações.",
+        variant: "destructive",
       });
       return;
     }
@@ -58,28 +93,41 @@ export function CourseImageGenerator({
 
       if (error) {
         console.error('❌ Function returned error:', error);
-        throw error;
+        throw new Error(error.message || 'Erro ao gerar imagem');
       }
 
       if (!data?.imageUrl) {
         console.error('❌ No imageUrl in response:', data);
-        throw new Error(data?.error || 'Nenhuma imagem foi gerada');
+        const errorMsg = data?.error || 'Nenhuma imagem foi retornada';
+        throw new Error(errorMsg);
       }
 
       console.log('✅ Image generated successfully');
       setGeneratedImage(data.imageUrl);
       
       toast({
-        title: "Sucesso",
-        description: "Imagem gerada com sucesso!"
+        title: "Imagem gerada!",
+        description: "A capa foi gerada com sucesso.",
       });
     } catch (error: any) {
-      console.error('❌ Error generating image:', error);
-      const errorMessage = error.message || 'Falha ao gerar imagem. Verifique a configuração do Lovable AI.';
+      console.error('❌ Error in handleGenerate:', error);
+      
+      let errorMessage = "Não foi possível gerar a imagem. Tente novamente.";
+      
+      if (error.message?.includes('API Key')) {
+        errorMessage = "Chave API inválida ou não configurada.";
+      } else if (error.message?.includes('429')) {
+        errorMessage = "Limite de requisições atingido. Tente novamente em alguns instantes.";
+      } else if (error.message?.includes('403')) {
+        errorMessage = "Chave API inválida. Verifique as configurações.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
-        title: "Erro",
+        title: "Erro ao gerar imagem",
         description: errorMessage,
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setGenerating(false);
