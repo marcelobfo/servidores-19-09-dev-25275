@@ -7,13 +7,16 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('🚀 generate-course-image-v2 function started');
+  
   if (req.method === 'OPTIONS') {
+    console.log('✅ CORS preflight request handled');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const { courseName, areaName, description } = await req.json();
-    console.log('Request received:', { courseName, areaName, hasDescription: !!description });
+    console.log('📥 Request received:', { courseName, areaName, hasDescription: !!description });
 
     if (!courseName) {
       console.error('Course name is required');
