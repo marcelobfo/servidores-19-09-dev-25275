@@ -197,286 +197,288 @@ const CourseDetailPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section with Background Image */}
-      <div className="relative h-[400px] w-full overflow-hidden">
-        {course.image_url ? (
-          <>
-            <img 
-              src={course.image_url} 
-              alt={course.name}
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
-          </>
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5" />
-        )}
-        
-        <div className="absolute inset-0 flex items-end">
-          <div className="container mx-auto px-4 pb-12">
-            <Link to="/courses" className="inline-flex items-center text-white/90 hover:text-white mb-6">
-              <ArrowLeft className="h-4 w-4 mr-2" />
+      <div className="container mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[350px_1fr] gap-8">
+          {/* Side Banner - Left Column */}
+          <div className="lg:sticky lg:top-6 h-fit space-y-4">
+            <Link 
+              to="/courses" 
+              className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
               Voltar aos Cursos
             </Link>
             
-            <div className="flex items-center gap-3 mb-4">
-              <Badge className="bg-primary text-primary-foreground text-sm px-4 py-1">
-                {course.areas?.name}
-              </Badge>
-              <div className="flex items-center text-white/90">
-                <Clock className="h-4 w-4 mr-2" />
-                <span className="text-sm font-medium">{course.duration_hours} horas</span>
-              </div>
+            <div className="relative rounded-lg overflow-hidden aspect-[3/4] bg-muted">
+              {course.image_url ? (
+                <img 
+                  src={course.image_url} 
+                  alt={course.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                  <BookOpen className="h-16 w-16 text-muted-foreground" />
+                </div>
+              )}
             </div>
             
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-3 max-w-3xl">
-              {course.name}
-            </h1>
+            <Badge className="w-fit">
+              {course.areas?.name || 'Área não especificada'}
+            </Badge>
           </div>
-        </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Content */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* About Course */}
-            <div>
-              <h2 className="text-2xl font-bold text-primary mb-4">Sobre o Curso</h2>
-              {course.brief_description && (
-                <p className="text-lg text-muted-foreground mb-4">
-                  {course.brief_description}
-                </p>
-              )}
-              {course.description && (
-                <SafeHTML html={course.description} />
-              )}
-            </div>
-
-            {/* Modules */}
-            {modules.length > 0 && (
-              <div>
-                <h2 className="text-2xl font-bold text-primary mb-6">Módulos do Curso</h2>
-                <div className="space-y-4">
-                  {modules.map((module, index) => (
-                    <Card key={index} className="border-l-4 border-l-primary">
-                      <CardContent className="p-6">
-                        <div className="flex items-start gap-4">
-                          <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                            <BookOpen className="h-6 w-6 text-primary" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-start justify-between mb-2">
-                              <h3 className="text-lg font-semibold">
-                                {module.name || `Módulo ${index + 1}`}
-                              </h3>
-                              {module.hours && (
-                                <Badge variant="secondary" className="ml-4">
-                                  {module.hours} horas
-                                </Badge>
-                              )}
-                            </div>
-                            {module.description && (
-                              <SafeHTML html={module.description} className="text-muted-foreground" />
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+          {/* Main Content - Right Column */}
+          <div className="space-y-6">
+            {/* Course Title */}
+            <div className="space-y-2">
+              <h1 className="text-4xl font-bold tracking-tight">
+                {course.name}
+              </h1>
+              <div className="flex items-center gap-4 text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  <span>{course.duration_hours} horas</span>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
 
-          {/* Right Sidebar */}
-          <div className="lg:col-span-1">
-            <Card className="sticky top-6">
-              <CardContent className="p-6 space-y-6">
+            {/* Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* About and Modules - 2/3 */}
+              <div className="lg:col-span-2 space-y-8">
+                {/* About Course */}
                 <div>
-                  <h3 className="text-lg font-semibold mb-4">Informações do Curso</h3>
-                  
-                  <div className="space-y-4">
-                    <div className="flex items-start gap-3">
-                      <Clock className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium">Carga Horária</p>
-                        <p className="text-sm text-muted-foreground">{course.duration_hours} horas</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <Award className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium">Certificado</p>
-                        <p className="text-sm text-muted-foreground">Incluído</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <Monitor className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium">Modalidade</p>
-                        <p className="text-sm text-muted-foreground">Online</p>
-                      </div>
-                    </div>
-
-                    {course.start_date && course.end_date && (
-                      <div className="flex items-start gap-3">
-                        <Calendar className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-sm font-medium">Período</p>
-                          <p className="text-sm text-muted-foreground">
-                            {new Date(course.start_date).toLocaleDateString()} - {new Date(course.end_date).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Rating */}
-                <div className="pt-4 border-t">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="flex items-center">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star key={star} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      ))}
-                    </div>
-                    <span className="text-lg font-semibold">4.8</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">1.247 avaliações</p>
-                </div>
-
-                {/* Pricing */}
-                {(course.pre_enrollment_fee || course.enrollment_fee) && (
-                  <div className="pt-4 border-t space-y-2">
-                    {course.pre_enrollment_fee && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Taxa de Pré-Matrícula:</span>
-                        <span className="font-medium">R$ {course.pre_enrollment_fee.toFixed(2).replace('.', ',')}</span>
-                      </div>
-                    )}
-                    {course.enrollment_fee && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Taxa de Matrícula:</span>
-                        <span className="font-medium">R$ {course.enrollment_fee.toFixed(2).replace('.', ',')}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="pt-4 border-t">
-                  {!user ? (
-                    <Link to="/auth" className="w-full">
-                      <Button className="w-full" size="lg">
-                        Fazer Login para Matrícula
-                      </Button>
-                    </Link>
-                  ) : !preEnrollment ? (
-                    <Link to={`/pre-enrollment?course=${course.id}`} className="w-full">
-                      <Button className="w-full" size="lg">
-                        Fazer Pré-Matrícula
-                      </Button>
-                    </Link>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="text-center">
-                        {preEnrollment.status === 'payment_confirmed' && preEnrollment.organ_approval_status === 'pending' && (
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                            Aguardando Aprovação do Órgão
-                          </Badge>
-                        )}
-                        
-                        {preEnrollment.organ_approval_status === 'approved' && !preEnrollment.organ_approval_confirmed && (
-                          <Badge variant="default" className="bg-green-500">
-                            Órgão Aprovou - Faça sua Matrícula
-                          </Badge>
-                        )}
-                        
-                        {preEnrollment.organ_approval_status === 'approved' && preEnrollment.organ_approval_confirmed && (
-                          <Badge variant="default" className="bg-purple-500">
-                            Curso Concluído - Certificado Disponível
-                          </Badge>
-                        )}
-                        
-                        {preEnrollment.organ_approval_status === 'rejected' && (
-                          <Badge variant="destructive">
-                            Reprovado pelo Órgão
-                          </Badge>
-                        )}
-                        
-                        {preEnrollment.status === 'pending' && (
-                          <Badge variant="secondary">
-                            Aguardando Análise
-                          </Badge>
-                        )}
-                      </div>
-
-                      {preEnrollment.status === 'payment_confirmed' && preEnrollment.organ_approval_status === 'pending' && (
-                        <Button 
-                          onClick={handleOrganApproval}
-                          variant="outline"
-                          size="lg"
-                          className="w-full"
-                          disabled={loadingAction}
-                        >
-                          {loadingAction ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
-                              Confirmando...
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle className="mr-2 h-4 w-4" />
-                              ✓ Meu Órgão Aprovou
-                            </>
-                          )}
-                        </Button>
-                      )}
-
-                      {preEnrollment.organ_approval_status === 'approved' && !preEnrollment.organ_approval_confirmed && (
-                        <Button 
-                          onClick={handleEnrollmentPayment}
-                          className="w-full"
-                          size="lg"
-                          disabled={loadingAction}
-                        >
-                          {loadingAction ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                              Processando...
-                            </>
-                          ) : (
-                            <>
-                              <CreditCard className="mr-2 h-4 w-4" />
-                              Fazer Matrícula (R$ {preEnrollment.courses.enrollment_fee?.toFixed(2) || '0,00'})
-                            </>
-                          )}
-                        </Button>
-                      )}
-
-                      {preEnrollment.organ_approval_status === 'approved' && preEnrollment.organ_approval_confirmed && (
-                        <Link to="/student" className="w-full">
-                          <Button className="w-full" size="lg">
-                            <Download className="mr-2 h-4 w-4" />
-                            Baixar Certificado
-                          </Button>
-                        </Link>
-                      )}
-
-                      <Link to="/student" className="w-full">
-                        <Button variant="outline" size="sm" className="w-full">
-                          Ver Detalhes no Dashboard
-                        </Button>
-                      </Link>
-                    </div>
+                  <h2 className="text-2xl font-bold text-primary mb-4">Sobre o Curso</h2>
+                  {course.brief_description && (
+                    <p className="text-lg text-muted-foreground mb-4">
+                      {course.brief_description}
+                    </p>
+                  )}
+                  {course.description && (
+                    <SafeHTML html={course.description} />
                   )}
                 </div>
-              </CardContent>
-            </Card>
+
+                {/* Modules */}
+                {modules.length > 0 && (
+                  <div>
+                    <h2 className="text-2xl font-bold text-primary mb-6">Módulos do Curso</h2>
+                    <div className="space-y-4">
+                      {modules.map((module, index) => (
+                        <Card key={index} className="border-l-4 border-l-primary">
+                          <CardContent className="p-6">
+                            <div className="flex items-start gap-4">
+                              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                                <BookOpen className="h-6 w-6 text-primary" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-start justify-between mb-2">
+                                  <h3 className="text-lg font-semibold">
+                                    {module.name || `Módulo ${index + 1}`}
+                                  </h3>
+                                  {module.hours && (
+                                    <Badge variant="secondary" className="ml-4">
+                                      {module.hours} horas
+                                    </Badge>
+                                  )}
+                                </div>
+                                {module.description && (
+                                  <SafeHTML html={module.description} className="text-muted-foreground" />
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Sidebar - Course Details - 1/3 */}
+              <div className="space-y-6">
+                <Card className="sticky top-4">
+                  <CardContent className="p-6 space-y-6">
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Informações do Curso</h3>
+                      
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3">
+                          <Clock className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium">Carga Horária</p>
+                            <p className="text-sm text-muted-foreground">{course.duration_hours} horas</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                          <Award className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium">Certificado</p>
+                            <p className="text-sm text-muted-foreground">Incluído</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                          <Monitor className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium">Modalidade</p>
+                            <p className="text-sm text-muted-foreground">Online</p>
+                          </div>
+                        </div>
+
+                        {course.start_date && course.end_date && (
+                          <div className="flex items-start gap-3">
+                            <Calendar className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium">Período</p>
+                              <p className="text-sm text-muted-foreground">
+                                {new Date(course.start_date).toLocaleDateString()} - {new Date(course.end_date).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Rating */}
+                    <div className="pt-4 border-t">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star key={star} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                          ))}
+                        </div>
+                        <span className="text-lg font-semibold">4.8</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">1.247 avaliações</p>
+                    </div>
+
+                    {/* Pricing */}
+                    {(course.pre_enrollment_fee || course.enrollment_fee) && (
+                      <div className="pt-4 border-t space-y-2">
+                        {course.pre_enrollment_fee && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Taxa de Pré-Matrícula:</span>
+                            <span className="font-medium">R$ {course.pre_enrollment_fee.toFixed(2).replace('.', ',')}</span>
+                          </div>
+                        )}
+                        {course.enrollment_fee && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Taxa de Matrícula:</span>
+                            <span className="font-medium">R$ {course.enrollment_fee.toFixed(2).replace('.', ',')}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="pt-4 border-t">
+                      {!user ? (
+                        <Link to="/auth" className="w-full">
+                          <Button className="w-full" size="lg">
+                            Fazer Login para Matrícula
+                          </Button>
+                        </Link>
+                      ) : !preEnrollment ? (
+                        <Link to={`/pre-enrollment?course=${course.id}`} className="w-full">
+                          <Button className="w-full" size="lg">
+                            Fazer Pré-Matrícula
+                          </Button>
+                        </Link>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="text-center">
+                            {preEnrollment.status === 'payment_confirmed' && preEnrollment.organ_approval_status === 'pending' && (
+                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                Aguardando Aprovação do Órgão
+                              </Badge>
+                            )}
+                            
+                            {preEnrollment.organ_approval_status === 'approved' && !preEnrollment.organ_approval_confirmed && (
+                              <Badge variant="default" className="bg-green-500">
+                                Órgão Aprovou - Faça sua Matrícula
+                              </Badge>
+                            )}
+                            
+                            {preEnrollment.organ_approval_status === 'approved' && preEnrollment.organ_approval_confirmed && (
+                              <Badge variant="default" className="bg-purple-500">
+                                Curso Concluído - Certificado Disponível
+                              </Badge>
+                            )}
+                            
+                            {preEnrollment.organ_approval_status === 'rejected' && (
+                              <Badge variant="destructive">
+                                Reprovado pelo Órgão
+                              </Badge>
+                            )}
+                            
+                            {preEnrollment.status === 'pending' && (
+                              <Badge variant="secondary">
+                                Aguardando Análise
+                              </Badge>
+                            )}
+                          </div>
+
+                          {preEnrollment.status === 'payment_confirmed' && preEnrollment.organ_approval_status === 'pending' && (
+                            <Button 
+                              onClick={handleOrganApproval}
+                              variant="outline"
+                              size="lg"
+                              className="w-full"
+                              disabled={loadingAction}
+                            >
+                              {loadingAction ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
+                                  Confirmando...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                  ✓ Meu Órgão Aprovou
+                                </>
+                              )}
+                            </Button>
+                          )}
+
+                          {preEnrollment.organ_approval_status === 'approved' && !preEnrollment.organ_approval_confirmed && (
+                            <Button 
+                              onClick={handleEnrollmentPayment}
+                              className="w-full"
+                              size="lg"
+                              disabled={loadingAction}
+                            >
+                              {loadingAction ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                  Processando...
+                                </>
+                              ) : (
+                                <>
+                                  <CreditCard className="mr-2 h-4 w-4" />
+                                  Fazer Matrícula (R$ {preEnrollment.courses.enrollment_fee?.toFixed(2) || '0,00'})
+                                </>
+                              )}
+                            </Button>
+                          )}
+
+                          {preEnrollment.organ_approval_status === 'approved' && preEnrollment.organ_approval_confirmed && (
+                            <Link to="/student" className="w-full">
+                              <Button className="w-full" size="lg">
+                                <Download className="mr-2 h-4 w-4" />
+                                Baixar Certificado
+                              </Button>
+                            </Link>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </div>
         </div>
       </div>
