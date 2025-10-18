@@ -63,7 +63,7 @@ export function CourseImageGenerator({
 
       if (!data?.imageUrl) {
         console.error('❌ No imageUrl in response:', data);
-        const errorMsg = data?.error || 'Nenhuma imagem foi retornada';
+        const errorMsg = data?.error || data?.details || 'Nenhuma imagem foi retornada';
         throw new Error(errorMsg);
       }
 

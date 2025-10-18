@@ -26,6 +26,8 @@ serve(async (req) => {
     // Usar Lovable AI Gateway (chave já configurada automaticamente)
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
+    console.log('LOVABLE_API_KEY exists:', !!LOVABLE_API_KEY);
+    
     if (!LOVABLE_API_KEY) {
       console.error('Lovable API key not configured');
       return new Response(
@@ -60,6 +62,7 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
       modalities: ["image", "text"]
     };
     
+    console.log('Request body:', JSON.stringify(requestBody, null, 2));
     console.log('Calling Lovable AI Gateway...');
 
     const response = await fetch(
@@ -75,10 +78,12 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
     );
     
     console.log('Response status:', response.status);
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Lovable AI Gateway error:', response.status, errorText);
+      console.error('Full error response:', errorText);
       
       if (response.status === 429) {
         return new Response(
@@ -95,8 +100,12 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
       }
 
       return new Response(
-        JSON.stringify({ error: 'Erro ao gerar imagem com IA. Tente novamente.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ 
+          error: 'Erro ao gerar imagem com IA. Tente novamente.',
+          details: errorText,
+          status: response.status
+        }),
+        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
