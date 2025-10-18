@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -23,8 +22,7 @@ import {
   DollarSign,
   FolderOpen,
   UserCheck,
-  LogOut,
-  Building2
+  LogOut
 } from "lucide-react";
 
 const adminMenuItems = [
@@ -37,11 +35,6 @@ const adminMenuItems = [
     title: "Áreas",
     url: "/admin/areas",
     icon: FolderOpen,
-  },
-  {
-    title: "Instituições",
-    url: "/admin/institutions",
-    icon: Building2,
   },
   {
     title: "Cursos",
