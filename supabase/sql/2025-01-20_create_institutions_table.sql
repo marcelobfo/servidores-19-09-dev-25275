@@ -32,10 +32,7 @@ ON public.institutions
 FOR INSERT
 TO authenticated
 WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM public.user_roles
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
+  public.has_role(auth.uid(), 'admin'::public.app_role)
 );
 
 -- Policy: Only admins can update institutions
@@ -44,10 +41,10 @@ ON public.institutions
 FOR UPDATE
 TO authenticated
 USING (
-  EXISTS (
-    SELECT 1 FROM public.user_roles
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
+  public.has_role(auth.uid(), 'admin'::public.app_role)
+)
+WITH CHECK (
+  public.has_role(auth.uid(), 'admin'::public.app_role)
 );
 
 -- Policy: Only admins can delete institutions
@@ -56,10 +53,7 @@ ON public.institutions
 FOR DELETE
 TO authenticated
 USING (
-  EXISTS (
-    SELECT 1 FROM public.user_roles
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
+  public.has_role(auth.uid(), 'admin'::public.app_role)
 );
 
 -- Create trigger for updated_at
