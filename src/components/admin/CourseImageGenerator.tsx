@@ -46,7 +46,7 @@ export function CourseImageGenerator({
 
     try {
       console.log('📤 Invoking generate-course-image function...');
-      const { data, error } = await supabase.functions.invoke('generate-course-image', {
+      const { data, error } = await supabase.functions.invoke('generate-course-image-v2', {
         body: {
           courseName,
           areaName,

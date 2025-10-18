@@ -14,3 +14,6 @@ verify_jwt = true
 
 [functions.generate-course-image]
 verify_jwt = true
+
+[functions.generate-course-image-v2]
+verify_jwt = true
