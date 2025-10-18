@@ -16,12 +16,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-
-interface Institution {
-  id: string;
-  name: string;
-  type: string;
-}
+import type { Institution } from "@/types/institutions";
 
 interface InstitutionSelectProps {
   value?: string;
@@ -41,13 +36,13 @@ export function InstitutionSelect({ value, onValueChange, onCreateNew }: Institu
   const fetchInstitutions = async () => {
     try {
       const { data, error } = await supabase
-        .from("institutions")
+        .from("institutions" as any)
         .select("id, name, type")
         .eq("is_active", true)
         .order("name");
 
       if (error) throw error;
-      setInstitutions(data || []);
+      setInstitutions((data as unknown as Institution[]) || []);
     } catch (error) {
       console.error("Error fetching institutions:", error);
     } finally {

@@ -20,6 +20,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import type { InstitutionInsert } from "@/types/institutions";
 
 interface QuickInstitutionCreateProps {
   open: boolean;
@@ -62,13 +63,15 @@ export function QuickInstitutionCreate({
 
     setLoading(true);
     try {
+      const insertData: InstitutionInsert = {
+        name: formData.name.trim(),
+        type: formData.type,
+        workload_rules: FEDERAL_DEFAULT_RULES,
+      };
+
       const { data, error } = await supabase
-        .from("institutions")
-        .insert({
-          name: formData.name.trim(),
-          type: formData.type,
-          workload_rules: FEDERAL_DEFAULT_RULES,
-        })
+        .from("institutions" as any)
+        .insert(insertData)
         .select()
         .single();
 
@@ -79,7 +82,7 @@ export function QuickInstitutionCreate({
         description: "Instituição cadastrada com sucesso",
       });
 
-      onSuccess(data.id);
+      onSuccess((data as any).id);
       onOpenChange(false);
       setFormData({ name: "", type: "federal" });
     } catch (error: any) {

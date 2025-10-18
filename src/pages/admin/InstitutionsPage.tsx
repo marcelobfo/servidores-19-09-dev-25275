@@ -30,15 +30,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-
-interface Institution {
-  id: string;
-  name: string;
-  type: string;
-  workload_rules: Record<string, number>;
-  is_active: boolean;
-  created_at: string;
-}
+import type { Institution, InstitutionInsert, InstitutionUpdate } from "@/types/institutions";
 
 export default function InstitutionsPage() {
   const { toast } = useToast();
@@ -62,12 +54,12 @@ export default function InstitutionsPage() {
   const fetchInstitutions = async () => {
     try {
       const { data, error } = await supabase
-        .from("institutions")
+        .from("institutions" as any)
         .select("*")
         .order("name");
 
       if (error) throw error;
-      setInstitutions(data || []);
+      setInstitutions((data as unknown as Institution[]) || []);
     } catch (error) {
       console.error("Error fetching institutions:", error);
       toast({
@@ -98,9 +90,11 @@ export default function InstitutionsPage() {
 
   const handleToggleActive = async (institution: Institution) => {
     try {
+      const updateData: InstitutionUpdate = { is_active: !institution.is_active };
+      
       const { error } = await supabase
-        .from("institutions")
-        .update({ is_active: !institution.is_active })
+        .from("institutions" as any)
+        .update(updateData)
         .eq("id", institution.id);
 
       if (error) throw error;
@@ -127,23 +121,29 @@ export default function InstitutionsPage() {
 
     try {
       if (editingInstitution) {
+        const updateData: InstitutionUpdate = {
+          name: formData.name,
+          type: formData.type,
+          workload_rules: formData.workload_rules,
+        };
+
         const { error } = await supabase
-          .from("institutions")
-          .update({
-            name: formData.name,
-            type: formData.type,
-            workload_rules: formData.workload_rules,
-          })
+          .from("institutions" as any)
+          .update(updateData)
           .eq("id", editingInstitution.id);
 
         if (error) throw error;
         toast({ title: "Sucesso", description: "Instituição atualizada com sucesso" });
       } else {
-        const { error } = await supabase.from("institutions").insert({
+        const insertData: InstitutionInsert = {
           name: formData.name,
           type: formData.type,
           workload_rules: formData.workload_rules,
-        });
+        };
+
+        const { error } = await supabase
+          .from("institutions" as any)
+          .insert(insertData);
 
         if (error) throw error;
         toast({ title: "Sucesso", description: "Instituição cadastrada com sucesso" });
