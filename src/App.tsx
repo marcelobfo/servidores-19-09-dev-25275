@@ -30,6 +30,7 @@ import NotFound from "./pages/NotFound";
 import VerifyCertificate from "./pages/VerifyCertificate";
 import CertificatesPage from "./pages/admin/CertificatesPage";
 import EnrollmentsManagementPage from "./pages/admin/EnrollmentsManagementPage";
+import InstitutionsPage from "./pages/admin/InstitutionsPage";
 
 const queryClient = new QueryClient();
 
@@ -191,6 +192,16 @@ const App = () => (
                   <AuthGuard adminOnly>
                     <AdminLayout>
                       <EnrollmentsManagementPage />
+                    </AdminLayout>
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/admin/institutions" 
+                element={
+                  <AuthGuard adminOnly>
+                    <AdminLayout>
+                      <InstitutionsPage />
                     </AdminLayout>
                   </AuthGuard>
                 } 
