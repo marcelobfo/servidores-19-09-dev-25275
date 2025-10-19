@@ -29,7 +29,7 @@ interface Enrollment {
     id: string;
     full_name: string;
     email: string;
-  };
+  } | null;
 }
 
 const statusLabels = {
@@ -105,6 +105,11 @@ export function EnrollmentsPage() {
 
   const handleEnrollmentCheckout = async (enrollment: Enrollment) => {
     try {
+      if (!enrollment.pre_enrollments) {
+        toast.error("Informações de pré-matrícula não encontradas");
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
         body: {
           pre_enrollment_id: enrollment.pre_enrollments.id,
@@ -279,10 +284,10 @@ export function EnrollmentsPage() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
-                      <strong>Estudante:</strong> {enrollment.pre_enrollments.full_name}
+                      <strong>Estudante:</strong> {enrollment.pre_enrollments?.full_name || "Não informado"}
                     </div>
                     <div>
-                      <strong>Email:</strong> {enrollment.pre_enrollments.email}
+                      <strong>Email:</strong> {enrollment.pre_enrollments?.email || "Não informado"}
                     </div>
                     {enrollment.enrollment_date && (
                       <div>
