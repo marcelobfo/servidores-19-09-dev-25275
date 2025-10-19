@@ -183,6 +183,26 @@ export function PreEnrollmentsPage() {
     );
   }
 
+  // Fallback se não houver usuário após o carregamento
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4 p-4">
+        <div className="text-center max-w-md">
+          <h2 className="text-2xl font-bold mb-2">Sessão Expirada</h2>
+          <p className="text-muted-foreground mb-6">
+            Sua sessão expirou ou é inválida. Por favor, faça login novamente para continuar.
+          </p>
+          <Button onClick={() => {
+            localStorage.clear();
+            window.location.href = '/auth';
+          }}>
+            Fazer Login Novamente
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>

@@ -24,6 +24,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // Auto-recovery: detectar sessão inválida e limpar
+        if (event === 'SIGNED_OUT' && !session) {
+          localStorage.clear();
+          setIsAdmin(false);
+        }
+        
+        // Token refresh failed - limpar e redirecionar
+        if (event === 'TOKEN_REFRESHED' && !session) {
+          localStorage.clear();
+          setSession(null);
+          setUser(null);
+          setIsAdmin(false);
+          setLoading(false);
+          return;
+        }
+        
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -53,9 +69,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     );
 
     // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      // Se houver erro ao buscar sessão, limpar tudo
+      if (error) {
+        console.error('Error getting session:', error);
+        localStorage.clear();
+        setSession(null);
+        setUser(null);
+        setIsAdmin(false);
+      } else {
+        setSession(session);
+        setUser(session?.user ?? null);
+      }
       setLoading(false);
     });
 

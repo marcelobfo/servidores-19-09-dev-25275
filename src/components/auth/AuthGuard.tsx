@@ -1,5 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
 import { Navigate } from "react-router-dom";
+import { useEffect } from "react";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -8,6 +9,13 @@ interface AuthGuardProps {
 
 export const AuthGuard = ({ children, adminOnly = false }: AuthGuardProps) => {
   const { user, loading, isAdmin } = useAuth();
+
+  useEffect(() => {
+    // Se terminou de carregar mas não tem usuário, limpar localStorage
+    if (!loading && !user) {
+      localStorage.clear();
+    }
+  }, [loading, user]);
 
   if (loading) {
     return (
