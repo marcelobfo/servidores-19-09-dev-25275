@@ -78,8 +78,8 @@ serve(async (req) => {
 
     console.log(`Authenticated user: ${user.id}`);
 
-    // Get payment settings
-    const { data: paymentSettings, error: settingsError } = await supabaseClient
+    // Get payment settings using serviceClient to bypass RLS
+    const { data: paymentSettings, error: settingsError } = await serviceClient
       .from('payment_settings')
       .select('environment, asaas_api_key_sandbox, asaas_api_key_production')
       .single();
