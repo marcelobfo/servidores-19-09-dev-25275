@@ -8,7 +8,7 @@ import { StatusFilter } from "@/components/student/filters/StatusFilter";
 import { SearchFilter } from "@/components/student/filters/SearchFilter";
 import { SortOptions } from "@/components/student/filters/SortOptions";
 import { PaymentModal } from "@/components/payment/PaymentModal";
-import { Clock, CheckCircle, XCircle, DollarSign, FileText, Calendar } from "lucide-react";
+import { Clock, CheckCircle, XCircle, DollarSign, FileText, Calendar, Download } from "lucide-react";
 import { toast } from "sonner";
 
 interface PreEnrollment {
@@ -112,9 +112,120 @@ export function PreEnrollmentsPage() {
     }
   };
 
-  const handleEnrollment = (preEnrollment: PreEnrollment) => {
-    toast.info("Funcionalidade de matrícula em desenvolvimento");
-    // TODO: Implementar fluxo de matrícula
+  const [downloadingDeclarations, setDownloadingDeclarations] = useState<Set<string>>(new Set());
+  const [downloadingStudyPlans, setDownloadingStudyPlans] = useState<Set<string>>(new Set());
+
+  const handleDownloadDeclaration = async (preEnrollmentId: string) => {
+    try {
+      setDownloadingDeclarations(prev => new Set(prev).add(preEnrollmentId));
+      
+      // Generate documents if they don't exist
+      const { error: generateError } = await supabase.functions.invoke('generate-enrollment-documents', {
+        body: { preEnrollmentId }
+      });
+      
+      if (generateError) throw generateError;
+      
+      // Fetch the declaration
+      const { data, error } = await supabase
+        .from('enrollment_declarations')
+        .select('content')
+        .eq('pre_enrollment_id', preEnrollmentId)
+        .single();
+        
+      if (error) throw error;
+      
+      // Create and download the file
+      const blob = new Blob([data.content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `declaracao-matricula-${preEnrollmentId}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success("Declaração baixada com sucesso!");
+    } catch (error) {
+      console.error("Error downloading declaration:", error);
+      toast.error("Erro ao baixar declaração");
+    } finally {
+      setDownloadingDeclarations(prev => {
+        const next = new Set(prev);
+        next.delete(preEnrollmentId);
+        return next;
+      });
+    }
+  };
+
+  const handleDownloadStudyPlan = async (preEnrollmentId: string) => {
+    try {
+      setDownloadingStudyPlans(prev => new Set(prev).add(preEnrollmentId));
+      
+      // Generate documents if they don't exist
+      const { error: generateError } = await supabase.functions.invoke('generate-enrollment-documents', {
+        body: { preEnrollmentId }
+      });
+      
+      if (generateError) throw generateError;
+      
+      // Fetch the study plan
+      const { data, error } = await supabase
+        .from('study_plans')
+        .select('content')
+        .eq('pre_enrollment_id', preEnrollmentId)
+        .single();
+        
+      if (error) throw error;
+      
+      // Create and download the file
+      const blob = new Blob([data.content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `plano-estudos-${preEnrollmentId}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success("Plano de estudos baixado com sucesso!");
+    } catch (error) {
+      console.error("Error downloading study plan:", error);
+      toast.error("Erro ao baixar plano de estudos");
+    } finally {
+      setDownloadingStudyPlans(prev => {
+        const next = new Set(prev);
+        next.delete(preEnrollmentId);
+        return next;
+      });
+    }
+  };
+
+  const handleEnrollment = async (preEnrollment: PreEnrollment) => {
+    try {
+      // Create enrollment
+      const { data, error } = await supabase
+        .from("enrollments")
+        .insert({
+          user_id: user?.id,
+          course_id: preEnrollment.courses.id,
+          pre_enrollment_id: preEnrollment.id,
+          status: "active",
+          payment_status: "paid", // Pre-enrollment already paid
+          enrollment_date: new Date().toISOString(),
+          enrollment_amount: 0 // No additional fee for now
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success("Matrícula realizada com sucesso!");
+      
+      // Navigate to enrollments page
+      window.location.href = "/student/enrollments";
+    } catch (error) {
+      console.error("Error creating enrollment:", error);
+      toast.error("Erro ao realizar matrícula");
+    }
   };
 
   const handlePreEnrollmentPayment = (preEnrollment: PreEnrollment) => {
@@ -360,6 +471,29 @@ export function PreEnrollmentsPage() {
                           {preEnrollment.organ_approval_date && 
                             new Date(preEnrollment.organ_approval_date).toLocaleDateString("pt-BR")
                           }
+                        </div>
+                        <p className="text-sm text-green-800 dark:text-green-200 mb-3">
+                          Documentos disponíveis para apresentar ao órgão:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="secondary"
+                            onClick={() => handleDownloadDeclaration(preEnrollment.id)}
+                            size="sm"
+                            disabled={downloadingDeclarations.has(preEnrollment.id)}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            {downloadingDeclarations.has(preEnrollment.id) ? 'Baixando...' : 'Declaração de Matrícula'}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            onClick={() => handleDownloadStudyPlan(preEnrollment.id)}
+                            size="sm"
+                            disabled={downloadingStudyPlans.has(preEnrollment.id)}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            {downloadingStudyPlans.has(preEnrollment.id) ? 'Baixando...' : 'Plano de Estudos'}
+                          </Button>
                         </div>
                       </div>
                       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">

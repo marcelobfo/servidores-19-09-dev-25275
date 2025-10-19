@@ -17,3 +17,6 @@ verify_jwt = true
 
 [functions.generate-course-image-v2]
 verify_jwt = true
+
+[functions.check-certificate-availability]
+verify_jwt = false

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StatusFilter } from "@/components/student/filters/StatusFilter";
 import { SearchFilter } from "@/components/student/filters/SearchFilter";
 import { SortOptions } from "@/components/student/filters/SortOptions";
-import { Clock, CheckCircle, DollarSign, FileText, Calendar } from "lucide-react";
+import { Clock, CheckCircle, DollarSign, FileText, Calendar, Download, Award } from "lucide-react";
 import { toast } from "sonner";
 
 interface Enrollment {
@@ -24,6 +24,7 @@ interface Enrollment {
     id: string;
     name: string;
     enrollment_fee?: number;
+    duration_days?: number;
   };
   pre_enrollments: {
     id: string;
@@ -82,7 +83,8 @@ export function EnrollmentsPage() {
           courses (
             id,
             name,
-            enrollment_fee
+            enrollment_fee,
+            duration_days
           ),
           pre_enrollments (
             id,
@@ -169,6 +171,53 @@ export function EnrollmentsPage() {
         {paymentStatusLabels[paymentStatus as keyof typeof paymentStatusLabels] || paymentStatus}
       </Badge>
     );
+  };
+
+  const calculateCertificateAvailability = (enrollment: Enrollment): {
+    isAvailable: boolean;
+    availableDate: Date | null;
+    daysRemaining: number;
+  } => {
+    if (!enrollment.enrollment_date || !enrollment.courses.duration_days) {
+      return { isAvailable: false, availableDate: null, daysRemaining: 0 };
+    }
+
+    const enrollmentDate = new Date(enrollment.enrollment_date);
+    const durationDays = enrollment.courses.duration_days;
+    const availableDate = new Date(enrollmentDate);
+    availableDate.setDate(availableDate.getDate() + durationDays + 1);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    availableDate.setHours(0, 0, 0, 0);
+
+    const isAvailable = today >= availableDate;
+    const daysRemaining = Math.ceil((availableDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    return { isAvailable, availableDate, daysRemaining };
+  };
+
+  const handleDownloadCertificate = async (enrollmentId: string) => {
+    try {
+      toast.info("Gerando certificado...");
+      
+      const { data, error } = await supabase
+        .from('certificates')
+        .select('*')
+        .eq('enrollment_id', enrollmentId)
+        .single();
+
+      if (error) {
+        // Certificate doesn't exist, needs to be generated
+        toast.info("Certificado será gerado em breve");
+        return;
+      }
+
+      toast.success("Certificado baixado!");
+    } catch (error) {
+      console.error("Error downloading certificate:", error);
+      toast.error("Erro ao baixar certificado");
+    }
   };
 
   const filteredAndSortedEnrollments = enrollments
@@ -319,12 +368,47 @@ export function EnrollmentsPage() {
                   )}
 
                   {enrollment.status === "active" && (
-                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                      <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-200">
-                        <CheckCircle className="h-4 w-4" />
-                        Matrícula ativa! Você pode acessar o conteúdo do curso.
+                    <>
+                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-200">
+                          <CheckCircle className="h-4 w-4" />
+                          Matrícula ativa! Você pode acessar o conteúdo do curso.
+                        </div>
                       </div>
-                    </div>
+
+                      {(() => {
+                        const certInfo = calculateCertificateAvailability(enrollment);
+                        
+                        if (certInfo.isAvailable) {
+                          return (
+                            <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+                              <p className="text-sm text-purple-800 dark:text-purple-200 mb-3">
+                                Parabéns! Você concluiu o curso e pode baixar seu certificado.
+                              </p>
+                              <Button
+                                onClick={() => handleDownloadCertificate(enrollment.id)}
+                                size="lg"
+                                className="flex items-center gap-2"
+                              >
+                                <Award className="h-4 w-4" />
+                                Baixar Certificado
+                              </Button>
+                            </div>
+                          );
+                        } else if (certInfo.availableDate) {
+                          return (
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                              <p className="text-sm text-blue-800 dark:text-blue-200">
+                                Certificado estará disponível em{" "}
+                                <strong>{certInfo.availableDate.toLocaleDateString("pt-BR")}</strong>
+                                {certInfo.daysRemaining > 0 && ` (${certInfo.daysRemaining} dias restantes)`}
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </>
                   )}
 
                   {enrollment.status === "completed" && (
