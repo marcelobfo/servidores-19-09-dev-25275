@@ -82,11 +82,23 @@ serve(async (req) => {
     const { data: paymentSettings, error: settingsError } = await serviceClient
       .from('payment_settings')
       .select('environment, asaas_api_key_sandbox, asaas_api_key_production')
-      .single();
+      .maybeSingle();
 
-    if (settingsError || !paymentSettings) {
-      console.error("Payment settings error:", settingsError);
-      return new Response(JSON.stringify({ error: "Payment configuration not found" }), {
+    if (settingsError) {
+      console.error("Payment settings database error:", settingsError);
+      return new Response(JSON.stringify({ 
+        error: "Erro ao buscar configurações de pagamento. Entre em contato com o suporte." 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (!paymentSettings) {
+      console.error("Payment settings not configured - table is empty");
+      return new Response(JSON.stringify({ 
+        error: "Sistema de pagamento não configurado. O administrador precisa configurar as credenciais do Asaas primeiro." 
+      }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
