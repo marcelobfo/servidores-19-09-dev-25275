@@ -136,7 +136,8 @@ const EnrollmentsPage = () => {
         throw fetchError;
       }
 
-      const updateData: any = { 
+      // Build update object with only defined values
+      const updateData: Record<string, any> = { 
         status
       };
 
@@ -149,11 +150,21 @@ const EnrollmentsPage = () => {
       if (status === 'approved') {
         updateData.approved_at = new Date().toISOString();
         const { data: userData } = await supabase.auth.getUser();
-        updateData.approved_by = userData.user?.id;
+        // Only add approved_by if userData.user exists and has id
+        if (userData?.user?.id) {
+          updateData.approved_by = userData.user.id;
+        }
         if (manualApproval) {
           updateData.manual_approval = true;
         }
       }
+
+      // Remove any undefined values to prevent JSON errors
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined || updateData[key] === null) {
+          delete updateData[key];
+        }
+      });
 
       console.log('Update data:', updateData);
 
@@ -198,7 +209,7 @@ const EnrollmentsPage = () => {
 
   const updateOrganApprovalStatus = async (id: string, approvalStatus: string, notes?: string) => {
     try {
-      const updateData: any = {
+      const updateData: Record<string, any> = {
         organ_approval_status: approvalStatus,
         organ_approval_date: new Date().toISOString(),
       };
@@ -213,8 +224,18 @@ const EnrollmentsPage = () => {
       if (approvalStatus === 'approved') {
         updateData.status = 'approved';
         updateData.approved_at = new Date().toISOString();
-        updateData.approved_by = (await supabase.auth.getUser()).data.user?.id;
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData?.user?.id) {
+          updateData.approved_by = userData.user.id;
+        }
       }
+
+      // Remove any undefined values to prevent JSON errors
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined || updateData[key] === null) {
+          delete updateData[key];
+        }
+      });
 
       const { error } = await supabase
         .from("pre_enrollments")

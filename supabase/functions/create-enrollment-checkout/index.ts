@@ -40,6 +40,8 @@ serve(async (req) => {
 
     // Check if user is authenticated
     const authHeader = req.headers.get('Authorization');
+    console.log("Authorization header present:", !!authHeader);
+    
     if (!authHeader) {
       console.error("No authorization header provided");
       return new Response(JSON.stringify({ error: "Authentication required" }), {
@@ -48,14 +50,27 @@ serve(async (req) => {
       });
     }
 
-    // Verify the user with anon client
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    );
+    // Extract token from Bearer string
+    const token = authHeader.replace('Bearer ', '');
+    console.log("Token extracted:", token.substring(0, 20) + "...");
 
-    if (authError || !user) {
-      console.error("Authentication failed:", authError);
-      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
+    // Verify the user with anon client
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+
+    if (authError) {
+      console.error("Authentication error:", authError.message);
+      return new Response(JSON.stringify({ 
+        error: "Invalid authentication", 
+        details: authError.message 
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (!user) {
+      console.error("No user found in token");
+      return new Response(JSON.stringify({ error: "Invalid authentication - no user found" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
