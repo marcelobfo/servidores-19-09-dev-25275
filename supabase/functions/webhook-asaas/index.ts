@@ -214,8 +214,11 @@ serve(async (req) => {
       throw new Error('Failed to update payment');
     }
 
+    // Check if this is an enrollment payment
+    const isEnrollmentPayment = dbPayment.kind === 'enrollment';
+
     // Update pre-enrollment status if payment was received/confirmed
-    if (updatePreEnrollmentStatus) {
+    if (updatePreEnrollmentStatus && !isEnrollmentPayment) {
       const { error: updatePreEnrollmentError } = await supabaseClient
         .from('pre_enrollments')
         .update({ status: 'payment_confirmed' })
@@ -227,8 +230,29 @@ serve(async (req) => {
       } else {
         console.log('Pre-enrollment status updated to payment_confirmed');
         
-      // Trigger N8N webhook for payment confirmation
-      await triggerN8NWebhook(supabaseClient, dbPayment.pre_enrollment_id, 'payment_confirmed', dbPayment.id);
+        // Trigger N8N webhook for payment confirmation
+        await triggerN8NWebhook(supabaseClient, dbPayment.pre_enrollment_id, 'payment_confirmed', dbPayment.id);
+      }
+    }
+
+    // Update enrollment status if this is an enrollment payment
+    if (updatePreEnrollmentStatus && isEnrollmentPayment && dbPayment.enrollment_id) {
+      console.log('Updating enrollment payment status for:', dbPayment.enrollment_id);
+      
+      const { error: updateEnrollmentError } = await supabaseClient
+        .from('enrollments')
+        .update({
+          payment_status: 'paid',
+          status: 'active',
+          enrollment_date: new Date().toISOString()
+        })
+        .eq('id', dbPayment.enrollment_id);
+
+      if (updateEnrollmentError) {
+        console.error('Error updating enrollment:', updateEnrollmentError);
+        // Don't throw here as payment update was successful
+      } else {
+        console.log('Enrollment status updated to active with payment_status paid');
       }
     }
 

@@ -25,6 +25,7 @@ interface PreEnrollment {
     id: string;
     name: string;
     pre_enrollment_fee?: number;
+    enrollment_fee?: number;
   };
 }
 
@@ -60,6 +61,8 @@ export function PreEnrollmentsPage() {
   const [sortBy, setSortBy] = useState("created_at_desc");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedPreEnrollment, setSelectedPreEnrollment] = useState<PreEnrollment | null>(null);
+  const [showEnrollmentPaymentModal, setShowEnrollmentPaymentModal] = useState(false);
+  const [selectedPreEnrollmentForEnrollment, setSelectedPreEnrollmentForEnrollment] = useState<PreEnrollment | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -76,7 +79,8 @@ export function PreEnrollmentsPage() {
           courses (
             id,
             name,
-            pre_enrollment_fee
+            pre_enrollment_fee,
+            enrollment_fee
           )
         `)
         .eq("user_id", user?.id)
@@ -201,26 +205,48 @@ export function PreEnrollmentsPage() {
 
   const handleEnrollment = async (preEnrollment: PreEnrollment) => {
     try {
-      // Create enrollment
-      const { data, error } = await supabase
+      const enrollmentFee = preEnrollment.courses.enrollment_fee || 0;
+      
+      // Se há taxa de matrícula, abrir modal de pagamento
+      if (enrollmentFee > 0) {
+        // Primeiro criar a matrícula com status pending_payment
+        const { data: enrollment, error: enrollmentError } = await supabase
+          .from("enrollments")
+          .insert({
+            user_id: user?.id,
+            course_id: preEnrollment.courses.id,
+            pre_enrollment_id: preEnrollment.id,
+            status: "pending_payment",
+            payment_status: "pending",
+            enrollment_amount: enrollmentFee
+          })
+          .select()
+          .single();
+
+        if (enrollmentError) throw enrollmentError;
+
+        // Abrir modal de pagamento com o enrollment_id
+        setSelectedPreEnrollmentForEnrollment(preEnrollment);
+        setShowEnrollmentPaymentModal(true);
+        return;
+      }
+      
+      // Se não há taxa, criar matrícula diretamente com status ativo
+      const { error } = await supabase
         .from("enrollments")
         .insert({
           user_id: user?.id,
           course_id: preEnrollment.courses.id,
           pre_enrollment_id: preEnrollment.id,
           status: "active",
-          payment_status: "paid", // Pre-enrollment already paid
+          payment_status: "paid",
           enrollment_date: new Date().toISOString(),
-          enrollment_amount: 0 // No additional fee for now
-        })
-        .select()
-        .single();
+          enrollment_amount: 0
+        });
 
       if (error) throw error;
 
       toast.success("Matrícula realizada com sucesso!");
-      
-      // Navigate to enrollments page
       window.location.href = "/student/enrollments";
     } catch (error) {
       console.error("Error creating enrollment:", error);
@@ -237,6 +263,14 @@ export function PreEnrollmentsPage() {
     setShowPaymentModal(false);
     setSelectedPreEnrollment(null);
     fetchPreEnrollments();
+  };
+
+  const handleEnrollmentPaymentSuccess = () => {
+    setShowEnrollmentPaymentModal(false);
+    setSelectedPreEnrollmentForEnrollment(null);
+    toast.success("Pagamento da matrícula realizado com sucesso!");
+    // Redirecionar para a página de matrículas
+    window.location.href = "/student/enrollments";
   };
 
   const getStatusIcon = (status: string) => {
@@ -526,6 +560,18 @@ export function PreEnrollmentsPage() {
           amount={selectedPreEnrollment.courses.pre_enrollment_fee || 0}
           courseName={selectedPreEnrollment.courses.name}
           onPaymentSuccess={handlePaymentSuccess}
+        />
+      )}
+
+      {showEnrollmentPaymentModal && selectedPreEnrollmentForEnrollment && (
+        <PaymentModal
+          isOpen={showEnrollmentPaymentModal}
+          onClose={() => setShowEnrollmentPaymentModal(false)}
+          preEnrollmentId={selectedPreEnrollmentForEnrollment.id}
+          amount={selectedPreEnrollmentForEnrollment.courses.enrollment_fee || 0}
+          courseName={selectedPreEnrollmentForEnrollment.courses.name}
+          onPaymentSuccess={handleEnrollmentPaymentSuccess}
+          kind="enrollment"
         />
       )}
     </div>

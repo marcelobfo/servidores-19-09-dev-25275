@@ -63,6 +63,34 @@ export default function EnrollmentsManagementPage() {
     }
   };
 
+  const approveEnrollmentManually = async (enrollmentId: string) => {
+    try {
+      const { error } = await supabase
+        .from('enrollments')
+        .update({
+          payment_status: 'paid',
+          status: 'active',
+          enrollment_date: new Date().toISOString(),
+        })
+        .eq('id', enrollmentId);
+        
+      if (error) throw error;
+      
+      toast({
+        title: "Sucesso",
+        description: "Matrícula aprovada manualmente com sucesso!"
+      });
+      
+      load(); // Recarregar lista
+    } catch (e: any) {
+      toast({
+        title: "Erro",
+        description: e.message || "Falha ao aprovar matrícula",
+        variant: "destructive"
+      });
+    }
+  };
+
   const statusBadge = (s: string) => {
     const map: Record<string, { label: string; variant: any }> = {
       awaiting_payment: { label: "Aguardando Pagamento", variant: "secondary" },
@@ -189,6 +217,7 @@ export default function EnrollmentsManagementPage() {
                 <TableHead>Status</TableHead>
                 <TableHead>Pagamento</TableHead>
                 <TableHead>Data</TableHead>
+                <TableHead>Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -200,6 +229,16 @@ export default function EnrollmentsManagementPage() {
                   <TableCell>{statusBadge(it.status)}</TableCell>
                   <TableCell>{payBadge(it.payment_status)}</TableCell>
                   <TableCell>{new Date(it.created_at).toLocaleString()}</TableCell>
+                  <TableCell>
+                    {it.payment_status === 'pending' && it.status === 'pending_payment' && (
+                      <Button
+                        size="sm"
+                        onClick={() => approveEnrollmentManually(it.id)}
+                      >
+                        Aprovar Manualmente
+                      </Button>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

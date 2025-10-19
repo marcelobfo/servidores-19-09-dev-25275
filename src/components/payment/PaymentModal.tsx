@@ -105,11 +105,31 @@ export function PaymentModal({
         throw new Error('Dados de pagamento inválidos. Verifique se todos os dados obrigatórios estão preenchidos.');
       }
 
+      let enrollmentIdToSend = enrollmentId;
+      
+      // Se é pagamento de matrícula mas não temos o ID, buscar do banco
+      if (kind === 'enrollment' && !enrollmentIdToSend) {
+        const { data: enrollmentData, error: enrollmentError } = await supabase
+          .from('enrollments')
+          .select('id')
+          .eq('pre_enrollment_id', preEnrollmentId)
+          .eq('status', 'pending_payment')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+          
+        if (enrollmentError) {
+          console.error('Error fetching enrollment:', enrollmentError);
+        } else if (enrollmentData) {
+          enrollmentIdToSend = enrollmentData.id;
+        }
+      }
+
       console.log('Creating payment with:', {
         pre_enrollment_id: preEnrollmentId,
         amount: amount,
         kind,
-        enrollment_id: enrollmentId
+        enrollment_id: enrollmentIdToSend
       });
 
       const { data, error } = await supabase.functions.invoke('create-payment', {
@@ -117,7 +137,7 @@ export function PaymentModal({
           pre_enrollment_id: preEnrollmentId,
           amount: amount,
           kind,
-          enrollment_id: enrollmentId
+          enrollment_id: enrollmentIdToSend
         }
       });
 

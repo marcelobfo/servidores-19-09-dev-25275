@@ -494,6 +494,24 @@ serve(async (req) => {
       // Don't throw here as payment was created successfully
     }
 
+    // If this is an enrollment payment, update enrollment with payment_id
+    if (kind === 'enrollment' && enrollment_id) {
+      const { error: enrollmentUpdateError } = await supabaseClient
+        .from('enrollments')
+        .update({ 
+          enrollment_payment_id: dbPayment.id,
+          status: 'pending_payment'
+        })
+        .eq('id', enrollment_id);
+
+      if (enrollmentUpdateError) {
+        console.error('Error linking payment to enrollment:', enrollmentUpdateError);
+        // Don't throw here as payment was created successfully
+      } else {
+        console.log('Enrollment updated with payment_id:', dbPayment.id);
+      }
+    }
+
     console.log('Payment created successfully:', dbPayment.id);
 
     return new Response(JSON.stringify(dbPayment), {

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StatusFilter } from "@/components/student/filters/StatusFilter";
 import { SearchFilter } from "@/components/student/filters/SearchFilter";
 import { SortOptions } from "@/components/student/filters/SortOptions";
+import { PaymentModal } from "@/components/payment/PaymentModal";
 import { Clock, CheckCircle, DollarSign, FileText, Calendar, Download, Award } from "lucide-react";
 import { toast } from "sonner";
 
@@ -67,6 +68,8 @@ export function EnrollmentsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("created_at_desc");
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedEnrollment, setSelectedEnrollment] = useState<Enrollment | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -105,31 +108,20 @@ export function EnrollmentsPage() {
     }
   };
 
-  const handleEnrollmentCheckout = async (enrollment: Enrollment) => {
-    try {
-      if (!enrollment.pre_enrollments) {
-        toast.error("Informações de pré-matrícula não encontradas");
-        return;
-      }
-
-      const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
-        body: {
-          pre_enrollment_id: enrollment.pre_enrollments.id,
-          amount: enrollment.courses.enrollment_fee || 0,
-        }
-      });
-
-      if (error) throw error;
-      
-      if (data.checkout_url) {
-        window.open(data.checkout_url, "_blank");
-      } else {
-        throw new Error("URL de checkout não encontrada");
-      }
-    } catch (error) {
-      console.error("Error creating checkout:", error);
-      toast.error("Erro ao criar checkout de pagamento");
+  const handleEnrollmentPayment = (enrollment: Enrollment) => {
+    if (!enrollment.pre_enrollments) {
+      toast.error("Informações de pré-matrícula não encontradas");
+      return;
     }
+    setSelectedEnrollment(enrollment);
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentSuccess = () => {
+    setShowPaymentModal(false);
+    setSelectedEnrollment(null);
+    toast.success("Pagamento da matrícula confirmado com sucesso!");
+    fetchEnrollments(); // Recarregar lista
   };
 
   const getStatusIcon = (status: string) => {
@@ -351,13 +343,13 @@ export function EnrollmentsPage() {
                     )}
                   </div>
 
-                  {enrollment.status === "awaiting_payment" && enrollment.payment_status === "pending" && (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                      <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
-                        Complete sua matrícula efetuando o pagamento da taxa de matrícula.
+                  {(enrollment.status === "awaiting_payment" || enrollment.status === "pending_payment") && enrollment.payment_status === "pending" && (
+                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+                      <p className="text-sm text-orange-800 dark:text-orange-200 mb-3">
+                        Pagamento da matrícula pendente. Clique para gerar um novo QR Code PIX.
                       </p>
                       <Button
-                        onClick={() => handleEnrollmentCheckout(enrollment)}
+                        onClick={() => handleEnrollmentPayment(enrollment)}
                         size="sm"
                         className="flex items-center gap-2"
                       >
@@ -424,6 +416,19 @@ export function EnrollmentsPage() {
             </Card>
           ))}
         </div>
+      )}
+
+      {showPaymentModal && selectedEnrollment && selectedEnrollment.pre_enrollments && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          preEnrollmentId={selectedEnrollment.pre_enrollments.id}
+          amount={selectedEnrollment.courses.enrollment_fee || 0}
+          courseName={selectedEnrollment.courses.name}
+          onPaymentSuccess={handlePaymentSuccess}
+          kind="enrollment"
+          enrollmentId={selectedEnrollment.id}
+        />
       )}
     </div>
   );
