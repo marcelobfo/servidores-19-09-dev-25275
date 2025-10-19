@@ -338,37 +338,43 @@ try {
   const courseLineEnd = courseLineStart + courseNameWidth;
   pdf.line(courseLineStart, 50, courseLineEnd, 50);
 
-  // Modules content with improved formatting
-  pdf.setFontSize(10);
+  // Modules content with two-column layout
+  pdf.setFontSize(8);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(0, 0, 0);
   
-  // Parse modules from JSON string and format properly
-  let modules: any[] = [];
+  // Parse modules from JSON string
+  let modules: Array<{ name: string }> = [];
   try {
     const parsedModules = JSON.parse(certificateData.courseModules);
     
-    // Check if it's the new format with módulos key
-    if (parsedModules.módulos && Array.isArray(parsedModules.módulos)) {
-      modules = parsedModules.módulos.map((m: any) => ({
-        title: m.nome || m.title || '',
-        description: m.descricao || m.description || ''
-      }));
-    } else if (Array.isArray(parsedModules)) {
-      modules = parsedModules;
+    if (Array.isArray(parsedModules)) {
+      modules = parsedModules.map((m: any, idx: number) => {
+        if (typeof m === 'string') {
+          return { name: m.trim() };
+        }
+        // Prioritize 'name' field (ModuleEditor format)
+        const moduleName = m.name || m.nome || m.title || `Módulo ${idx + 1}`;
+        return { name: moduleName.trim() };
+      });
     }
   } catch (e) {
     console.warn('Could not parse modules JSON:', e);
-    // Fallback: treat as plain text
-    modules = certificateData.courseModules.split('\n').map((text, index) => ({
-      id: index + 1,
-      title: text.trim(),
-      description: ''
-    }));
+    modules = certificateData.courseModules.split('\n')
+      .filter((text: string) => text.trim())
+      .map((text: string) => ({ name: text.trim() }));
   }
-  let yPosition = 65;
   
-  // Preload back background once for subsequent pages
+  // Two-column layout configuration
+  const leftColumnX = 25;
+  const rightColumnX = pageWidth / 2 + 5;
+  const maxYPerColumn = pageHeight - 60;
+  const lineHeight = 5;
+  
+  let currentColumn: 'left' | 'right' = 'left';
+  let yPosition = 60;
+  
+  // Preload back background for subsequent pages
   let backBg: HTMLImageElement | null = null;
   try {
     if (settings.certificate_back_bg_url) {
@@ -379,13 +385,13 @@ try {
   }
   
   modules.forEach((module, index) => {
-    const moduleTitle = typeof module === 'string' 
-      ? module.trim() 
-      : (typeof module.title === 'string' ? module.title.trim() : '') || `Módulo ${index + 1}`;
-    const moduleDescription = typeof module === 'object' ? module.description || '' : '';
-    
-    if (moduleTitle) {
-      if (yPosition > pageHeight - 40) {
+    // Check if we need to move to next column or page
+    if (yPosition > maxYPerColumn) {
+      if (currentColumn === 'left') {
+        currentColumn = 'right';
+        yPosition = 60;
+      } else {
+        // Add new page
         pdf.addPage();
         if (backBg) {
           pdf.addImage(backBg, 'PNG', 0, 0, pageWidth, pageHeight);
@@ -393,38 +399,25 @@ try {
         // Add header on new pages
         pdf.setFillColor(30, 64, 175);
         pdf.rect(0, 0, pageWidth, 25, 'F');
-        pdf.setFontSize(14);
+        pdf.setFontSize(12);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(255, 255, 255);
         pdf.text('CONTEÚDO PROGRAMÁTICO (continuação)', pageWidth / 2, 16, { align: 'center' });
+        
+        currentColumn = 'left';
         yPosition = 35;
         pdf.setTextColor(0, 0, 0);
         pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(12);
+        pdf.setFontSize(8);
       }
-      
-      // Add module number if it's not already numbered
-      const moduleText = moduleTitle;
-      const isNumbered = /^\d+[\.\)\-]/.test(moduleText);
-      const displayText = isNumbered ? moduleText : `${index + 1}. ${moduleText}`;
-      
-      // Split long lines with better formatting
-      const lines = pdf.splitTextToSize(displayText, pageWidth - 50);
-      lines.forEach((line: string, lineIndex: number) => {
-        if (lineIndex === 0) {
-          // First line with bullet point styling
-          pdf.setFont('helvetica', 'bold');
-          pdf.text('•', 25, yPosition);
-          pdf.setFont('helvetica', 'normal');
-          pdf.text(line, 35, yPosition);
-        } else {
-          // Continuation lines indented
-          pdf.text(line, 35, yPosition);
-        }
-        yPosition += 7;
-      });
-      yPosition += 3; // Extra spacing between modules
     }
+    
+    const xPosition = currentColumn === 'left' ? leftColumnX : rightColumnX;
+    const moduleName = module.name || `Módulo ${index + 1}`;
+    
+    // Simple numbered list - no bullet points
+    pdf.text(`${index + 1}. ${moduleName}`, xPosition, yPosition);
+    yPosition += lineHeight;
   });
 
   // Legal note with improved formatting

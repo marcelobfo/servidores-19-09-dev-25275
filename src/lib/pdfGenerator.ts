@@ -68,91 +68,86 @@ export const generateStudyPlan = async (
   }
 
   // Header information
-  pdf.setFontSize(9);
+  pdf.setFontSize(8);
   pdf.setFont('helvetica', 'normal');
   pdf.text(settings.institution_name, 50, yPosition + 5);
-  pdf.text(settings.institution_address, 50, yPosition + 10);
-  pdf.text(`CEP: ${settings.institution_cep} - CNPJ: ${settings.institution_cnpj}`, 50, yPosition + 15);
-  pdf.text(`Tel: ${settings.institution_phone} - Email: ${settings.institution_email}`, 50, yPosition + 20);
+  pdf.text(settings.institution_address, 50, yPosition + 9);
+  pdf.text(`CEP: ${settings.institution_cep} - CNPJ: ${settings.institution_cnpj}`, 50, yPosition + 13);
+  pdf.text(`Tel: ${settings.institution_phone} - Email: ${settings.institution_email}`, 50, yPosition + 17);
 
-  yPosition += 40;
+  yPosition += 35;
 
   // Title
-  pdf.setFontSize(16);
+  pdf.setFontSize(18);
   pdf.setFont('helvetica', 'bold');
   pdf.text('PLANO DE ESTUDOS', 105, yPosition, { align: 'center' });
 
-  yPosition += 20;
+  yPosition += 15;
 
-  // Course Info Box
-  pdf.setFontSize(12);
+  // Course Info
+  pdf.setFontSize(11);
   pdf.setFont('helvetica', 'bold');
   pdf.text('DADOS DO CURSO', 20, yPosition);
   
-  yPosition += 8;
+  yPosition += 7;
   pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(10);
   pdf.text(`Curso: ${enrollment.course.name}`, 20, yPosition);
-  yPosition += 6;
+  yPosition += 5;
   pdf.text(`Carga Horária Total: ${enrollment.course.duration_hours} horas`, 20, yPosition);
-  yPosition += 6;
+  yPosition += 5;
+  
+  // Calculate duration in days
+  let durationDays = 0;
   if (enrollment.course.start_date && enrollment.course.end_date) {
-    pdf.text(`Período: ${new Date(enrollment.course.start_date).toLocaleDateString('pt-BR')} a ${new Date(enrollment.course.end_date).toLocaleDateString('pt-BR')}`, 20, yPosition);
+    const start = new Date(enrollment.course.start_date);
+    const end = new Date(enrollment.course.end_date);
+    durationDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
   }
-  yPosition += 6;
+  
+  if (durationDays > 0) {
+    pdf.text(`Duração: ${durationDays} dias`, 20, yPosition);
+  }
+  yPosition += 5;
   pdf.text(`Modalidade: Ensino à Distância (EAD)`, 20, yPosition);
 
-  yPosition += 15;
+  yPosition += 12;
 
   // Student Info Box
   pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(11);
   pdf.text('DADOS DO ESTUDANTE', 20, yPosition);
   
-  yPosition += 8;
+  yPosition += 7;
   pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(10);
   pdf.text(`Nome: ${enrollment.full_name}`, 20, yPosition);
   if (enrollment.cpf) {
-    yPosition += 6;
+    yPosition += 5;
     pdf.text(`CPF: ${enrollment.cpf}`, 20, yPosition);
   }
   if (enrollment.organization) {
-    yPosition += 6;
+    yPosition += 5;
     pdf.text(`Instituição: ${enrollment.organization}`, 20, yPosition);
   }
 
-  yPosition += 15;
+  yPosition += 12;
 
-  // Course Content
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('CONTEÚDO PROGRAMÁTICO', 20, yPosition);
-
-  yPosition += 10;
-
-  // Table header
-  pdf.setFillColor(240, 240, 240);
-  pdf.rect(20, yPosition - 5, 170, 8, 'F');
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(10);
-  pdf.text('MÓDULO', 25, yPosition);
-  pdf.text('CARGA HORÁRIA', 150, yPosition);
-
-  yPosition += 8;
-
-  // Parse modules with better handling
-  let modules: Array<{ nome: string; carga_horaria: number }> = [];
+  // Parse modules first to use in description
+  let modules: Array<{ name: string; hours: number; description?: string }> = [];
   if (enrollment.course.modules) {
     try {
       const parsedModules = JSON.parse(enrollment.course.modules);
       
-      // Normalize to always use correct format
       if (Array.isArray(parsedModules)) {
         modules = parsedModules.map((m: any) => {
           if (typeof m === 'string') {
-            return { nome: m, carga_horaria: 0 };
+            return { name: m, hours: 0 };
           }
-          // Prioritize 'name' and 'hours' (ModuleEditor format)
           return {
-            nome: m.name || m.nome || m.title || 'Módulo',
-            carga_horaria: m.hours || m.carga_horaria || 0
+            name: m.name || m.nome || m.title || 'Módulo',
+            hours: m.hours || m.carga_horaria || 0,
+            description: m.description || m.descricao || ''
           };
         });
       }
@@ -161,38 +156,95 @@ export const generateStudyPlan = async (
     }
   }
 
-  // Default modules if none provided or calculate hours if missing
-  if (modules.length === 0) {
-    const hoursPerModule = Math.floor(enrollment.course.duration_hours / 4);
-    modules = [
-      { nome: 'Módulo Introdutório', carga_horaria: hoursPerModule },
-      { nome: 'Módulo Básico', carga_horaria: hoursPerModule },
-      { nome: 'Módulo Intermediário', carga_horaria: hoursPerModule },
-      { nome: 'Módulo Avançado', carga_horaria: enrollment.course.duration_hours - (hoursPerModule * 3) }
-    ];
-  } else {
-    // Calculate missing hours proportionally
-    const totalHours = modules.reduce((sum, m) => sum + m.carga_horaria, 0);
+  // Calculate missing hours proportionally
+  if (modules.length > 0) {
+    const totalHours = modules.reduce((sum, m) => sum + m.hours, 0);
     if (totalHours === 0) {
       const hoursPerModule = Math.floor(enrollment.course.duration_hours / modules.length);
       modules = modules.map((m, i) => ({
         ...m,
-        carga_horaria: i === modules.length - 1 
+        hours: i === modules.length - 1 
           ? enrollment.course.duration_hours - (hoursPerModule * (modules.length - 1))
           : hoursPerModule
       }));
     }
   }
 
-  // Helper function to check page break needs - improved
-  const addPageBreakIfNeeded = (currentY: number, requiredSpace: number = 40): number => {
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const marginBottom = 40; // Increased margin for signature area
+  // Description of course (if modules have descriptions)
+  const hasDescriptions = modules.some(m => m.description && m.description.trim());
+  if (hasDescriptions) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(11);
+    pdf.text('DESCRIÇÃO DO CURSO', 20, yPosition);
+    yPosition += 7;
     
-    // More conservative space calculation
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    
+    modules.forEach((module, index) => {
+      if (module.description && module.description.trim()) {
+        // Check if we need a new page
+        if (yPosition > 250) {
+          pdf.addPage();
+          yPosition = 20;
+        }
+        
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(`MÓDULO ${index + 1} - ${module.name.toUpperCase()}`, 20, yPosition);
+        yPosition += 5;
+        
+        pdf.setFont('helvetica', 'normal');
+        const descLines = pdf.splitTextToSize(module.description, 170);
+        descLines.forEach((line: string) => {
+          if (yPosition > 270) {
+            pdf.addPage();
+            yPosition = 20;
+          }
+          pdf.text(line, 20, yPosition);
+          yPosition += 4;
+        });
+        yPosition += 3;
+      }
+    });
+    
+    yPosition += 7;
+  }
+
+  // Course Content
+  if (yPosition > 230) {
+    pdf.addPage();
+    yPosition = 20;
+  }
+  
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(11);
+  pdf.text('CONTEÚDO PROGRAMÁTICO', 20, yPosition);
+
+  yPosition += 8;
+
+  // Table header
+  pdf.setFillColor(220, 220, 220);
+  pdf.rect(20, yPosition - 4, 170, 7, 'F');
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  pdf.text('MÓDULO', 25, yPosition);
+  pdf.text('CARGA HORÁRIA', 155, yPosition);
+
+  yPosition += 6;
+
+  // Draw table borders
+  pdf.setDrawColor(180, 180, 180);
+  pdf.setLineWidth(0.3);
+  pdf.rect(20, yPosition - 10, 170, 7);
+
+  // Helper function to check page break needs
+  const addPageBreakIfNeeded = (currentY: number, requiredSpace: number = 60): number => {
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const marginBottom = 50;
+    
     if (currentY + requiredSpace > pageHeight - marginBottom) {
       pdf.addPage();
-      return 30; // Start from top of new page with proper margin
+      return 20;
     }
     return currentY;
   };
@@ -200,44 +252,54 @@ export const generateStudyPlan = async (
   // Module table with actual module names
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
+  
   modules.forEach((module, index) => {
     yPosition = addPageBreakIfNeeded(yPosition, 10);
     
-    // Use actual module name, not generic "Módulo X"
-    const moduleName = module.nome || `Módulo ${index + 1}`;
+    const moduleName = module.name || `Módulo ${index + 1}`;
     pdf.text(`${index + 1}. ${moduleName}`, 25, yPosition);
-    pdf.text(`${module.carga_horaria}h`, 155, yPosition);
+    pdf.text(`${module.hours}h`, 160, yPosition);
+    
+    // Draw row border
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(20, yPosition + 2, 190, yPosition + 2);
+    
     yPosition += 6;
   });
 
   // Total
-  yPosition += 5;
+  yPosition += 3;
   pdf.setFont('helvetica', 'bold');
+  pdf.setDrawColor(100, 100, 100);
+  pdf.setLineWidth(0.5);
   pdf.line(20, yPosition, 190, yPosition);
   yPosition += 5;
-  const total = modules.reduce((sum, module) => sum + module.carga_horaria, 0);
-  pdf.text('CARGA HORÁRIA TOTAL:', 25, yPosition);
-  pdf.text(`${total}h`, 150, yPosition);
+  const total = modules.reduce((sum, module) => sum + module.hours, 0);
+  pdf.text('TOTAL:', 25, yPosition);
+  pdf.text(`${total}h`, 160, yPosition);
 
-  yPosition += 15;
+  yPosition += 12;
+  yPosition = addPageBreakIfNeeded(yPosition, 70);
 
   // Methodology
   pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(11);
   pdf.text('METODOLOGIA', 20, yPosition);
-  yPosition += 8;
+  yPosition += 7;
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
   const methodologyText = 'O curso será desenvolvido na modalidade de Ensino a Distância (EAD), com aulas online, materiais didáticos digitais e acompanhamento tutorial. As atividades incluem videoaulas, exercícios práticos, fóruns de discussão e avaliações online.';
   const splitMethodology = pdf.splitTextToSize(methodologyText, 170);
   pdf.text(splitMethodology, 20, yPosition);
-  yPosition += splitMethodology.length * 4 + 10;
+  yPosition += splitMethodology.length * 4 + 8;
 
   // Schedule
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(10);
+  pdf.setFontSize(11);
   pdf.text('CRONOGRAMA DE ESTUDOS', 20, yPosition);
-  yPosition += 8;
+  yPosition += 7;
   pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
   pdf.text('Carga horária semanal recomendada: 20 horas', 20, yPosition);
   yPosition += 5;
   pdf.text('Horário de atendimento: Segunda a Sexta, 8h às 18h', 20, yPosition);
@@ -245,13 +307,15 @@ export const generateStudyPlan = async (
   pdf.text('Plataforma: Sistema EAD Infomar Cursos', 20, yPosition);
 
   // Signature area - ensure enough space for signature section
-  yPosition = addPageBreakIfNeeded(yPosition, 80);
+  yPosition = addPageBreakIfNeeded(yPosition, 70);
   
-  yPosition += 25;
+  yPosition += 20;
   
-  pdf.text(`São Paulo, ${new Date().toLocaleDateString('pt-BR')}`, 20, yPosition);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(10);
+  pdf.text(`São Paulo, ${new Date().toLocaleDateString('pt-BR')}.`, 20, yPosition);
   
-  yPosition += 25;
+  yPosition += 20;
 
   // Add director signature if available
   if (settings.director_signature_url) {
@@ -263,15 +327,20 @@ export const generateStudyPlan = async (
       canvas.height = signature.height;
       ctx?.drawImage(signature, 0, 0);
       const signatureData = canvas.toDataURL('image/png');
-      pdf.addImage(signatureData, 'PNG', 20, yPosition - 15, 40, 15);
+      pdf.addImage(signatureData, 'PNG', 20, yPosition - 10, 40, 15);
     } catch (error) {
       console.error('Error loading signature:', error);
     }
   }
   
+  pdf.setLineWidth(0.5);
   pdf.line(20, yPosition + 5, 80, yPosition + 5);
-  pdf.text(settings.director_name, 20, yPosition + 12);
-  pdf.text(settings.director_title, 20, yPosition + 18);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  pdf.text(settings.director_name, 20, yPosition + 10);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  pdf.text(settings.director_title, 20, yPosition + 15);
 
   return pdf.output('blob');
 };
@@ -333,49 +402,46 @@ export const generateEnrollmentDeclaration = async (
   pdf.text(`CEP: ${settings.institution_cep} - CNPJ: ${settings.institution_cnpj}`, 50, yPosition + 15);
   pdf.text(`Tel: ${settings.institution_phone} - Email: ${settings.institution_email}`, 50, yPosition + 20);
 
-  yPosition += 50;
+  yPosition += 45;
 
   // Title - centered and bold
-  pdf.setFontSize(16);
+  pdf.setFontSize(18);
   pdf.setFont('helvetica', 'bold');
   pdf.text('DECLARAÇÃO DE MATRÍCULA', 105, yPosition, { align: 'center' });
 
-  yPosition += 25;
+  yPosition += 20;
 
   // Declaration content
-  pdf.setFontSize(12);
+  pdf.setFontSize(11);
   pdf.setFont('helvetica', 'normal');
 
-  const declarationText = `Declaramos para os devidos fins que ${enrollment.full_name.toUpperCase()}, portador(a) do CPF nº ${enrollment.cpf || 'não informado'}, ${enrollment.organization || ''}, encontra-se regularmente matriculado(a) no curso de "${enrollment.course.name.toUpperCase()}".
+  const orgText = enrollment.organization ? `, ${enrollment.organization},` : '';
+  const declarationText = `Declaramos para os devidos fins que ${enrollment.full_name.toUpperCase()}, portador(a) do CPF nº ${enrollment.cpf || 'não informado'}${orgText} encontra-se regularmente matriculado(a) no curso de "${enrollment.course.name.toUpperCase()}".
 
-O referido curso possui carga horária de ${enrollment.course.duration_hours || 390} (${numberToWords(enrollment.course.duration_hours || 390)}) horas, sendo realizado na modalidade de Ensino a Distância (EAD), com datas a serem definidas.
+O referido curso possui carga horária total de ${enrollment.course.duration_hours || 390} (${numberToWords(enrollment.course.duration_hours || 390)}) horas, sendo realizado na modalidade de Ensino a Distância (EAD).
 
 O curso está devidamente registrado em nossa instituição e atende aos requisitos necessários para fins de capacitação profissional e licença para capacitação.
 
-Declaramos ainda que o estudante terá acompanhamento pedagógico especializado durante todo o período do curso, com acesso a materiais didáticos atualizados e suporte técnico-pedagógico.`;
+Declaramos ainda que o estudante terá acompanhamento pedagógico especializado durante todo o período do curso, com acesso a materiais didáticos atualizados e suporte técnico-pedagógico.
+
+Esta declaração é válida para todos os fins de direito.`;
 
   const splitText = pdf.splitTextToSize(declarationText, 170);
   pdf.text(splitText, 20, yPosition);
 
-  yPosition += splitText.length * 5 + 20;
-
-  // Additional info
-  pdf.setFontSize(10);
-  pdf.setFont('helvetica', 'italic');
-  pdf.text('Esta declaração é válida para todos os fins de direito.', 20, yPosition);
-
-  yPosition += 20;
+  yPosition += splitText.length * 5.5 + 15;
 
   // Date and location
   pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(10);
   pdf.text(`São Paulo, ${new Date().toLocaleDateString('pt-BR')}.`, 20, yPosition);
 
   // Ensure we have enough space for signature area
   if (yPosition > 220) {
     pdf.addPage();
-    yPosition = 60;
+    yPosition = 50;
   } else {
-    yPosition += 40;
+    yPosition += 30;
   }
 
   // Signature area
@@ -388,19 +454,25 @@ Declaramos ainda que o estudante terá acompanhamento pedagógico especializado 
       canvas.height = signature.height;
       ctx?.drawImage(signature, 0, 0);
       const signatureData = canvas.toDataURL('image/png');
-      pdf.addImage(signatureData, 'PNG', 20, yPosition - 10, 40, 15);
+      pdf.addImage(signatureData, 'PNG', 20, yPosition - 8, 40, 15);
     } catch (error) {
       console.error('Error loading signature:', error);
     }
   }
 
-  pdf.line(20, yPosition + 5, 100, yPosition + 5);
-  pdf.text(settings.director_name, 20, yPosition + 10);
-  pdf.text(settings.director_title, 20, yPosition + 15);
+  pdf.setLineWidth(0.5);
+  pdf.line(20, yPosition + 8, 90, yPosition + 8);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  pdf.text(settings.director_name, 20, yPosition + 13);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  pdf.text(settings.director_title, 20, yPosition + 18);
 
   // Stamp area indication
   pdf.setFontSize(8);
-  pdf.text('(CARIMBO E ASSINATURA)', 120, yPosition + 10);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text('(CARIMBO E ASSINATURA)', 130, yPosition + 13);
 
   return pdf.output('blob');
 };
