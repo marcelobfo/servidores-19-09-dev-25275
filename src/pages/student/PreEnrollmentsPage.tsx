@@ -112,6 +112,11 @@ export function PreEnrollmentsPage() {
     }
   };
 
+  const handleEnrollment = (preEnrollment: PreEnrollment) => {
+    toast.info("Funcionalidade de matrícula em desenvolvimento");
+    // TODO: Implementar fluxo de matrícula
+  };
+
   const handlePreEnrollmentPayment = (preEnrollment: PreEnrollment) => {
     setSelectedPreEnrollment(preEnrollment);
     setShowPaymentModal(true);
@@ -297,10 +302,10 @@ export function PreEnrollmentsPage() {
                     </div>
                   </div>
 
-                  {preEnrollment.status === "approved" && !preEnrollment.organ_approval_confirmed && (
+                  {preEnrollment.status === "payment_confirmed" && !preEnrollment.organ_approval_confirmed && (
                     <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                       <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-3">
-                        Sua pré-matrícula foi aprovada! Agora você precisa confirmar a aprovação do seu órgão.
+                        Pagamento confirmado! Agora você precisa confirmar a aprovação do seu órgão.
                       </p>
                       <Button
                         onClick={() => handleOrganApproval(preEnrollment.id)}
@@ -313,7 +318,7 @@ export function PreEnrollmentsPage() {
                     </div>
                   )}
 
-                  {preEnrollment.status === "pending" && preEnrollment.courses.pre_enrollment_fee && (
+                  {preEnrollment.status === "pending" && preEnrollment.courses.pre_enrollment_fee && !preEnrollment.organ_approval_confirmed && (
                     <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                       <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
                         Pague a taxa de pré-matrícula para prosseguir com sua solicitação.
@@ -329,7 +334,7 @@ export function PreEnrollmentsPage() {
                     </div>
                   )}
 
-                  {preEnrollment.status === "pending_payment" && preEnrollment.courses.pre_enrollment_fee && (
+                  {preEnrollment.status === "pending_payment" && preEnrollment.courses.pre_enrollment_fee && !preEnrollment.organ_approval_confirmed && (
                     <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
                       <p className="text-sm text-orange-800 dark:text-orange-200 mb-3">
                         Pagamento pendente. Clique para gerar um novo QR Code PIX.
@@ -346,16 +351,31 @@ export function PreEnrollmentsPage() {
                     </div>
                   )}
 
-                  {preEnrollment.organ_approval_confirmed && (
-                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                      <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-200">
-                        <CheckCircle className="h-4 w-4" />
-                        Aprovação do órgão confirmada em{" "}
-                        {preEnrollment.organ_approval_date && 
-                          new Date(preEnrollment.organ_approval_date).toLocaleDateString("pt-BR")
-                        }
+                  {preEnrollment.organ_approval_confirmed && preEnrollment.status === "payment_confirmed" && (
+                    <>
+                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-200 mb-3">
+                          <CheckCircle className="h-4 w-4" />
+                          Aprovação do órgão confirmada em{" "}
+                          {preEnrollment.organ_approval_date && 
+                            new Date(preEnrollment.organ_approval_date).toLocaleDateString("pt-BR")
+                          }
+                        </div>
                       </div>
-                    </div>
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                        <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
+                          Órgão aprovado! Agora você pode realizar sua matrícula no curso.
+                        </p>
+                        <Button
+                          onClick={() => handleEnrollment(preEnrollment)}
+                          size="lg"
+                          className="flex items-center gap-2"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          Realizar Matrícula
+                        </Button>
+                      </div>
+                    </>
                   )}
                 </div>
               </CardContent>

@@ -146,6 +146,9 @@ const EnrollmentsPage = () => {
       }
 
       if (status === 'approved') {
+        // When admin approves manually, set status to payment_confirmed
+        // This allows the student to continue the flow (confirm organ approval -> enrollment)
+        updateData.status = 'payment_confirmed';
         updateData.approved_at = new Date().toISOString();
         const { data: userData } = await supabase.auth.getUser();
         // Only add approved_by if userData.user exists and has id
