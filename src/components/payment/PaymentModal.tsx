@@ -159,6 +159,15 @@ export function PaymentModal({
       }
 
       console.log('Payment created successfully:', data);
+      
+      // Check if this is an existing payment being reused
+      if (data.isExisting) {
+        toast({
+          title: "Pagamento encontrado",
+          description: "Você já possui um pagamento pendente válido. Use o QR Code abaixo.",
+        });
+      }
+      
       setPaymentData(data);
     } catch (error: any) {
       console.error('Payment creation error:', error);

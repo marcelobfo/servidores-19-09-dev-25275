@@ -70,14 +70,56 @@ serve(async (req) => {
     // Check for duplicate payment attempts (idempotency)
     const { data: existingPayment } = await supabaseClient
       .from('payments')
-      .select('id, status')
+      .select('*')
       .eq('pre_enrollment_id', pre_enrollment_id)
       .eq('kind', kind)
       .in('status', ['pending', 'received', 'confirmed'])
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (existingPayment) {
-      throw new Error('Já existe um pagamento pendente ou confirmado para esta matrícula');
+      // If payment is confirmed or received, block duplicate
+      if (existingPayment.status === 'confirmed' || existingPayment.status === 'received') {
+        throw new Error('Já existe um pagamento confirmado para esta matrícula');
+      }
+
+      // If payment is pending, check expiration
+      if (existingPayment.status === 'pending') {
+        const expirationDate = existingPayment.pix_expiration_date 
+          ? new Date(existingPayment.pix_expiration_date) 
+          : null;
+        
+        const now = new Date();
+
+        // If payment hasn't expired and has QR code, return existing payment
+        if (expirationDate && expirationDate > now && existingPayment.pix_qr_code && existingPayment.pix_payload) {
+          console.log('Returning existing valid payment:', existingPayment.id);
+          return new Response(JSON.stringify({
+            ...existingPayment,
+            isExisting: true
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // If payment expired or has no QR code, cancel it and create new one
+        console.log('Cancelling expired/invalid payment:', existingPayment.id);
+        const { error: cancelError } = await supabaseClient
+          .from('payments')
+          .update({ 
+            status: 'overdue',
+            error_message: 'Pagamento expirado - novo pagamento criado'
+          })
+          .eq('id', existingPayment.id);
+
+        if (cancelError) {
+          console.error('Error cancelling payment:', cancelError);
+          // Continue anyway to create new payment
+        }
+        
+        console.log('Creating new payment after cancelling expired one');
+      }
     }
     
     console.log('Creating payment', { pre_enrollment_id, amount, kind, enrollment_id });
