@@ -122,12 +122,19 @@ const EnrollmentsPage = () => {
 
   const updateEnrollmentStatus = async (id: string, status: string, notes?: string, manualApproval: boolean = false) => {
     try {
+      console.log('Updating enrollment status:', { id, status, manualApproval });
+      
       // Get current enrollment status for webhook
-      const { data: currentEnrollment } = await supabase
+      const { data: currentEnrollment, error: fetchError } = await supabase
         .from("pre_enrollments")
         .select("status")
         .eq("id", id)
         .single();
+
+      if (fetchError) {
+        console.error('Error fetching enrollment:', fetchError);
+        throw fetchError;
+      }
 
       const updateData: any = { 
         status,
@@ -136,24 +143,34 @@ const EnrollmentsPage = () => {
 
       if (status === 'approved') {
         updateData.approved_at = new Date().toISOString();
-        updateData.approved_by = (await supabase.auth.getUser()).data.user?.id;
+        const { data: userData } = await supabase.auth.getUser();
+        updateData.approved_by = userData.user?.id;
         if (manualApproval) {
           updateData.manual_approval = true;
         }
       }
+
+      console.log('Update data:', updateData);
 
       const { error } = await supabase
         .from("pre_enrollments")
         .update(updateData)
         .eq("id", id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating enrollment:', error);
+        throw error;
+      }
 
       // Trigger webhook based on status change
-      if (status === 'approved') {
-        await triggerEnrollmentWebhook(id, 'enrollment_approved', currentEnrollment?.status);
-      } else if (currentEnrollment?.status !== status) {
-        await triggerEnrollmentWebhook(id, 'status_changed', currentEnrollment?.status);
+      try {
+        if (status === 'approved') {
+          await triggerEnrollmentWebhook(id, 'enrollment_approved', currentEnrollment?.status);
+        } else if (currentEnrollment?.status !== status) {
+          await triggerEnrollmentWebhook(id, 'status_changed', currentEnrollment?.status);
+        }
+      } catch (webhookError) {
+        console.error('Webhook error (non-critical):', webhookError);
       }
 
       toast({
@@ -164,10 +181,11 @@ const EnrollmentsPage = () => {
       fetchEnrollments();
       setSelectedEnrollment(null);
       setAdminNotes("");
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Full error:', error);
       toast({
         title: "Erro",
-        description: "Falha ao atualizar status",
+        description: error?.message || "Falha ao atualizar status",
         variant: "destructive"
       });
     }
