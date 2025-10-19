@@ -207,12 +207,42 @@ const PreEnrollmentPage = () => {
       .replace(/(-\d{3})\d+?$/, '$1');
   };
 
+  // Verifica se o token de autenticação está presente
+  const verifyAuthHeader = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      console.error('❌ Sem access token! Session:', session);
+      throw new Error('Token de autenticação ausente');
+    }
+    
+    console.log('✅ Token presente:', {
+      tokenPreview: session.access_token.substring(0, 20) + '...',
+      userId: session.user?.id,
+      expiresAt: new Date((session.expires_at || 0) * 1000).toISOString()
+    });
+    
+    return session;
+  };
+
   // Garante que a sessão é válida e renova se necessário
   const ensureValidSession = async () => {
+    // Primeiro verifica se o token está presente
+    await verifyAuthHeader();
+    
     const { data: { session }, error } = await supabase.auth.getSession();
     
+    console.log('🔍 Verificando sessão:', {
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      userId: session?.user?.id,
+      expiresAt: session?.expires_at,
+      error: error?.message
+    });
+    
     if (error || !session) {
-      throw new Error('Invalid session');
+      console.error('❌ Sessão inválida:', error);
+      throw new Error('Sessão inválida. Por favor, faça login novamente.');
     }
     
     // Verificar se o token expira em menos de 5 minutos
@@ -220,19 +250,24 @@ const PreEnrollmentPage = () => {
     const now = Math.floor(Date.now() / 1000);
     const timeUntilExpiry = expiresAt - now;
     
-    // Se expira em menos de 5 minutos, renovar
+    console.log('⏰ Token expira em:', timeUntilExpiry, 'segundos');
+    
+    // Se expira em menos de 5 minutos (300 segundos), renovar
     if (timeUntilExpiry < 300) {
-      console.log('Token próximo de expirar, renovando...');
+      console.log('🔄 Token próximo de expirar, renovando...');
       const { data: { session: newSession }, error: refreshError } = 
         await supabase.auth.refreshSession();
         
       if (refreshError || !newSession) {
-        throw new Error('Failed to refresh session');
+        console.error('❌ Falha ao renovar token:', refreshError);
+        throw new Error('Falha ao renovar sessão. Por favor, faça login novamente.');
       }
       
+      console.log('✅ Token renovado com sucesso');
       return newSession;
     }
     
+    console.log('✅ Token válido');
     return session;
   };
 
