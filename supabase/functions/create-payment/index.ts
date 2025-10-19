@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Create payment function called - v2.0 with expiration handling');
+    console.log('=== CREATE PAYMENT v2.1 - EXPIRATION AUTO-CANCEL ACTIVE ===');
     
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -57,6 +57,19 @@ serve(async (req) => {
 
     const { pre_enrollment_id, amount, kind = 'pre_enrollment', enrollment_id } = requestBody;
 
+    // Debug endpoint - temporary
+    if (requestBody?.debug === true) {
+      console.log('Debug endpoint called');
+      return new Response(JSON.stringify({
+        version: 'v2.1',
+        timestamp: new Date().toISOString(),
+        message: 'Edge function with AUTO-CANCEL expired payments is ACTIVE',
+        features: ['expiration_check', 'auto_cancel_expired', 'qr_code_regeneration']
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // SECURITY: Validate required fields and types
     if (!pre_enrollment_id || typeof pre_enrollment_id !== 'string') {
       throw new Error('Campo obrigatório: pre_enrollment_id (string UUID)');
@@ -68,6 +81,8 @@ serve(async (req) => {
     }
 
     // Check for duplicate payment attempts (idempotency)
+    console.log('Checking for existing payments...', { pre_enrollment_id, kind });
+    
     const { data: existingPayment } = await supabaseClient
       .from('payments')
       .select('*')
@@ -78,9 +93,21 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
+    console.log('Existing payment check result:', {
+      found: !!existingPayment,
+      payment_id: existingPayment?.id,
+      status: existingPayment?.status,
+      has_qr_code: !!existingPayment?.pix_qr_code,
+      has_payload: !!existingPayment?.pix_payload,
+      expiration_date: existingPayment?.pix_expiration_date
+    });
+
     if (existingPayment) {
+      console.log('Processing existing payment...', { status: existingPayment.status });
+      
       // If payment is confirmed or received, block duplicate
       if (existingPayment.status === 'confirmed' || existingPayment.status === 'received') {
+        console.log('Blocking duplicate - payment already confirmed/received');
         throw new Error('Já existe um pagamento confirmado para esta matrícula');
       }
 
@@ -91,10 +118,18 @@ serve(async (req) => {
           : null;
         
         const now = new Date();
+        
+        console.log('Checking payment expiration:', {
+          expiration_date: expirationDate?.toISOString(),
+          current_time: now.toISOString(),
+          is_expired: expirationDate ? expirationDate <= now : 'NO_EXPIRATION_DATE',
+          has_qr_code: !!existingPayment.pix_qr_code,
+          has_payload: !!existingPayment.pix_payload
+        });
 
         // If payment hasn't expired and has QR code, return existing payment
         if (expirationDate && expirationDate > now && existingPayment.pix_qr_code && existingPayment.pix_payload) {
-          console.log('Returning existing valid payment:', existingPayment.id);
+          console.log('✅ Returning existing VALID payment - not expired, has QR code');
           return new Response(JSON.stringify({
             ...existingPayment,
             isExisting: true
@@ -104,21 +139,30 @@ serve(async (req) => {
         }
 
         // If payment expired or has no QR code, cancel it and create new one
-        console.log('Cancelling expired/invalid payment:', existingPayment.id);
+        console.log('⚠️ Payment is EXPIRED or INVALID - auto-cancelling and creating new one');
+        console.log('Cancellation reason:', {
+          expired: expirationDate ? expirationDate <= now : false,
+          no_expiration_date: !expirationDate,
+          missing_qr_code: !existingPayment.pix_qr_code,
+          missing_payload: !existingPayment.pix_payload
+        });
+        
         const { error: cancelError } = await supabaseClient
           .from('payments')
           .update({ 
             status: 'overdue',
-            error_message: 'Pagamento expirado - novo pagamento criado'
+            error_message: 'Pagamento expirado - novo pagamento criado automaticamente'
           })
           .eq('id', existingPayment.id);
 
         if (cancelError) {
-          console.error('Error cancelling payment:', cancelError);
+          console.error('❌ Error cancelling expired payment:', cancelError);
           // Continue anyway to create new payment
+        } else {
+          console.log('✅ Expired payment cancelled successfully');
         }
         
-        console.log('Creating new payment after cancelling expired one');
+        console.log('▶️ Proceeding to create new payment...');
       }
     }
     
