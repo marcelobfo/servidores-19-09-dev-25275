@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Clock, CheckCircle, XCircle, Download, Eye, CreditCard, AlertTriangle, QrCode } from "lucide-react";
+import { Clock, CheckCircle, XCircle, Download, Eye, CreditCard, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { generateStudyPlan, generateEnrollmentDeclaration } from "@/lib/pdfGenerator";
 import { useToast } from "@/hooks/use-toast";
@@ -45,8 +45,6 @@ export default function StudentDashboard() {
   const [generating, setGenerating] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedEnrollmentForPayment, setSelectedEnrollmentForPayment] = useState<PreEnrollment | null>(null);
-  const [showPreEnrollmentPaymentModal, setShowPreEnrollmentPaymentModal] = useState(false);
-  const [selectedPreEnrollmentForPayment, setSelectedPreEnrollmentForPayment] = useState<PreEnrollment | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -148,21 +146,37 @@ export default function StudentDashboard() {
     }
   };
 
-  const handlePreEnrollmentPayment = (enrollment: PreEnrollment) => {
-    setSelectedPreEnrollmentForPayment(enrollment);
-    setShowPreEnrollmentPaymentModal(true);
-  };
+  const handlePreEnrollmentPayment = async (enrollment: PreEnrollment) => {
+    try {
+      console.log('💳 [DASHBOARD] Iniciando checkout de pré-matrícula');
+      console.log('📋 Pre-enrollment ID:', enrollment.id);
+      console.log('💰 Valor:', enrollment.courses.pre_enrollment_fee);
 
-  const handlePreEnrollmentPaymentSuccess = () => {
-    setShowPreEnrollmentPaymentModal(false);
-    setSelectedPreEnrollmentForPayment(null);
-    
-    toast({
-      title: "Pagamento confirmado!",
-      description: "Sua pré-matrícula foi paga com sucesso.",
-    });
-    
-    fetchEnrollments();
+      const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
+        body: {
+          pre_enrollment_id: enrollment.id
+        }
+      });
+
+      console.log('✅ [DASHBOARD] Resposta da edge function:', data);
+      console.log('❌ [DASHBOARD] Erro:', error);
+
+      if (error) throw error;
+
+      if (data?.checkout_url) {
+        console.log('🔗 [DASHBOARD] Redirecionando para:', data.checkout_url);
+        window.location.href = data.checkout_url;
+      } else {
+        throw new Error("URL de checkout não foi gerada");
+      }
+    } catch (error: any) {
+      console.error("Error creating pre-enrollment checkout:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao processar pagamento",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleEnrollmentCheckout = async (enrollment: PreEnrollment) => {
@@ -544,7 +558,7 @@ export default function StudentDashboard() {
                     </div>
                    )}
 
-                  {/* Botão para pagar pré-matrícula quando status é pending_payment */}
+                   {/* Botão para pagar pré-matrícula quando status é pending_payment */}
                   {enrollment.status === 'pending_payment' && enrollment.courses.pre_enrollment_fee && enrollment.courses.pre_enrollment_fee > 0 && (
                     <div className="mt-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
                       <div className="flex items-center gap-2 mb-2">
@@ -558,8 +572,8 @@ export default function StudentDashboard() {
                         onClick={() => handlePreEnrollmentPayment(enrollment)}
                         className="bg-orange-600 hover:bg-orange-700"
                       >
-                        <QrCode className="mr-2 h-4 w-4" />
-                        Gerar QR Code PIX (R$ {enrollment.courses.pre_enrollment_fee.toFixed(2)})
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        Pagar Pré-matrícula (R$ {enrollment.courses.pre_enrollment_fee.toFixed(2)})
                       </Button>
                     </div>
                   )}
@@ -607,22 +621,6 @@ export default function StudentDashboard() {
              </Card>
           ))}
         </div>
-      )}
-
-      {/* Payment Modal for Pre-Enrollment */}
-      {showPreEnrollmentPaymentModal && selectedPreEnrollmentForPayment && (
-        <PaymentModal
-          preEnrollmentId={selectedPreEnrollmentForPayment.id}
-          courseName={selectedPreEnrollmentForPayment.courses.name}
-          amount={selectedPreEnrollmentForPayment.courses.pre_enrollment_fee || 0}
-          kind="pre_enrollment"
-          isOpen={showPreEnrollmentPaymentModal}
-          onClose={() => {
-            setShowPreEnrollmentPaymentModal(false);
-            setSelectedPreEnrollmentForPayment(null);
-          }}
-          onPaymentSuccess={handlePreEnrollmentPaymentSuccess}
-        />
       )}
 
       {/* Payment Modal for Enrollment */}
