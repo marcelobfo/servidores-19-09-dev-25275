@@ -9,6 +9,9 @@ verify_jwt = false
 [functions.create-enrollment-checkout]
 verify_jwt = false
 
+[functions.create-matricula-checkout]
+verify_jwt = false
+
 [functions.generate-enrollment-documents]
 verify_jwt = true
 

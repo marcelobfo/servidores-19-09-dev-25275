@@ -61,8 +61,6 @@ export function PreEnrollmentsPage() {
   const [sortBy, setSortBy] = useState("created_at_desc");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedPreEnrollment, setSelectedPreEnrollment] = useState<PreEnrollment | null>(null);
-  const [showEnrollmentPaymentModal, setShowEnrollmentPaymentModal] = useState(false);
-  const [selectedPreEnrollmentForEnrollment, setSelectedPreEnrollmentForEnrollment] = useState<PreEnrollment | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -207,7 +205,7 @@ export function PreEnrollmentsPage() {
     try {
       const enrollmentFee = preEnrollment.courses.enrollment_fee || 0;
       
-      // Se há taxa de matrícula, abrir modal de pagamento
+      // Se há taxa de matrícula, redirecionar para checkout Asaas
       if (enrollmentFee > 0) {
         // Primeiro criar a matrícula com status pending_payment
         const { data: enrollment, error: enrollmentError } = await supabase
@@ -225,9 +223,22 @@ export function PreEnrollmentsPage() {
 
         if (enrollmentError) throw enrollmentError;
 
-        // Abrir modal de pagamento com o enrollment_id
-        setSelectedPreEnrollmentForEnrollment(preEnrollment);
-        setShowEnrollmentPaymentModal(true);
+        // Chamar edge function para criar checkout Asaas
+        const { data, error } = await supabase.functions.invoke('create-matricula-checkout', {
+          body: {
+            enrollment_id: enrollment.id,
+            pre_enrollment_id: preEnrollment.id
+          }
+        });
+
+        if (error) throw error;
+
+        if (data?.checkout_url) {
+          // Redirecionar para checkout Asaas
+          window.location.href = data.checkout_url;
+        } else {
+          throw new Error("URL de checkout não foi gerada");
+        }
         return;
       }
       
@@ -263,14 +274,6 @@ export function PreEnrollmentsPage() {
     setShowPaymentModal(false);
     setSelectedPreEnrollment(null);
     fetchPreEnrollments();
-  };
-
-  const handleEnrollmentPaymentSuccess = () => {
-    setShowEnrollmentPaymentModal(false);
-    setSelectedPreEnrollmentForEnrollment(null);
-    toast.success("Pagamento da matrícula realizado com sucesso!");
-    // Redirecionar para a página de matrículas
-    window.location.href = "/student/enrollments";
   };
 
   const getStatusIcon = (status: string) => {
@@ -560,18 +563,6 @@ export function PreEnrollmentsPage() {
           amount={selectedPreEnrollment.courses.pre_enrollment_fee || 0}
           courseName={selectedPreEnrollment.courses.name}
           onPaymentSuccess={handlePaymentSuccess}
-        />
-      )}
-
-      {showEnrollmentPaymentModal && selectedPreEnrollmentForEnrollment && (
-        <PaymentModal
-          isOpen={showEnrollmentPaymentModal}
-          onClose={() => setShowEnrollmentPaymentModal(false)}
-          preEnrollmentId={selectedPreEnrollmentForEnrollment.id}
-          amount={selectedPreEnrollmentForEnrollment.courses.enrollment_fee || 0}
-          courseName={selectedPreEnrollmentForEnrollment.courses.name}
-          onPaymentSuccess={handleEnrollmentPaymentSuccess}
-          kind="enrollment"
         />
       )}
     </div>
