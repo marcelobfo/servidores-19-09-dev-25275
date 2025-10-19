@@ -3,11 +3,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { QrCode, Copy, CheckCircle, Clock, X, CreditCard } from "lucide-react";
+import { Copy, CheckCircle, Clock, X, CreditCard, Mail } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -43,13 +45,32 @@ export function PaymentModal({
   const [copied, setCopied] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [studentEmail, setStudentEmail] = useState<string>('');
   const { toast } = useToast();
 
   useEffect(() => {
     if (isOpen && !paymentData) {
+      fetchStudentEmail();
       createPayment();
     }
   }, [isOpen]);
+
+  const fetchStudentEmail = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pre_enrollments')
+        .select('email')
+        .eq('id', preEnrollmentId)
+        .single();
+      
+      if (error) throw error;
+      if (data?.email) {
+        setStudentEmail(data.email);
+      }
+    } catch (error) {
+      console.error('Error fetching student email:', error);
+    }
+  };
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -283,77 +304,88 @@ export function PaymentModal({
             </div>
           ) : paymentData ? (
             <>
-              {/* QR Code */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">Escaneie o QR Code</CardTitle>
-                  <CardDescription>
-                    Use o app do seu banco para escanear o código
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex justify-center">
-                  <div className="relative">
-                    {paymentData.pix_qr_code ? (
-                      <img 
-                        src={`data:image/png;base64,${paymentData.pix_qr_code}`}
-                        alt="QR Code PIX"
-                        className="w-48 h-48 border rounded-lg"
-                      />
-                    ) : (
-                      <div className="w-48 h-48 border rounded-lg flex items-center justify-center bg-muted">
-                        <QrCode className="h-16 w-16 text-muted-foreground" />
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Separator />
-
               {/* Copy Paste Code */}
-              <Card>
+              <Card className="border-2 border-primary/20">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">Ou copie o código</CardTitle>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Copy className="h-5 w-5 text-primary" />
+                    Código PIX Copia e Cola
+                  </CardTitle>
                   <CardDescription>
-                    Cole o código PIX diretamente no seu app de banco
+                    Cole este código no app do seu banco para efetuar o pagamento
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="flex gap-2">
-                    <div className="flex-1 p-3 bg-muted rounded text-xs font-mono break-all">
+                <CardContent className="space-y-3">
+                  <div className="p-4 bg-muted rounded-lg border">
+                    <p className="text-xs font-mono break-all leading-relaxed">
                       {paymentData.pix_payload}
-                    </div>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={copyToClipboard}
-                      className="flex-shrink-0"
-                    >
-                      {copied ? (
-                        <CheckCircle className="h-4 w-4" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </Button>
+                    </p>
                   </div>
+                  <Button 
+                    onClick={copyToClipboard}
+                    className="w-full"
+                    size="lg"
+                  >
+                    {copied ? (
+                      <>
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Copiado!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copiar Código PIX
+                      </>
+                    )}
+                  </Button>
                 </CardContent>
               </Card>
 
-              {/* Timer */}
+              {/* Expiration Info */}
               {timeLeft > 0 && (
                 <Card>
-                  <CardContent className="pt-6">
-                    <div className="space-y-2">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Clock className="h-5 w-5 text-orange-500" />
+                      Validade do Código
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="space-y-1">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">Tempo restante</span>
-                        <span className="text-sm text-muted-foreground">
+                        <span className="text-sm text-muted-foreground">Expira em:</span>
+                        <span className="text-sm font-semibold">
+                          {paymentData.pix_expiration_date && format(
+                            new Date(paymentData.pix_expiration_date), 
+                            "dd/MM/yyyy 'às' HH:mm",
+                            { locale: ptBR }
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Tempo restante:</span>
+                        <span className="text-sm font-mono">
                           {formatTime(timeLeft)}
                         </span>
                       </div>
-                      <Progress value={progressPercentage} className="h-2" />
                     </div>
+                    <Progress value={progressPercentage} className="h-2" />
                   </CardContent>
                 </Card>
+              )}
+
+              {/* Email Notification */}
+              {studentEmail && (
+                <Alert>
+                  <Mail className="h-4 w-4" />
+                  <AlertDescription className="ml-2">
+                    <p className="font-medium mb-1">Cobrança enviada por email</p>
+                    <p className="text-sm text-muted-foreground">
+                      A cobrança também foi enviada para <strong>{studentEmail}</strong>. 
+                      Verifique sua caixa de entrada!
+                    </p>
+                  </AlertDescription>
+                </Alert>
               )}
 
               {/* Actions */}
@@ -362,6 +394,7 @@ export function PaymentModal({
                   onClick={checkPaymentStatus}
                   disabled={checkingStatus}
                   className="w-full"
+                  size="lg"
                 >
                   {checkingStatus ? (
                     <>
@@ -381,8 +414,7 @@ export function PaymentModal({
                   onClick={onClose}
                   className="w-full"
                 >
-                  <X className="h-4 w-4 mr-2" />
-                  Cancelar
+                  Fechar
                 </Button>
               </div>
             </>
