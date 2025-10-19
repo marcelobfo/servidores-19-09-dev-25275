@@ -137,9 +137,14 @@ const EnrollmentsPage = () => {
       }
 
       const updateData: any = { 
-        status,
-        admin_notes: notes || adminNotes 
+        status
       };
+
+      // Only add admin_notes if it's not empty
+      const noteValue = notes || adminNotes;
+      if (noteValue && noteValue.trim()) {
+        updateData.admin_notes = noteValue.trim();
+      }
 
       if (status === 'approved') {
         updateData.approved_at = new Date().toISOString();
@@ -196,8 +201,13 @@ const EnrollmentsPage = () => {
       const updateData: any = {
         organ_approval_status: approvalStatus,
         organ_approval_date: new Date().toISOString(),
-        organ_approval_notes: notes || organApprovalNotes,
       };
+
+      // Only add organ_approval_notes if it's not empty
+      const noteValue = notes || organApprovalNotes;
+      if (noteValue && noteValue.trim()) {
+        updateData.organ_approval_notes = noteValue.trim();
+      }
 
       // If approved by organ, update main status to 'approved'
       if (approvalStatus === 'approved') {

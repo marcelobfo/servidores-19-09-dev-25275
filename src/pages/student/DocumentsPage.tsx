@@ -141,6 +141,7 @@ export function DocumentsPage() {
 
       // Generate documents for each approved pre-enrollment
       let generatedCount = 0;
+      let errorCount = 0;
       for (const preEnrollment of preEnrollments) {
         // Check if documents already exist
         const { data: existingDeclaration } = await supabase
@@ -156,16 +157,26 @@ export function DocumentsPage() {
           .single();
 
         if (!existingDeclaration || !existingStudyPlan) {
-          const { error } = await supabase.functions.invoke('generate-enrollment-documents', {
+          const { data, error } = await supabase.functions.invoke('generate-enrollment-documents', {
             body: { preEnrollmentId: preEnrollment.id }
           });
-          if (!error) generatedCount++;
+          
+          if (error) {
+            console.error('Error generating documents for pre-enrollment:', preEnrollment.id, error);
+            errorCount++;
+          } else {
+            console.log('Documents generated successfully:', data);
+            generatedCount++;
+          }
         }
       }
 
       if (generatedCount > 0) {
         toast.success(`${generatedCount} documento(s) gerado(s) com sucesso!`);
-        fetchDocuments();
+        // Wait a moment before fetching to ensure data is available
+        setTimeout(() => fetchDocuments(), 1000);
+      } else if (errorCount > 0) {
+        toast.error(`Erro ao gerar ${errorCount} documento(s). Verifique os logs.`);
       } else {
         toast.info('Todos os documentos já foram gerados anteriormente');
       }
