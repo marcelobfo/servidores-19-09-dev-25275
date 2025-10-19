@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Create payment function called');
+    console.log('Create payment function called - v2.0 with expiration handling');
     
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
