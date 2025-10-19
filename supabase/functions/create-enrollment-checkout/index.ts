@@ -138,6 +138,16 @@ serve(async (req) => {
       .eq('user_id', user.id)
       .single();
 
+    // Validate pre-enrollment exists BEFORE accessing its properties
+    if (enrollmentError || !preEnrollment) {
+      console.error("Pre-enrollment query failed:", enrollmentError);
+      console.error("Pre-enrollment ID:", pre_enrollment_id);
+      return new Response(JSON.stringify({ error: "Pre-enrollment not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     // ETAPA 4: Adicionar logging melhorado
     console.log('Pre-enrollment data retrieved:', {
       id: preEnrollment.id,
@@ -147,15 +157,6 @@ serve(async (req) => {
       has_courses: !!preEnrollment.courses,
       pre_enrollment_fee: preEnrollment.courses?.pre_enrollment_fee
     });
-
-    if (enrollmentError || !preEnrollment) {
-      console.error("Pre-enrollment query failed:", enrollmentError);
-      console.error("Pre-enrollment ID:", pre_enrollment_id);
-      return new Response(JSON.stringify({ error: "Pre-enrollment not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
 
     // Validate user ownership of the pre-enrollment
     if (preEnrollment.user_id !== user.id) {
