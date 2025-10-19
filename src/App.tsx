@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AuthGuard } from "@/components/auth/AuthGuard";
@@ -102,7 +102,7 @@ const App = () => (
                   <AuthGuard>
                     <StudentLayout>
                       <Routes>
-                        <Route index element={<StudentDashboard />} />
+                        <Route index element={<Navigate to="/student/pre-enrollments" replace />} />
                         <Route path="pre-enrollments" element={<PreEnrollmentsPage />} />
                         <Route path="enrollments" element={<StudentEnrollmentsPage />} />
                         <Route path="certificates" element={<StudentCertificatesPage />} />

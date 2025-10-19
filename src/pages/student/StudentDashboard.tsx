@@ -311,10 +311,10 @@ export default function StudentDashboard() {
   };
 
   const generateDocument = async (enrollment: PreEnrollment, type: 'declaration' | 'study_plan') => {
-    if (enrollment.status !== 'approved') {
+    if (enrollment.status !== 'approved' && enrollment.status !== 'payment_confirmed') {
       toast({
         title: "Acesso negado",
-        description: "Documentos disponíveis apenas para matrículas aprovadas.",
+        description: "Documentos disponíveis apenas após confirmação de pagamento ou aprovação.",
         variant: "destructive",
       });
       return;
