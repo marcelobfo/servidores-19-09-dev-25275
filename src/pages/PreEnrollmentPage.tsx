@@ -207,26 +207,93 @@ const PreEnrollmentPage = () => {
       .replace(/(-\d{3})\d+?$/, '$1');
   };
 
+  // Garante que a sessão é válida e renova se necessário
+  const ensureValidSession = async () => {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if (error || !session) {
+      throw new Error('Invalid session');
+    }
+    
+    // Verificar se o token expira em menos de 5 minutos
+    const expiresAt = session.expires_at || 0;
+    const now = Math.floor(Date.now() / 1000);
+    const timeUntilExpiry = expiresAt - now;
+    
+    // Se expira em menos de 5 minutos, renovar
+    if (timeUntilExpiry < 300) {
+      console.log('Token próximo de expirar, renovando...');
+      const { data: { session: newSession }, error: refreshError } = 
+        await supabase.auth.refreshSession();
+        
+      if (refreshError || !newSession) {
+        throw new Error('Failed to refresh session');
+      }
+      
+      return newSession;
+    }
+    
+    return session;
+  };
+
+  // Tenta inserir com retry em caso de erro de autorização
+  const insertPreEnrollmentWithRetry = async (enrollmentData: any, maxRetries = 1) => {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // Garantir token válido antes de cada tentativa
+        const session = await ensureValidSession();
+        
+        console.log(`Tentativa ${attempt + 1}/${maxRetries + 1} - Inserindo pre_enrollment`);
+        console.log('Token válido até:', new Date(session.expires_at! * 1000).toLocaleString());
+        
+        const { data, error } = await supabase
+          .from("pre_enrollments")
+          .insert([enrollmentData])
+          .select()
+          .single();
+          
+        if (error) {
+          // Se for erro de autorização e ainda temos retries
+          if (error.code === '42501' && attempt < maxRetries) {
+            console.log('Erro de autorização detectado, renovando token e tentando novamente...');
+            await supabase.auth.refreshSession();
+            continue; // Tenta novamente
+          }
+          throw error;
+        }
+        
+        return data;
+      } catch (error) {
+        if (attempt === maxRetries) throw error;
+      }
+    }
+    
+    throw new Error('Failed to insert after retries');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
 
     try {
-      // VERIFICAÇÃO ROBUSTA DE SESSÃO
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-      console.log('=== DEBUG PRE-ENROLLMENT ===');
-      console.log('User from context:', user?.id);
-      console.log('Session user:', session?.user?.id);
-      console.log('Session error:', sessionError);
+      // VERIFICAÇÃO E VALIDAÇÃO DE SESSÃO COM AUTO-RECOVERY
+      console.log('=== DEBUG PRE-ENROLLMENT SUBMISSION ===');
       
-      if (!session || sessionError || !session.user) {
-        console.error('Sessão inválida ou expirada:', sessionError);
+      // Garantir sessão válida antes de qualquer operação
+      let session;
+      try {
+        session = await ensureValidSession();
+        console.log('✓ Sessão validada com sucesso');
+        console.log('User ID:', session.user.id);
+        console.log('Token expira em:', new Date(session.expires_at! * 1000).toLocaleString());
+      } catch (error) {
+        console.error('✗ Falha na validação de sessão:', error);
         toast({
           title: "Sessão Expirada",
           description: "Por favor, faça login novamente para continuar",
           variant: "destructive"
         });
+        localStorage.clear();
         navigate('/auth');
         return;
       }
@@ -249,46 +316,32 @@ const PreEnrollmentPage = () => {
 
       const isPaymentEnabled = paymentSettings?.enabled || false;
 
-      // Insert pre-enrollment - USAR session.user.id explicitamente
-      console.log('Tentando inserir pre_enrollment com user_id:', session.user.id);
-      
-      const { data: preEnrollmentData, error: insertError } = await supabase
-        .from("pre_enrollments")
-        .insert([{
-          user_id: session.user.id,
-          course_id: formData.course_id,
-          full_name: formData.full_name,
-          email: formData.email,
-          whatsapp: formData.whatsapp,
-          cpf: formData.cpf,
-          birth_date: formData.birth_date || null,
-          organization: formData.organization,
-          postal_code: formData.postal_code,
-          address: formData.address,
-          address_number: formData.address_number,
-          complement: formData.complement,
-          city: formData.city,
-          state: formData.state,
-          license_duration: formData.license_duration,
-          license_start_date: formData.license_start_date,
-          license_end_date: formData.license_end_date,
-          additional_info: formData.additional_info,
-        }])
-        .select()
-        .single();
+      // Preparar dados do enrollment
+      const enrollmentData = {
+        user_id: session.user.id,
+        course_id: formData.course_id,
+        full_name: formData.full_name,
+        email: formData.email,
+        whatsapp: formData.whatsapp,
+        cpf: formData.cpf,
+        birth_date: formData.birth_date || null,
+        organization: formData.organization,
+        postal_code: formData.postal_code,
+        address: formData.address,
+        address_number: formData.address_number,
+        complement: formData.complement,
+        city: formData.city,
+        state: formData.state,
+        license_duration: formData.license_duration,
+        license_start_date: formData.license_start_date,
+        license_end_date: formData.license_end_date,
+        additional_info: formData.additional_info,
+      };
 
-      if (insertError) {
-        console.error('Erro ao inserir pre_enrollment:', insertError);
-        console.error('Detalhes do erro:', {
-          message: insertError.message,
-          details: insertError.details,
-          hint: insertError.hint,
-          code: insertError.code
-        });
-        throw insertError;
-      }
-      
-      console.log('Pre-enrollment criado com sucesso:', preEnrollmentData);
+      // Inserir com retry automático
+      console.log('Iniciando inserção com retry automático...');
+      const preEnrollmentData = await insertPreEnrollmentWithRetry(enrollmentData);
+      console.log('✓ Pre-enrollment criado com sucesso:', preEnrollmentData.id);
       
       // Trigger webhook for enrollment creation
       await triggerEnrollmentWebhook(preEnrollmentData.id, 'enrollment_created');
