@@ -207,24 +207,47 @@ const PreEnrollmentPage = () => {
       .replace(/(-\d{3})\d+?$/, '$1');
   };
 
-  // Insere usando Edge Function que bypassa RLS com segurança
+  // Insere diretamente no banco com refresh forçado do token
   const insertPreEnrollmentWithRetry = async (enrollmentData: any) => {
     try {
-      console.log('🔄 Chamando Edge Function create-pre-enrollment...');
+      // SEMPRE renovar sessão antes de inserir
+      console.log('🔄 Renovando sessão antes da inserção...');
+      const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
       
-      const { data, error } = await supabase.functions.invoke('create-pre-enrollment', {
-        body: enrollmentData
+      if (refreshError || !session) {
+        console.error('❌ Erro ao renovar sessão:', refreshError);
+        throw new Error('Falha ao renovar sessão: ' + refreshError?.message);
+      }
+      
+      console.log('✅ Sessão renovada com sucesso');
+      console.log('📋 Dados a inserir:', {
+        user_id: enrollmentData.user_id,
+        course_id: enrollmentData.course_id,
+        full_name: enrollmentData.full_name,
+        session_exists: !!session,
+        token_preview: session?.access_token?.substring(0, 20) + '...'
       });
       
+      // Aguardar 300ms para garantir que o token está ativo
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Inserir diretamente no banco
+      console.log('💾 Inserindo pre_enrollment no banco...');
+      const { data, error } = await supabase
+        .from('pre_enrollments')
+        .insert([enrollmentData])
+        .select()
+        .single();
+      
       if (error) {
-        console.error('❌ Erro na Edge Function:', error);
+        console.error('❌ Erro ao inserir:', error);
         throw error;
       }
       
-      console.log('✅ Pre-enrollment criado via Edge Function:', data.id);
+      console.log('✅ Pre-enrollment criado:', data.id);
       return data;
     } catch (error) {
-      console.error('❌ Falha ao criar pre-enrollment:', error);
+      console.error('❌ Falha total ao criar pre-enrollment:', error);
       throw error;
     }
   };
