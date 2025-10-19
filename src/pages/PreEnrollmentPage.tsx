@@ -212,12 +212,32 @@ const PreEnrollmentPage = () => {
     setSubmitting(true);
 
     try {
+      // VERIFICAÇÃO ROBUSTA DE SESSÃO
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      console.log('=== DEBUG PRE-ENROLLMENT ===');
+      console.log('User from context:', user?.id);
+      console.log('Session user:', session?.user?.id);
+      console.log('Session error:', sessionError);
+      
+      if (!session || sessionError || !session.user) {
+        console.error('Sessão inválida ou expirada:', sessionError);
+        toast({
+          title: "Sessão Expirada",
+          description: "Por favor, faça login novamente para continuar",
+          variant: "destructive"
+        });
+        navigate('/auth');
+        return;
+      }
+
       if (!user) {
         toast({
           title: "Erro",
           description: "Você precisa estar logado para fazer uma pré-matrícula",
           variant: "destructive"
         });
+        navigate('/auth');
         return;
       }
 
@@ -229,11 +249,13 @@ const PreEnrollmentPage = () => {
 
       const isPaymentEnabled = paymentSettings?.enabled || false;
 
-      // Insert pre-enrollment
+      // Insert pre-enrollment - USAR session.user.id explicitamente
+      console.log('Tentando inserir pre_enrollment com user_id:', session.user.id);
+      
       const { data: preEnrollmentData, error: insertError } = await supabase
         .from("pre_enrollments")
         .insert([{
-          user_id: user.id,
+          user_id: session.user.id,
           course_id: formData.course_id,
           full_name: formData.full_name,
           email: formData.email,
@@ -255,7 +277,18 @@ const PreEnrollmentPage = () => {
         .select()
         .single();
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Erro ao inserir pre_enrollment:', insertError);
+        console.error('Detalhes do erro:', {
+          message: insertError.message,
+          details: insertError.details,
+          hint: insertError.hint,
+          code: insertError.code
+        });
+        throw insertError;
+      }
+      
+      console.log('Pre-enrollment criado com sucesso:', preEnrollmentData);
       
       // Trigger webhook for enrollment creation
       await triggerEnrollmentWebhook(preEnrollmentData.id, 'enrollment_created');
@@ -296,9 +329,19 @@ const PreEnrollmentPage = () => {
       });
       navigate("/student");
     } catch (error: any) {
+      console.error('Erro no handleSubmit:', error);
+      
+      // Mensagem mais específica para erro de RLS
+      let errorMessage = error.message || "Falha ao enviar pré-matrícula";
+      
+      if (error.message?.includes('row-level security') || error.code === '42501') {
+        errorMessage = "Erro de autorização. Por favor, faça logout e login novamente, depois tente novamente.";
+        console.error('ERRO RLS DETECTADO - Usuário pode precisar reautenticar');
+      }
+      
       toast({
         title: "Erro",
-        description: error.message || "Falha ao enviar pré-matrícula",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
