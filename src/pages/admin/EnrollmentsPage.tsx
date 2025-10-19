@@ -67,13 +67,11 @@ const EnrollmentsPage = () => {
   const [downloadingPlans, setDownloadingPlans] = useState<Set<string>>(new Set());
   const [generatingCertificates, setGeneratingCertificates] = useState<Set<string>>(new Set());
   const [settings, setSettings] = useState<any>(null);
-  const [organApprovalNotes, setOrganApprovalNotes] = useState("");
   
   // Additional filter states
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCourse, setSelectedCourse] = useState("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [organApprovalFilter, setOrganApprovalFilter] = useState("all");
   
   const { toast } = useToast();
 
@@ -202,63 +200,6 @@ const EnrollmentsPage = () => {
       toast({
         title: "Erro",
         description: error?.message || "Falha ao atualizar status",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const updateOrganApprovalStatus = async (id: string, approvalStatus: string, notes?: string) => {
-    try {
-      const updateData: Record<string, any> = {
-        organ_approval_status: approvalStatus,
-        organ_approval_date: new Date().toISOString(),
-      };
-
-      // Only add organ_approval_notes if it's not empty
-      const noteValue = notes || organApprovalNotes;
-      if (noteValue && noteValue.trim()) {
-        updateData.organ_approval_notes = noteValue.trim();
-      }
-
-      // If approved by organ, update main status to 'approved'
-      if (approvalStatus === 'approved') {
-        updateData.status = 'approved';
-        updateData.approved_at = new Date().toISOString();
-        const { data: userData } = await supabase.auth.getUser();
-        if (userData?.user?.id) {
-          updateData.approved_by = userData.user.id;
-        }
-      }
-
-      // Remove any undefined values to prevent JSON errors
-      Object.keys(updateData).forEach(key => {
-        if (updateData[key] === undefined || updateData[key] === null) {
-          delete updateData[key];
-        }
-      });
-
-      const { error } = await supabase
-        .from("pre_enrollments")
-        .update(updateData)
-        .eq("id", id);
-
-      if (error) throw error;
-
-      // Trigger webhook for organ approval
-      await triggerEnrollmentWebhook(id, 'status_changed', approvalStatus);
-
-      toast({
-        title: "Sucesso",
-        description: `Aprovação de órgão ${approvalStatus === 'approved' ? 'confirmada' : 'rejeitada'} com sucesso!`
-      });
-
-      fetchEnrollments();
-      setSelectedEnrollment(null);
-      setOrganApprovalNotes("");
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Falha ao atualizar aprovação de órgão",
         variant: "destructive"
       });
     }
@@ -414,10 +355,7 @@ const EnrollmentsPage = () => {
       (new Date(enrollment.created_at) >= dateRange.from && 
        (!dateRange.to || new Date(enrollment.created_at) <= dateRange.to));
     
-    const matchesOrganApproval = organApprovalFilter === "all" || 
-      enrollment.organ_approval_status === organApprovalFilter;
-    
-    return matchesStatus && matchesSearch && matchesCourse && matchesDateRange && matchesOrganApproval;
+    return matchesStatus && matchesSearch && matchesCourse && matchesDateRange;
   });
 
   const clearFilters = () => {
@@ -425,7 +363,6 @@ const EnrollmentsPage = () => {
     setStatusFilter("all");
     setSelectedCourse("all");
     setDateRange(undefined);
-    setOrganApprovalFilter("all");
   };
 
   const statusOptions = [
@@ -434,13 +371,6 @@ const EnrollmentsPage = () => {
     { value: "approved", label: "Aprovada" },
     { value: "rejected", label: "Rejeitada" },
     { value: "pending_payment", label: "Aguardando Pagamento" }
-  ];
-
-  const organApprovalOptions = [
-    { value: "all", label: "Todos" },
-    { value: "pending", label: "Pendente" },
-    { value: "approved", label: "Aprovado" },
-    { value: "rejected", label: "Rejeitado" }
   ];
 
   if (loading) {
@@ -472,12 +402,6 @@ const EnrollmentsPage = () => {
           value={selectedCourse}
           onChange={setSelectedCourse}
         />
-        <StatusFilter
-          value={organApprovalFilter}
-          onChange={setOrganApprovalFilter}
-          options={organApprovalOptions}
-          label="Aprovação Órgão"
-        />
         <DateRangeFilter
           value={dateRange}
           onChange={setDateRange}
@@ -488,135 +412,6 @@ const EnrollmentsPage = () => {
       <div className="mb-4 text-sm text-muted-foreground">
         Mostrando {filteredEnrollments.length} de {enrollments.length} pré-matrículas
       </div>
-
-      {/* Seção de Aprovação de Órgão */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-blue-600" />
-            Aprovação de Órgão
-          </CardTitle>
-          <CardDescription>
-            Pré-matrículas com pagamento confirmado aguardando aprovação do órgão do aluno
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {enrollments.filter(e => e.status === 'pending_payment' || (e.status === 'pending' && e.organ_approval_status === 'pending')).length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Curso</TableHead>
-                  <TableHead>Órgão</TableHead>
-                  <TableHead>Status do Pagamento</TableHead>
-                  <TableHead>Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {enrollments
-                  .filter(e => e.status === 'pending_payment' || (e.status === 'pending' && e.organ_approval_status === 'pending'))
-                  .map((enrollment) => (
-                  <TableRow key={`organ-${enrollment.id}`}>
-                    <TableCell className="font-medium">{enrollment.full_name}</TableCell>
-                    <TableCell>{enrollment.courses?.name}</TableCell>
-                    <TableCell>{enrollment.organization || 'Não informado'}</TableCell>
-                    <TableCell>
-                      <Badge variant={enrollment.status === 'pending_payment' ? 'secondary' : 'outline'}>
-                        {enrollment.status === 'pending_payment' ? 'Pago' : 'Pendente'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {(() => {
-                        // Check if payment is confirmed for courses with pre-enrollment fee
-                        const hasPreEnrollmentFee = (enrollment.courses?.pre_enrollment_fee || 0) > 0;
-                        const hasConfirmedPayment = enrollment.payments?.some(p => 
-                          p.kind === 'pre_enrollment' && (p.status === 'received' || p.status === 'confirmed')
-                        );
-                        const canApprove = !hasPreEnrollmentFee || (hasPreEnrollmentFee && hasConfirmedPayment);
-
-                        return (
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                disabled={!canApprove}
-                                onClick={() => {
-                                  setSelectedEnrollment(enrollment);
-                                  setOrganApprovalNotes(enrollment.organ_approval_notes || "");
-                                }}
-                                title={!canApprove ? "Aguardando confirmação do pagamento da pré-matrícula" : ""}
-                              >
-                                <CheckCircle className="h-4 w-4 mr-1" />
-                                Avaliar Órgão
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-lg">
-                              <DialogHeader>
-                                <DialogTitle>Aprovação de Órgão</DialogTitle>
-                              </DialogHeader>
-                              {selectedEnrollment && (
-                                <div className="space-y-4">
-                              <div className="space-y-2">
-                                <Label>Aluno</Label>
-                                <p className="text-sm font-medium">{selectedEnrollment.full_name}</p>
-                              </div>
-                              
-                              <div className="space-y-2">
-                                <Label>Curso</Label>
-                                <p className="text-sm">{selectedEnrollment.courses?.name}</p>
-                              </div>
-                              
-                              <div className="space-y-2">
-                                <Label>Órgão</Label>
-                                <p className="text-sm">{selectedEnrollment.organization || 'Não informado'}</p>
-                              </div>
-
-                              <div>
-                                <Label>Observações sobre a Aprovação</Label>
-                                <Textarea
-                                  value={organApprovalNotes}
-                                  onChange={(e) => setOrganApprovalNotes(e.target.value)}
-                                  placeholder="Adicione observações sobre a aprovação do órgão..."
-                                  rows={3}
-                                />
-                              </div>
-
-                              <div className="flex gap-2">
-                                <Button 
-                                  onClick={() => updateOrganApprovalStatus(selectedEnrollment.id, 'approved')}
-                                  className="flex-1"
-                                >
-                                  <CheckCircle className="h-4 w-4 mr-2" />
-                                  ✅ Órgão Aprovou
-                                </Button>
-                                <Button 
-                                  variant="destructive"
-                                  onClick={() => updateOrganApprovalStatus(selectedEnrollment.id, 'rejected')}
-                                  className="flex-1"
-                                >
-                                  <XCircle className="h-4 w-4 mr-2" />
-                                  ❌ Órgão Reprovou
-                                </Button>
-                              </div>
-                                 </div>
-                               )}
-                             </DialogContent>
-                           </Dialog>
-                         );
-                       })()}
-                     </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <p className="text-center py-4 text-muted-foreground">
-              Nenhuma pré-matrícula aguardando aprovação de órgão no momento.
-            </p>
-          )}
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
