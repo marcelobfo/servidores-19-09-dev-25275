@@ -222,6 +222,7 @@ serve(async (req) => {
       .from('payments')
       .insert({
         pre_enrollment_id: pre_enrollment_id,
+        enrollment_id: enrollment_id,
         amount: enrollmentFee,
         currency: 'BRL',
         status: 'pending',

@@ -117,32 +117,62 @@ export function PreEnrollmentsPage() {
   const [downloadingDeclarations, setDownloadingDeclarations] = useState<Set<string>>(new Set());
   const [downloadingStudyPlans, setDownloadingStudyPlans] = useState<Set<string>>(new Set());
 
-  const handleDownloadDeclaration = async (preEnrollmentId: string) => {
+  const handleDownloadDeclaration = async (preEnrollment: PreEnrollment) => {
     try {
-      setDownloadingDeclarations(prev => new Set(prev).add(preEnrollmentId));
+      setDownloadingDeclarations(prev => new Set(prev).add(preEnrollment.id));
       
-      // Generate documents if they don't exist
-      const { error: generateError } = await supabase.functions.invoke('generate-enrollment-documents', {
-        body: { preEnrollmentId }
-      });
-      
-      if (generateError) throw generateError;
-      
-      // Fetch the declaration
-      const { data, error } = await supabase
-        .from('enrollment_declarations')
-        .select('content')
-        .eq('pre_enrollment_id', preEnrollmentId)
+      // Buscar configurações do sistema
+      const { data: settings, error: settingsError } = await supabase
+        .from('system_settings')
+        .select('*')
         .single();
-        
-      if (error) throw error;
       
-      // Create and download the file
-      const blob = new Blob([data.content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
+      if (settingsError) throw settingsError;
+      
+      // Buscar dados completos da pré-matrícula com curso
+      const { data: fullPreEnrollment, error: preEnrollmentError } = await supabase
+        .from('pre_enrollments')
+        .select(`
+          *,
+          courses (
+            name,
+            duration_hours,
+            start_date,
+            end_date,
+            modules,
+            description
+          )
+        `)
+        .eq('id', preEnrollment.id)
+        .single();
+      
+      if (preEnrollmentError) throw preEnrollmentError;
+      
+      // Gerar PDF usando pdfGenerator.ts
+      const { generateEnrollmentDeclaration } = await import('@/lib/pdfGenerator');
+      const pdfBlob = await generateEnrollmentDeclaration(
+        {
+          full_name: fullPreEnrollment.full_name,
+          cpf: fullPreEnrollment.cpf,
+          organization: fullPreEnrollment.organization,
+          phone: fullPreEnrollment.phone,
+          email: fullPreEnrollment.email,
+          course: {
+            name: fullPreEnrollment.courses.name,
+            duration_hours: fullPreEnrollment.courses.duration_hours,
+            start_date: fullPreEnrollment.courses.start_date,
+            end_date: fullPreEnrollment.courses.end_date
+          }
+        },
+        settings
+      );
+      
+      // Download do PDF
+      const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `declaracao-matricula-${preEnrollmentId}.txt`;
+      const fileName = `declaracao-matricula-${fullPreEnrollment.full_name.replace(/\s+/g, '-')}.pdf`;
+      a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
       
@@ -153,38 +183,70 @@ export function PreEnrollmentsPage() {
     } finally {
       setDownloadingDeclarations(prev => {
         const next = new Set(prev);
-        next.delete(preEnrollmentId);
+        next.delete(preEnrollment.id);
         return next;
       });
     }
   };
 
-  const handleDownloadStudyPlan = async (preEnrollmentId: string) => {
+  const handleDownloadStudyPlan = async (preEnrollment: PreEnrollment) => {
     try {
-      setDownloadingStudyPlans(prev => new Set(prev).add(preEnrollmentId));
+      setDownloadingStudyPlans(prev => new Set(prev).add(preEnrollment.id));
       
-      // Generate documents if they don't exist
-      const { error: generateError } = await supabase.functions.invoke('generate-enrollment-documents', {
-        body: { preEnrollmentId }
-      });
-      
-      if (generateError) throw generateError;
-      
-      // Fetch the study plan
-      const { data, error } = await supabase
-        .from('study_plans')
-        .select('content')
-        .eq('pre_enrollment_id', preEnrollmentId)
+      // Buscar configurações do sistema
+      const { data: settings, error: settingsError } = await supabase
+        .from('system_settings')
+        .select('*')
         .single();
-        
-      if (error) throw error;
       
-      // Create and download the file
-      const blob = new Blob([data.content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
+      if (settingsError) throw settingsError;
+      
+      // Buscar dados completos da pré-matrícula com curso
+      const { data: fullPreEnrollment, error: preEnrollmentError } = await supabase
+        .from('pre_enrollments')
+        .select(`
+          *,
+          courses (
+            name,
+            duration_hours,
+            start_date,
+            end_date,
+            modules,
+            description
+          )
+        `)
+        .eq('id', preEnrollment.id)
+        .single();
+      
+      if (preEnrollmentError) throw preEnrollmentError;
+      
+      // Gerar PDF usando pdfGenerator.ts
+      const { generateStudyPlan } = await import('@/lib/pdfGenerator');
+      const pdfBlob = await generateStudyPlan(
+        {
+          full_name: fullPreEnrollment.full_name,
+          cpf: fullPreEnrollment.cpf,
+          organization: fullPreEnrollment.organization,
+          phone: fullPreEnrollment.phone,
+          email: fullPreEnrollment.email,
+          course: {
+            name: fullPreEnrollment.courses.name,
+            duration_hours: fullPreEnrollment.courses.duration_hours,
+            start_date: fullPreEnrollment.courses.start_date,
+            end_date: fullPreEnrollment.courses.end_date,
+            modules: fullPreEnrollment.courses.modules,
+            description: fullPreEnrollment.courses.description
+          }
+        },
+        settings
+      );
+      
+      // Download do PDF
+      const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `plano-estudos-${preEnrollmentId}.txt`;
+      const fileName = `plano-estudos-${fullPreEnrollment.full_name.replace(/\s+/g, '-')}.pdf`;
+      a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
       
@@ -195,7 +257,7 @@ export function PreEnrollmentsPage() {
     } finally {
       setDownloadingStudyPlans(prev => {
         const next = new Set(prev);
-        next.delete(preEnrollmentId);
+        next.delete(preEnrollment.id);
         return next;
       });
     }
@@ -204,6 +266,10 @@ export function PreEnrollmentsPage() {
   const handleEnrollment = async (preEnrollment: PreEnrollment) => {
     try {
       const enrollmentFee = preEnrollment.courses.enrollment_fee || 0;
+      
+      console.log('🎓 [ENROLLMENT] Iniciando checkout de matrícula');
+      console.log('📋 Pré-matrícula ID:', preEnrollment.id);
+      console.log('💰 Taxa de matrícula:', enrollmentFee);
       
       // Se há taxa de matrícula, redirecionar para checkout Asaas
       if (enrollmentFee > 0) {
@@ -221,9 +287,15 @@ export function PreEnrollmentsPage() {
           .select()
           .single();
 
-        if (enrollmentError) throw enrollmentError;
+        if (enrollmentError) {
+          console.error('❌ [ENROLLMENT] Erro ao criar enrollment:', enrollmentError);
+          throw enrollmentError;
+        }
+
+        console.log('✅ [ENROLLMENT] Enrollment criado:', enrollment.id);
 
         // Chamar edge function para criar checkout Asaas
+        console.log('🔄 [ENROLLMENT] Chamando edge function create-matricula-checkout...');
         const { data, error } = await supabase.functions.invoke('create-matricula-checkout', {
           body: {
             enrollment_id: enrollment.id,
@@ -231,12 +303,17 @@ export function PreEnrollmentsPage() {
           }
         });
 
+        console.log('✅ [ENROLLMENT] Resposta da edge function:', data);
+        console.log('❌ [ENROLLMENT] Erro da edge function:', error);
+
         if (error) throw error;
 
         if (data?.checkout_url) {
+          console.log('🔗 [ENROLLMENT] Redirecionando para:', data.checkout_url);
           // Redirecionar para checkout Asaas
           window.location.href = data.checkout_url;
         } else {
+          console.error('❌ [ENROLLMENT] URL de checkout não foi gerada');
           throw new Error("URL de checkout não foi gerada");
         }
         return;
@@ -459,7 +536,7 @@ export function PreEnrollmentsPage() {
                         <div className="flex flex-wrap gap-2">
                           <Button
                             variant="secondary"
-                            onClick={() => handleDownloadDeclaration(preEnrollment.id)}
+                            onClick={() => handleDownloadDeclaration(preEnrollment)}
                             size="sm"
                             disabled={downloadingDeclarations.has(preEnrollment.id)}
                           >
@@ -468,7 +545,7 @@ export function PreEnrollmentsPage() {
                           </Button>
                           <Button
                             variant="secondary"
-                            onClick={() => handleDownloadStudyPlan(preEnrollment.id)}
+                            onClick={() => handleDownloadStudyPlan(preEnrollment)}
                             size="sm"
                             disabled={downloadingStudyPlans.has(preEnrollment.id)}
                           >

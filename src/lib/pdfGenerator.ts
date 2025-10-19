@@ -237,20 +237,20 @@ export const generateStudyPlan = async (
 
   yPosition += 8;
 
-  // Table header
-  pdf.setFillColor(220, 220, 220);
-  pdf.rect(20, yPosition - 4, 170, 7, 'F');
+  // Table header - SEM FUNDO CINZA
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(9);
   pdf.text('MÓDULO', 25, yPosition);
   pdf.text('CARGA HORÁRIA', 155, yPosition);
 
-  yPosition += 6;
+  yPosition += 3;
 
-  // Draw table borders
-  pdf.setDrawColor(180, 180, 180);
-  pdf.setLineWidth(0.3);
-  pdf.rect(20, yPosition - 10, 170, 7);
+  // Linha horizontal abaixo do header
+  pdf.setDrawColor(100, 100, 100);
+  pdf.setLineWidth(0.5);
+  pdf.line(20, yPosition, 190, yPosition);
+
+  yPosition += 5;
 
   // Helper function to check page break needs
   const addPageBreakIfNeeded = (currentY: number, requiredSpace: number = 60): number => {
@@ -272,15 +272,17 @@ export const generateStudyPlan = async (
     yPosition = addPageBreakIfNeeded(yPosition, 10);
     
     const moduleName = module.name || `Módulo ${index + 1}`;
+    pdf.setFont('helvetica', 'normal');
     pdf.text(`${index + 1}. ${moduleName}`, 25, yPosition);
     pdf.text(`${module.hours}h`, 160, yPosition);
     
-    // Draw row border
-    pdf.setDrawColor(200, 200, 200);
-    pdf.line(20, yPosition + 2, 190, yPosition + 2);
-    
-    yPosition += 6;
+    yPosition += 7;
   });
+
+  // Linha final da tabela
+  pdf.setDrawColor(100, 100, 100);
+  pdf.setLineWidth(0.5);
+  pdf.line(20, yPosition, 190, yPosition);
 
   // Total
   yPosition += 3;
@@ -436,8 +438,8 @@ export const generateEnrollmentDeclaration = async (
   pdf.setFontSize(11);
   pdf.setFont('helvetica', 'normal');
 
-  const orgText = enrollment.organization ? `, ${enrollment.organization},` : '';
-  const declarationText = `Declaramos para os devidos fins que ${enrollment.full_name.toUpperCase()}, portador(a) do CPF nº ${formatCPF(enrollment.cpf || '')}${orgText} encontra-se regularmente matriculado(a) no curso de "${enrollment.course.name.toUpperCase()}".
+  const orgText = enrollment.organization ? ` ${enrollment.organization}` : '';
+  const declarationText = `Declaramos para os devidos fins que ${enrollment.full_name.toUpperCase()}, portador(a) do CPF nº ${formatCPF(enrollment.cpf || '')},${orgText} encontra-se regularmente matriculado(a) no curso de "${enrollment.course.name.toUpperCase()}".
 
 O referido curso possui carga horária de ${enrollment.course.duration_hours || 390} (${numberToWords(enrollment.course.duration_hours || 390)}) horas, sendo realizado na modalidade de Ensino a Distância (EAD), com datas a serem definidas.
 
@@ -498,7 +500,7 @@ Esta declaração é válida para todos os fins de direito.`;
   // Stamp area indication
   pdf.setFontSize(8);
   pdf.setFont('helvetica', 'normal');
-  pdf.text('(CARIMBO E ASSINATURA)', 130, yPosition + 13);
+  pdf.text('(CARIMBO E ASSINATURA)', 95, yPosition + 13);
 
   return pdf.output('blob');
 };
