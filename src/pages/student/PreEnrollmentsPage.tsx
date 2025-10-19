@@ -367,19 +367,36 @@ export function PreEnrollmentsPage() {
       });
 
       console.log('✅ [PRE-ENROLLMENT] Resposta da edge function:', data);
-      console.log('❌ [PRE-ENROLLMENT] Erro:', error);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [PRE-ENROLLMENT] Erro:', error);
+        throw error;
+      }
 
       if (data?.checkout_url) {
         console.log('🔗 [PRE-ENROLLMENT] Redirecionando para:', data.checkout_url);
-        window.location.href = data.checkout_url;
+        
+        // ETAPA 5: Mostrar toast com link antes de redirecionar
+        toast.success(
+          "Checkout criado com sucesso! Redirecionando...",
+          { 
+            duration: 10000,
+            description: data.reused ? "Reutilizando checkout existente" : undefined
+          }
+        );
+        
+        // Aguardar um momento antes de redirecionar
+        setTimeout(() => {
+          window.location.href = data.checkout_url;
+        }, 1000);
       } else {
         throw new Error("URL de checkout não foi gerada");
       }
     } catch (error) {
       console.error("Error creating pre-enrollment checkout:", error);
-      toast.error("Erro ao processar pagamento");
+      toast.error(
+        "Erro ao gerar checkout. Verifique se todos os dados estão preenchidos ou entre em contato com o suporte."
+      );
     }
   };
 

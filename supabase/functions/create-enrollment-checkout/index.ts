@@ -138,6 +138,16 @@ serve(async (req) => {
       .eq('user_id', user.id)
       .single();
 
+    // ETAPA 4: Adicionar logging melhorado
+    console.log('Pre-enrollment data retrieved:', {
+      id: preEnrollment.id,
+      user_id: preEnrollment.user_id,
+      course_id: preEnrollment.course_id,
+      course_name: preEnrollment.courses?.name,
+      has_courses: !!preEnrollment.courses,
+      pre_enrollment_fee: preEnrollment.courses?.pre_enrollment_fee
+    });
+
     if (enrollmentError || !preEnrollment) {
       console.error("Pre-enrollment query failed:", enrollmentError);
       console.error("Pre-enrollment ID:", pre_enrollment_id);
@@ -156,12 +166,54 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Pre-enrollment found for course: ${preEnrollment.courses.name}`);
+    console.log(`Pre-enrollment found for course: ${preEnrollment.courses?.name || 'UNKNOWN'}`);
+
+    // ETAPA 1: Verificar se já existe um pagamento pendente
+    const { data: existingPayment } = await serviceClient
+      .from('payments')
+      .select('id, status, asaas_payment_id')
+      .eq('pre_enrollment_id', pre_enrollment_id)
+      .eq('kind', 'pre_enrollment')
+      .in('status', ['pending', 'waiting'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingPayment) {
+      console.log('Reusing existing payment:', existingPayment.id);
+      
+      // Construir URL do checkout existente
+      const checkoutUrl = `https://${environment === 'production' ? 'asaas.com' : 'sandbox.asaas.com'}/checkoutSession/show?id=${existingPayment.asaas_payment_id}`;
+      
+      return new Response(JSON.stringify({
+        checkout_url: checkoutUrl,
+        checkout_id: existingPayment.asaas_payment_id,
+        reused: true
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200
+      });
+    }
+
+    // ETAPA 2: Validar dados do curso
+    if (!preEnrollment.courses) {
+      console.error("Course data not found for pre-enrollment:", pre_enrollment_id);
+      return new Response(JSON.stringify({ 
+        error: "Dados do curso não encontrados. Entre em contato com o suporte." 
+      }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     const preEnrollmentFee = preEnrollment.courses.pre_enrollment_fee;
     
     if (!preEnrollmentFee || preEnrollmentFee <= 0) {
-      console.error("Course pre-enrollment fee not configured:", preEnrollment.courses.name);
+      console.error("Course pre-enrollment fee not configured:", {
+        courseId: preEnrollment.course_id,
+        courseName: preEnrollment.courses.name,
+        fee: preEnrollmentFee
+      });
       return new Response(JSON.stringify({ 
         error: "Taxa de pré-matrícula não configurada para este curso. Entre em contato com o suporte." 
       }), {
@@ -293,20 +345,31 @@ serve(async (req) => {
     const checkoutResult = await asaasResponse.json();
     console.log('Asaas checkout response:', checkoutResult);
 
-    // Store checkout info in payments table
-    const { error: paymentError } = await serviceClient
-      .from('payments')
-      .insert({
-        pre_enrollment_id: pre_enrollment_id,
-        amount: preEnrollmentFee,
-        currency: 'BRL',
-        status: 'pending',
-        kind: 'pre_enrollment',
-        asaas_payment_id: checkoutResult.id
-      });
+    // ETAPA 3: Store checkout info in payments table with try-catch
+    try {
+      const { data: newPayment, error: paymentError } = await serviceClient
+        .from('payments')
+        .insert({
+          pre_enrollment_id: pre_enrollment_id,
+          amount: preEnrollmentFee,
+          currency: 'BRL',
+          status: 'pending',
+          kind: 'pre_enrollment',
+          asaas_payment_id: checkoutResult.id
+        })
+        .select()
+        .single();
 
-    if (paymentError) {
-      console.error("Error storing payment:", paymentError);
+      if (paymentError) {
+        console.error("Error storing payment:", paymentError);
+        // Não falhar a requisição, apenas logar o erro
+        // O checkout do Asaas já foi criado com sucesso
+      } else {
+        console.log("Payment record created:", newPayment.id);
+      }
+    } catch (paymentInsertError) {
+      console.error("Exception storing payment:", paymentInsertError);
+      // Continuar mesmo com erro, pois o checkout já foi criado
     }
 
     // Construct checkout URL if not provided directly
