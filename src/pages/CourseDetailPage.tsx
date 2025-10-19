@@ -18,6 +18,7 @@ interface Course {
   modules: string;
   image_url: string;
   duration_hours: number;
+  duration_days?: number;
   start_date: string;
   end_date: string;
   pre_enrollment_fee?: number;
@@ -269,8 +270,11 @@ const CourseDetailPage = () => {
             <div>
               <h2 className="text-3xl font-bold mb-6 text-foreground">Sobre o Curso</h2>
               {course.description && (
-                <div className="prose max-w-none">
-                  <SafeHTML html={course.description} />
+                <div className="prose prose-slate dark:prose-invert max-w-none">
+                  <SafeHTML 
+                    html={course.description} 
+                    className="text-foreground leading-relaxed"
+                  />
                 </div>
               )}
             </div>
@@ -336,6 +340,16 @@ const CourseDetailPage = () => {
                         <p className="text-sm text-muted-foreground">{course.duration_hours} horas</p>
                       </div>
                     </div>
+
+                    {course.duration_days && (
+                      <div className="flex items-start gap-3">
+                        <Calendar className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-foreground">Duração do Curso</p>
+                          <p className="text-sm text-muted-foreground">{course.duration_days} dias</p>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex items-start gap-3">
                       <Award className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
