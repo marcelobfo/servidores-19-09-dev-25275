@@ -137,29 +137,61 @@ export default function PaymentSettingsPage() {
   };
 
   const handleSave = async () => {
-    // Validate settings before saving
+    // Validar ambiente e chaves API
     if (settings.enabled) {
+      // Validar chave do ambiente atual
       const currentApiKey = settings.environment === 'production' 
         ? settings.asaas_api_key_production 
         : settings.asaas_api_key_sandbox;
         
-      if (!currentApiKey) {
+      if (!currentApiKey || currentApiKey.trim() === '') {
         toast({
-          title: "Erro",
-          description: `Chave API do ambiente ${settings.environment} é obrigatória quando o sistema está habilitado`,
+          title: "Erro de Configuração",
+          description: `A chave API do ambiente ${settings.environment} é obrigatória quando o sistema está habilitado.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validar formato da chave API
+      if (!currentApiKey.startsWith('$aact_')) {
+        toast({
+          title: "Erro de Configuração",
+          description: `A chave API do Asaas deve começar com "$aact_". Verifique se copiou corretamente.`,
           variant: "destructive",
         });
         return;
       }
     }
 
-    if (settings.pricing_type === 'fixed' && (!settings.fixed_price || settings.fixed_price <= 0)) {
+    // Validar pricing_type
+    if (settings.pricing_type === 'fixed') {
+      if (!settings.fixed_price || settings.fixed_price <= 0) {
+        toast({
+          title: "Erro de Configuração",
+          description: "Preço fixo deve ser maior que zero quando o tipo de preço é fixo",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (settings.fixed_price < 5) {
+        toast({
+          title: "Erro de Configuração",
+          description: "O valor mínimo para pagamento é R$ 5,00 (requisito da Asaas)",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    // Validar webhook token
+    if (settings.enabled && (!settings.asaas_webhook_token || settings.asaas_webhook_token.trim() === '')) {
       toast({
-        title: "Erro",
-        description: "Preço fixo deve ser maior que zero quando o tipo de preço é fixo",
-        variant: "destructive",
+        title: "Aviso",
+        description: "Token do webhook não configurado. Os webhooks não funcionarão até você configurar.",
+        variant: "default",
       });
-      return;
     }
 
     setSaving(true);
@@ -179,13 +211,26 @@ export default function PaymentSettingsPage() {
         title: "Sucesso",
         description: "Configurações de pagamento salvas com sucesso!",
       });
-    } catch (error) {
+      
+      // Recarregar settings após salvar
+      await fetchSettings();
+    } catch (error: any) {
       console.error('Error saving payment settings:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao salvar configurações",
-        variant: "destructive",
-      });
+      
+      // Erro específico de RLS
+      if (error.code === '42501') {
+        toast({
+          title: "Erro de Permissão",
+          description: "Você não tem permissão para salvar configurações. Verifique se você é administrador.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Erro ao Salvar",
+          description: error.message || "Erro ao salvar configurações",
+          variant: "destructive",
+        });
+      }
     } finally {
       setSaving(false);
     }
@@ -375,6 +420,60 @@ export default function PaymentSettingsPage() {
                    Use a mesma URL para ambos os ambientes (sandbox e produção)
                  </p>
                </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Diagnóstico do Sistema</CardTitle>
+              <CardDescription>
+                Verifique o status das configurações de pagamento
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Sistema de Pagamento</span>
+                <span className={`text-xs px-2 py-1 rounded ${settings.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'}`}>
+                  {settings.enabled ? "Ativo" : "Inativo"}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Ambiente Atual</span>
+                <span className={`text-xs px-2 py-1 rounded ${settings.environment === 'production' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}`}>
+                  {settings.environment === 'production' ? "Produção" : "Sandbox"}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Chave API Sandbox</span>
+                <span className={`text-xs px-2 py-1 rounded ${settings.asaas_api_key_sandbox ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'}`}>
+                  {settings.asaas_api_key_sandbox ? "Configurada" : "Não configurada"}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Chave API Produção</span>
+                <span className={`text-xs px-2 py-1 rounded ${settings.asaas_api_key_production ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'}`}>
+                  {settings.asaas_api_key_production ? "Configurada" : "Não configurada"}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Token Webhook</span>
+                <span className={`text-xs px-2 py-1 rounded ${settings.asaas_webhook_token ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'}`}>
+                  {settings.asaas_webhook_token ? "Configurado" : "Não configurado"}
+                </span>
+              </div>
+
+              {settings.pricing_type === 'fixed' && settings.fixed_price && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Preço Fixo</span>
+                  <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                    R$ {settings.fixed_price.toFixed(2)}
+                  </span>
+                </div>
+              )}
             </CardContent>
           </Card>
         </>

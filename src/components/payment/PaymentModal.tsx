@@ -99,6 +99,26 @@ export function PaymentModal({
 
       if (error) {
         console.error('Supabase function error:', error);
+        
+        // Erro específico: API keys não configuradas
+        if (error.message?.includes('API key não configurada') || 
+            error.message?.includes('Chave API') ||
+            error.message?.includes('payment_settings')) {
+          throw new Error(
+            'Sistema de pagamento não configurado. Por favor, entre em contato com o administrador para configurar as chaves API do Asaas.'
+          );
+        }
+        
+        // Erro específico: dados obrigatórios faltando
+        if (error.message?.includes('obrigatório') || 
+            error.message?.includes('faltando') ||
+            error.message?.includes('CPF') ||
+            error.message?.includes('telefone')) {
+          throw new Error(
+            'Alguns dados obrigatórios estão faltando no seu cadastro. Verifique se preencheu todos os campos do formulário de pré-matrícula, incluindo CPF e telefone.'
+          );
+        }
+        
         throw error;
       }
 
