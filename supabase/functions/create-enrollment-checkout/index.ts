@@ -125,7 +125,7 @@ serve(async (req) => {
         *,
         courses (
           name,
-          enrollment_fee
+          pre_enrollment_fee
         )
       `)
       .eq('id', pre_enrollment_id)
@@ -158,12 +158,12 @@ serve(async (req) => {
 
     console.log(`Pre-enrollment found for course: ${preEnrollment.courses.name}`);
 
-    const enrollmentFee = preEnrollment.courses.enrollment_fee;
+    const preEnrollmentFee = preEnrollment.courses.pre_enrollment_fee;
     
-    if (!enrollmentFee || enrollmentFee <= 0) {
-      console.error("Course enrollment fee not configured:", preEnrollment.courses.name);
+    if (!preEnrollmentFee || preEnrollmentFee <= 0) {
+      console.error("Course pre-enrollment fee not configured:", preEnrollment.courses.name);
       return new Response(JSON.stringify({ 
-        error: "Taxa de matrícula não configurada para este curso. Entre em contato com o suporte." 
+        error: "Taxa de pré-matrícula não configurada para este curso. Entre em contato com o suporte." 
       }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -235,20 +235,20 @@ serve(async (req) => {
 
     // Create Asaas checkout following official documentation
     const checkoutData = {
-      billingTypes: ["CREDIT_CARD", "PIX"],
+      billingTypes: ["CREDIT_CARD", "PIX", "BOLETO"],
       chargeTypes: ["DETACHED"],
       minutesToExpire: 60,
       callback: {
-        successUrl: `${req.headers.get("origin")}/student?payment_success=true`,
-        cancelUrl: `${req.headers.get("origin")}/student?payment_cancelled=true`,
-        expiredUrl: `${req.headers.get("origin")}/student?payment_expired=true`
+        successUrl: `${req.headers.get("origin")}/student/pre-enrollments?payment_success=true`,
+        cancelUrl: `${req.headers.get("origin")}/student/pre-enrollments?payment_cancelled=true`,
+        expiredUrl: `${req.headers.get("origin")}/student/pre-enrollments?payment_expired=true`
       },
       items: [{
         externalReference: pre_enrollment_id,
-        description: `Matrícula - ${preEnrollment.courses.name}`,
+        description: `Pré-matrícula - ${preEnrollment.courses.name}`,
         name: preEnrollment.courses.name,
         quantity: 1,
-        value: enrollmentFee
+        value: preEnrollmentFee
       }],
       customerData: {
         name: getValueWithFallback(preEnrollment.full_name, userProfile?.full_name, "Nome não informado"),
@@ -298,10 +298,10 @@ serve(async (req) => {
       .from('payments')
       .insert({
         pre_enrollment_id: pre_enrollment_id,
-        amount: enrollmentFee,
+        amount: preEnrollmentFee,
         currency: 'BRL',
         status: 'pending',
-        kind: 'enrollment',
+        kind: 'pre_enrollment',
         asaas_payment_id: checkoutResult.id
       });
 

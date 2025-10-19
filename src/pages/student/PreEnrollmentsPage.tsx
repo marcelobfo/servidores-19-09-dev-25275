@@ -7,8 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StatusFilter } from "@/components/student/filters/StatusFilter";
 import { SearchFilter } from "@/components/student/filters/SearchFilter";
 import { SortOptions } from "@/components/student/filters/SortOptions";
-import { PaymentModal } from "@/components/payment/PaymentModal";
-import { Clock, CheckCircle, XCircle, DollarSign, FileText, Calendar, Download } from "lucide-react";
+import { Clock, CheckCircle, XCircle, DollarSign, FileText, Calendar, Download, Mail } from "lucide-react";
 import { toast } from "sonner";
 
 interface PreEnrollment {
@@ -59,8 +58,6 @@ export function PreEnrollmentsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("created_at_desc");
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPreEnrollment, setSelectedPreEnrollment] = useState<PreEnrollment | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -342,15 +339,33 @@ export function PreEnrollmentsPage() {
     }
   };
 
-  const handlePreEnrollmentPayment = (preEnrollment: PreEnrollment) => {
-    setSelectedPreEnrollment(preEnrollment);
-    setShowPaymentModal(true);
-  };
+  const handlePreEnrollmentPayment = async (preEnrollment: PreEnrollment) => {
+    try {
+      console.log('💳 [PRE-ENROLLMENT] Iniciando checkout de pré-matrícula');
+      console.log('📋 Pre-enrollment ID:', preEnrollment.id);
+      console.log('💰 Valor:', preEnrollment.courses.pre_enrollment_fee);
 
-  const handlePaymentSuccess = () => {
-    setShowPaymentModal(false);
-    setSelectedPreEnrollment(null);
-    fetchPreEnrollments();
+      const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
+        body: {
+          pre_enrollment_id: preEnrollment.id
+        }
+      });
+
+      console.log('✅ [PRE-ENROLLMENT] Resposta da edge function:', data);
+      console.log('❌ [PRE-ENROLLMENT] Erro:', error);
+
+      if (error) throw error;
+
+      if (data?.checkout_url) {
+        console.log('🔗 [PRE-ENROLLMENT] Redirecionando para:', data.checkout_url);
+        window.location.href = data.checkout_url;
+      } else {
+        throw new Error("URL de checkout não foi gerada");
+      }
+    } catch (error) {
+      console.error("Error creating pre-enrollment checkout:", error);
+      toast.error("Erro ao processar pagamento");
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -588,18 +603,31 @@ export function PreEnrollmentsPage() {
 
                   {preEnrollment.status === "pending_payment" && preEnrollment.courses.pre_enrollment_fee && !preEnrollment.organ_approval_confirmed && (
                     <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-                      <p className="text-sm text-orange-800 dark:text-orange-200 mb-3">
-                        Pagamento pendente. Clique para gerar um novo QR Code PIX.
-                      </p>
-                      <Button
-                        onClick={() => handlePreEnrollmentPayment(preEnrollment)}
-                        size="sm"
-                        variant="outline"
-                        className="flex items-center gap-2"
-                      >
-                        <DollarSign className="h-4 w-4" />
-                        Gerar Novo QR Code
-                      </Button>
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-3">
+                          <Mail className="h-5 w-5 text-orange-600 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-orange-800 dark:text-orange-200 mb-1">
+                              Pagamento pendente
+                            </p>
+                            <p className="text-sm text-orange-700 dark:text-orange-300 mb-2">
+                              Verifique seu e-mail <strong>{preEnrollment.email}</strong> para acessar o link de pagamento.
+                            </p>
+                            <p className="text-xs text-orange-600 dark:text-orange-400">
+                              O link de pagamento também foi enviado por e-mail e é válido por 60 minutos.
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => handlePreEnrollmentPayment(preEnrollment)}
+                          size="sm"
+                          variant="outline"
+                          className="w-full flex items-center justify-center gap-2"
+                        >
+                          <DollarSign className="h-4 w-4" />
+                          Gerar Nova Cobrança
+                        </Button>
+                      </div>
                     </div>
                   )}
 
@@ -632,16 +660,6 @@ export function PreEnrollmentsPage() {
         </div>
       )}
 
-      {showPaymentModal && selectedPreEnrollment && (
-        <PaymentModal
-          isOpen={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
-          preEnrollmentId={selectedPreEnrollment.id}
-          amount={selectedPreEnrollment.courses.pre_enrollment_fee || 0}
-          courseName={selectedPreEnrollment.courses.name}
-          onPaymentSuccess={handlePaymentSuccess}
-        />
-      )}
     </div>
   );
 }
