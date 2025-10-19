@@ -9,6 +9,9 @@ verify_jwt = false
 [functions.create-enrollment-checkout]
 verify_jwt = false
 
+[functions.create-pre-enrollment]
+verify_jwt = true
+
 [functions.generate-enrollment-documents]
 verify_jwt = true
 

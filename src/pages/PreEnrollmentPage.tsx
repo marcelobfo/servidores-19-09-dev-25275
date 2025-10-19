@@ -207,103 +207,26 @@ const PreEnrollmentPage = () => {
       .replace(/(-\d{3})\d+?$/, '$1');
   };
 
-  // Verifica se o token de autenticação está presente
-  const verifyAuthHeader = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session?.access_token) {
-      console.error('❌ Sem access token! Session:', session);
-      throw new Error('Token de autenticação ausente');
-    }
-    
-    console.log('✅ Token presente:', {
-      tokenPreview: session.access_token.substring(0, 20) + '...',
-      userId: session.user?.id,
-      expiresAt: new Date((session.expires_at || 0) * 1000).toISOString()
-    });
-    
-    return session;
-  };
-
-  // Garante que a sessão é válida e renova se necessário
-  const ensureValidSession = async () => {
-    // Primeiro verifica se o token está presente
-    await verifyAuthHeader();
-    
-    const { data: { session }, error } = await supabase.auth.getSession();
-    
-    console.log('🔍 Verificando sessão:', {
-      hasSession: !!session,
-      hasUser: !!session?.user,
-      userId: session?.user?.id,
-      expiresAt: session?.expires_at,
-      error: error?.message
-    });
-    
-    if (error || !session) {
-      console.error('❌ Sessão inválida:', error);
-      throw new Error('Sessão inválida. Por favor, faça login novamente.');
-    }
-    
-    // Verificar se o token expira em menos de 5 minutos
-    const expiresAt = session.expires_at || 0;
-    const now = Math.floor(Date.now() / 1000);
-    const timeUntilExpiry = expiresAt - now;
-    
-    console.log('⏰ Token expira em:', timeUntilExpiry, 'segundos');
-    
-    // Se expira em menos de 5 minutos (300 segundos), renovar
-    if (timeUntilExpiry < 300) {
-      console.log('🔄 Token próximo de expirar, renovando...');
-      const { data: { session: newSession }, error: refreshError } = 
-        await supabase.auth.refreshSession();
-        
-      if (refreshError || !newSession) {
-        console.error('❌ Falha ao renovar token:', refreshError);
-        throw new Error('Falha ao renovar sessão. Por favor, faça login novamente.');
+  // Insere usando Edge Function que bypassa RLS com segurança
+  const insertPreEnrollmentWithRetry = async (enrollmentData: any) => {
+    try {
+      console.log('🔄 Chamando Edge Function create-pre-enrollment...');
+      
+      const { data, error } = await supabase.functions.invoke('create-pre-enrollment', {
+        body: enrollmentData
+      });
+      
+      if (error) {
+        console.error('❌ Erro na Edge Function:', error);
+        throw error;
       }
       
-      console.log('✅ Token renovado com sucesso');
-      return newSession;
+      console.log('✅ Pre-enrollment criado via Edge Function:', data.id);
+      return data;
+    } catch (error) {
+      console.error('❌ Falha ao criar pre-enrollment:', error);
+      throw error;
     }
-    
-    console.log('✅ Token válido');
-    return session;
-  };
-
-  // Tenta inserir com retry em caso de erro de autorização
-  const insertPreEnrollmentWithRetry = async (enrollmentData: any, maxRetries = 1) => {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        // Garantir token válido antes de cada tentativa
-        const session = await ensureValidSession();
-        
-        console.log(`Tentativa ${attempt + 1}/${maxRetries + 1} - Inserindo pre_enrollment`);
-        console.log('Token válido até:', new Date(session.expires_at! * 1000).toLocaleString());
-        
-        const { data, error } = await supabase
-          .from("pre_enrollments")
-          .insert([enrollmentData])
-          .select()
-          .single();
-          
-        if (error) {
-          // Se for erro de autorização e ainda temos retries
-          if (error.code === '42501' && attempt < maxRetries) {
-            console.log('Erro de autorização detectado, renovando token e tentando novamente...');
-            await supabase.auth.refreshSession();
-            continue; // Tenta novamente
-          }
-          throw error;
-        }
-        
-        return data;
-      } catch (error) {
-        if (attempt === maxRetries) throw error;
-      }
-    }
-    
-    throw new Error('Failed to insert after retries');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -311,28 +234,6 @@ const PreEnrollmentPage = () => {
     setSubmitting(true);
 
     try {
-      // VERIFICAÇÃO E VALIDAÇÃO DE SESSÃO COM AUTO-RECOVERY
-      console.log('=== DEBUG PRE-ENROLLMENT SUBMISSION ===');
-      
-      // Garantir sessão válida antes de qualquer operação
-      let session;
-      try {
-        session = await ensureValidSession();
-        console.log('✓ Sessão validada com sucesso');
-        console.log('User ID:', session.user.id);
-        console.log('Token expira em:', new Date(session.expires_at! * 1000).toLocaleString());
-      } catch (error) {
-        console.error('✗ Falha na validação de sessão:', error);
-        toast({
-          title: "Sessão Expirada",
-          description: "Por favor, faça login novamente para continuar",
-          variant: "destructive"
-        });
-        localStorage.clear();
-        navigate('/auth');
-        return;
-      }
-
       if (!user) {
         toast({
           title: "Erro",
@@ -353,7 +254,7 @@ const PreEnrollmentPage = () => {
 
       // Preparar dados do enrollment
       const enrollmentData = {
-        user_id: session.user.id,
+        user_id: user.id,
         course_id: formData.course_id,
         full_name: formData.full_name,
         email: formData.email,
@@ -373,10 +274,10 @@ const PreEnrollmentPage = () => {
         additional_info: formData.additional_info,
       };
 
-      // Inserir com retry automático
-      console.log('Iniciando inserção com retry automático...');
+      // Inserir via Edge Function
+      console.log('Criando pré-matrícula via Edge Function...');
       const preEnrollmentData = await insertPreEnrollmentWithRetry(enrollmentData);
-      console.log('✓ Pre-enrollment criado com sucesso:', preEnrollmentData.id);
+      console.log('✅ Pre-enrollment criado com sucesso:', preEnrollmentData.id);
       
       // Trigger webhook for enrollment creation
       await triggerEnrollmentWebhook(preEnrollmentData.id, 'enrollment_created');
@@ -419,17 +320,9 @@ const PreEnrollmentPage = () => {
     } catch (error: any) {
       console.error('Erro no handleSubmit:', error);
       
-      // Mensagem mais específica para erro de RLS
-      let errorMessage = error.message || "Falha ao enviar pré-matrícula";
-      
-      if (error.message?.includes('row-level security') || error.code === '42501') {
-        errorMessage = "Erro de autorização. Por favor, faça logout e login novamente, depois tente novamente.";
-        console.error('ERRO RLS DETECTADO - Usuário pode precisar reautenticar');
-      }
-      
       toast({
         title: "Erro",
-        description: errorMessage,
+        description: error.message || "Falha ao enviar pré-matrícula. Tente novamente.",
         variant: "destructive"
       });
     } finally {
