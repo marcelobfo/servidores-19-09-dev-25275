@@ -15,6 +15,8 @@ interface PreEnrollment {
   full_name: string;
   email: string;
   phone?: string;
+  cpf?: string;
+  organization?: string;
   status: string;
   created_at: string;
   updated_at: string;
@@ -25,11 +27,17 @@ interface PreEnrollment {
     name: string;
     pre_enrollment_fee?: number;
     enrollment_fee?: number;
+    duration_hours?: number;
+    start_date?: string;
+    end_date?: string;
+    modules?: string;
+    description?: string;
   };
 }
 
 const statusLabels = {
   pending: "Pendente",
+  pending_payment: "Aguardando Pagamento",
   approved: "Aprovada",
   rejected: "Rejeitada",
   payment_confirmed: "Pagamento Confirmado",
@@ -38,6 +46,7 @@ const statusLabels = {
 
 const statuses = [
   { value: "pending", label: "Pendente" },
+  { value: "pending_payment", label: "Aguardando Pagamento" },
   { value: "approved", label: "Aprovada" },
   { value: "rejected", label: "Rejeitada" },
   { value: "payment_confirmed", label: "Pagamento Confirmado" },
@@ -75,7 +84,12 @@ export function PreEnrollmentsPage() {
             id,
             name,
             pre_enrollment_fee,
-            enrollment_fee
+            enrollment_fee,
+            duration_hours,
+            start_date,
+            end_date,
+            modules,
+            description
           )
         `)
         .eq("user_id", user?.id)
@@ -118,47 +132,45 @@ export function PreEnrollmentsPage() {
     try {
       setDownloadingDeclarations(prev => new Set(prev).add(preEnrollment.id));
       
+      // Validar dados necessários
+      if (!preEnrollment.cpf) {
+        toast.error("CPF não encontrado na pré-matrícula. Entre em contato com o suporte.");
+        return;
+      }
+      
       // Buscar configurações do sistema
       const { data: settings, error: settingsError } = await supabase
         .from('system_settings')
         .select('*')
-        .single();
+        .maybeSingle();
       
       if (settingsError) throw settingsError;
       
-      // Buscar dados completos da pré-matrícula com curso
-      const { data: fullPreEnrollment, error: preEnrollmentError } = await supabase
-        .from('pre_enrollments')
-        .select(`
-          *,
-          courses (
-            name,
-            duration_hours,
-            start_date,
-            end_date,
-            modules,
-            description
-          )
-        `)
-        .eq('id', preEnrollment.id)
-        .single();
+      if (!settings) {
+        toast.error("Configurações do sistema não encontradas. Entre em contato com o suporte.");
+        return;
+      }
       
-      if (preEnrollmentError) throw preEnrollmentError;
+      // Validar campos do curso já carregados
+      if (!preEnrollment.courses.duration_hours) {
+        toast.error("Carga horária do curso não configurada. Entre em contato com o suporte.");
+        return;
+      }
       
       // Gerar PDF usando pdfGenerator.ts
       const { generateEnrollmentDeclaration } = await import('@/lib/pdfGenerator');
       const pdfBlob = await generateEnrollmentDeclaration(
         {
-          full_name: fullPreEnrollment.full_name,
-          cpf: fullPreEnrollment.cpf,
-          organization: fullPreEnrollment.organization,
-          phone: fullPreEnrollment.phone,
-          email: fullPreEnrollment.email,
+          full_name: preEnrollment.full_name,
+          cpf: preEnrollment.cpf,
+          organization: preEnrollment.organization,
+          phone: preEnrollment.phone,
+          email: preEnrollment.email,
           course: {
-            name: fullPreEnrollment.courses.name,
-            duration_hours: fullPreEnrollment.courses.duration_hours,
-            start_date: fullPreEnrollment.courses.start_date,
-            end_date: fullPreEnrollment.courses.end_date
+            name: preEnrollment.courses.name,
+            duration_hours: preEnrollment.courses.duration_hours,
+            start_date: preEnrollment.courses.start_date,
+            end_date: preEnrollment.courses.end_date
           }
         },
         settings
@@ -168,7 +180,7 @@ export function PreEnrollmentsPage() {
       const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement('a');
       a.href = url;
-      const fileName = `declaracao-matricula-${fullPreEnrollment.full_name.replace(/\s+/g, '-')}.pdf`;
+      const fileName = `declaracao-matricula-${preEnrollment.full_name.replace(/\s+/g, '-')}.pdf`;
       a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
@@ -176,7 +188,7 @@ export function PreEnrollmentsPage() {
       toast.success("Declaração baixada com sucesso!");
     } catch (error) {
       console.error("Error downloading declaration:", error);
-      toast.error("Erro ao baixar declaração");
+      toast.error("Erro ao baixar declaração. Verifique se todos os dados estão completos.");
     } finally {
       setDownloadingDeclarations(prev => {
         const next = new Set(prev);
@@ -190,49 +202,52 @@ export function PreEnrollmentsPage() {
     try {
       setDownloadingStudyPlans(prev => new Set(prev).add(preEnrollment.id));
       
+      // Validar dados necessários
+      if (!preEnrollment.cpf) {
+        toast.error("CPF não encontrado na pré-matrícula. Entre em contato com o suporte.");
+        return;
+      }
+      
       // Buscar configurações do sistema
       const { data: settings, error: settingsError } = await supabase
         .from('system_settings')
         .select('*')
-        .single();
+        .maybeSingle();
       
       if (settingsError) throw settingsError;
       
-      // Buscar dados completos da pré-matrícula com curso
-      const { data: fullPreEnrollment, error: preEnrollmentError } = await supabase
-        .from('pre_enrollments')
-        .select(`
-          *,
-          courses (
-            name,
-            duration_hours,
-            start_date,
-            end_date,
-            modules,
-            description
-          )
-        `)
-        .eq('id', preEnrollment.id)
-        .single();
+      if (!settings) {
+        toast.error("Configurações do sistema não encontradas. Entre em contato com o suporte.");
+        return;
+      }
       
-      if (preEnrollmentError) throw preEnrollmentError;
+      // Validar campos do curso já carregados
+      if (!preEnrollment.courses.duration_hours) {
+        toast.error("Carga horária do curso não configurada. Entre em contato com o suporte.");
+        return;
+      }
+      
+      if (!preEnrollment.courses.modules) {
+        toast.error("Módulos do curso não configurados. Entre em contato com o suporte.");
+        return;
+      }
       
       // Gerar PDF usando pdfGenerator.ts
       const { generateStudyPlan } = await import('@/lib/pdfGenerator');
       const pdfBlob = await generateStudyPlan(
         {
-          full_name: fullPreEnrollment.full_name,
-          cpf: fullPreEnrollment.cpf,
-          organization: fullPreEnrollment.organization,
-          phone: fullPreEnrollment.phone,
-          email: fullPreEnrollment.email,
+          full_name: preEnrollment.full_name,
+          cpf: preEnrollment.cpf,
+          organization: preEnrollment.organization,
+          phone: preEnrollment.phone,
+          email: preEnrollment.email,
           course: {
-            name: fullPreEnrollment.courses.name,
-            duration_hours: fullPreEnrollment.courses.duration_hours,
-            start_date: fullPreEnrollment.courses.start_date,
-            end_date: fullPreEnrollment.courses.end_date,
-            modules: fullPreEnrollment.courses.modules,
-            description: fullPreEnrollment.courses.description
+            name: preEnrollment.courses.name,
+            duration_hours: preEnrollment.courses.duration_hours,
+            start_date: preEnrollment.courses.start_date,
+            end_date: preEnrollment.courses.end_date,
+            modules: preEnrollment.courses.modules,
+            description: preEnrollment.courses.description
           }
         },
         settings
@@ -242,7 +257,7 @@ export function PreEnrollmentsPage() {
       const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement('a');
       a.href = url;
-      const fileName = `plano-estudos-${fullPreEnrollment.full_name.replace(/\s+/g, '-')}.pdf`;
+      const fileName = `plano-estudos-${preEnrollment.full_name.replace(/\s+/g, '-')}.pdf`;
       a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
@@ -250,7 +265,7 @@ export function PreEnrollmentsPage() {
       toast.success("Plano de estudos baixado com sucesso!");
     } catch (error) {
       console.error("Error downloading study plan:", error);
-      toast.error("Erro ao baixar plano de estudos");
+      toast.error("Erro ao baixar plano de estudos. Verifique se todos os dados estão completos.");
     } finally {
       setDownloadingStudyPlans(prev => {
         const next = new Set(prev);
@@ -371,6 +386,7 @@ export function PreEnrollmentsPage() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "pending":
+      case "pending_payment":
         return <Clock className="h-4 w-4" />;
       case "approved":
       case "payment_confirmed":
