@@ -10,15 +10,34 @@ export const SafeHTML = ({ html, className = "" }: SafeHTMLProps) => {
 
   useEffect(() => {
     if (contentRef.current && html) {
-      // Set innerHTML safely - only use with trusted content from your database
-      contentRef.current.innerHTML = html;
+      // Decode HTML entities if they exist
+      const decodeHtml = (str: string) => {
+        const txt = document.createElement('textarea');
+        txt.innerHTML = str;
+        return txt.value;
+      };
+      
+      // Set innerHTML with decoded content
+      contentRef.current.innerHTML = decodeHtml(html);
     }
   }, [html]);
 
   return (
     <div 
       ref={contentRef}
-      className={`prose prose-sm max-w-none dark:prose-invert ${className}`}
+      className={`
+        prose prose-slate dark:prose-invert max-w-none
+        prose-p:text-foreground prose-p:leading-relaxed
+        prose-headings:text-foreground
+        prose-strong:text-foreground
+        prose-ul:text-foreground
+        prose-ol:text-foreground
+        prose-li:text-foreground
+        [&_.ql-align-justify]:text-justify
+        [&_.ql-align-center]:text-center
+        [&_.ql-align-right]:text-right
+        ${className}
+      `}
     />
   );
 };

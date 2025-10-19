@@ -270,12 +270,14 @@ const CourseDetailPage = () => {
             <div>
               <h2 className="text-3xl font-bold mb-6 text-foreground">Sobre o Curso</h2>
               {course.description && (
-                <div className="prose prose-slate dark:prose-invert max-w-none">
-                  <SafeHTML 
-                    html={course.description} 
-                    className="text-foreground leading-relaxed"
-                  />
-                </div>
+                <Card>
+                  <CardContent className="pt-6">
+                    <SafeHTML 
+                      html={course.description} 
+                      className="text-base"
+                    />
+                  </CardContent>
+                </Card>
               )}
             </div>
 
