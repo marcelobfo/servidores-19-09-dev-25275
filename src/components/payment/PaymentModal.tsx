@@ -79,6 +79,11 @@ export function PaymentModal({
   const createPayment = async () => {
     setLoading(true);
     try {
+      // Validate required data before calling function
+      if (!preEnrollmentId || !amount || amount <= 0) {
+        throw new Error('Dados de pagamento inválidos. Verifique se todos os dados obrigatórios estão preenchidos.');
+      }
+
       console.log('Creating payment with:', {
         pre_enrollment_id: preEnrollmentId,
         amount: amount,
@@ -97,15 +102,21 @@ export function PaymentModal({
 
       console.log('Payment response:', { data, error });
 
+      // Log full error details for debugging
+      if (error) {
+        console.error('Full error object:', JSON.stringify(error, null, 2));
+      }
+
       if (error) {
         console.error('Supabase function error:', error);
         
         // Erro específico: API keys não configuradas
         if (error.message?.includes('API key não configurada') || 
             error.message?.includes('Chave API') ||
-            error.message?.includes('payment_settings')) {
+            error.message?.includes('payment_settings') ||
+            error.message?.includes('não configurado')) {
           throw new Error(
-            'Sistema de pagamento não configurado. Por favor, entre em contato com o administrador para configurar as chaves API do Asaas.'
+            'Sistema de pagamento não configurado. Por favor, entre em contato com o administrador para configurar as chaves API do Asaas em /admin/payment-settings.'
           );
         }
         
@@ -116,6 +127,13 @@ export function PaymentModal({
             error.message?.includes('telefone')) {
           throw new Error(
             'Alguns dados obrigatórios estão faltando no seu cadastro. Verifique se preencheu todos os campos do formulário de pré-matrícula, incluindo CPF e telefone.'
+          );
+        }
+
+        // Erro 500 genérico
+        if (error.message?.includes('non-2xx status code') || error.message?.includes('500')) {
+          throw new Error(
+            'Erro ao processar pagamento. Verifique se: 1) O sistema de pagamento está configurado; 2) Todos os seus dados obrigatórios estão preenchidos (CPF, telefone); 3) A taxa do curso está configurada. Se o erro persistir, contate o administrador.'
           );
         }
         

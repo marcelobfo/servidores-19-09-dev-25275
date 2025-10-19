@@ -212,6 +212,25 @@ export function PreEnrollmentsPage() {
         </p>
       </div>
 
+      {preEnrollments.some(p => p.status === 'pending' && !p.courses.pre_enrollment_fee) && (
+        <Card className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-yellow-900 dark:text-yellow-100">
+                  Taxa de pré-matrícula não configurada
+                </h3>
+                <p className="text-sm text-yellow-800 dark:text-yellow-200 mt-1">
+                  A taxa de pré-matrícula não está configurada para alguns cursos. 
+                  Entre em contato com o administrador.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-4">
         <SearchFilter
           value={searchTerm}
@@ -306,6 +325,23 @@ export function PreEnrollmentsPage() {
                       >
                         <DollarSign className="h-4 w-4" />
                         Pagar Taxa - R$ {preEnrollment.courses.pre_enrollment_fee}
+                      </Button>
+                    </div>
+                  )}
+
+                  {preEnrollment.status === "pending_payment" && preEnrollment.courses.pre_enrollment_fee && (
+                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+                      <p className="text-sm text-orange-800 dark:text-orange-200 mb-3">
+                        Pagamento pendente. Clique para gerar um novo QR Code PIX.
+                      </p>
+                      <Button
+                        onClick={() => handlePreEnrollmentPayment(preEnrollment)}
+                        size="sm"
+                        variant="outline"
+                        className="flex items-center gap-2"
+                      >
+                        <DollarSign className="h-4 w-4" />
+                        Gerar Novo QR Code
                       </Button>
                     </div>
                   )}
