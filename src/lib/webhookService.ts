@@ -8,11 +8,24 @@ interface WebhookPayload {
     student_name: string;
     student_email: string;
     student_phone?: string;
+    student_whatsapp?: string;
     course_name: string;
     status: string;
     previous_status?: string;
     created_at: string;
     updated_at: string;
+  };
+  payment?: {
+    id: string;
+    asaas_payment_id: string | null;
+    amount: number;
+    currency: string;
+    status: string;
+    paid_at: string | null;
+    pix_qr_code: string | null;
+    pix_payload: string | null;
+    pix_expiration_date: string | null;
+    created_at: string;
   };
 }
 
@@ -97,6 +110,33 @@ export const triggerEnrollmentWebhook = async (
       return;
     }
 
+    // Fetch payment data if event is related to payment
+    let paymentData = null;
+    if (eventType === 'payment_confirmed' || eventType === 'enrollment_created') {
+      const { data: payment } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('pre_enrollment_id', enrollmentId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (payment) {
+        paymentData = {
+          id: payment.id,
+          asaas_payment_id: payment.asaas_payment_id,
+          amount: payment.amount,
+          currency: payment.currency,
+          status: payment.status,
+          paid_at: payment.paid_at,
+          pix_qr_code: payment.pix_qr_code,
+          pix_payload: payment.pix_payload,
+          pix_expiration_date: payment.pix_expiration_date,
+          created_at: payment.created_at,
+        };
+      }
+    }
+
     const payload: WebhookPayload = {
       event: eventType,
       timestamp: new Date().toISOString(),
@@ -104,15 +144,18 @@ export const triggerEnrollmentWebhook = async (
         id: enrollment.id,
         student_name: enrollment.full_name,
         student_email: enrollment.email,
-        student_phone: enrollment.phone || enrollment.whatsapp,
+        student_phone: enrollment.phone || null,
+        student_whatsapp: enrollment.whatsapp || null,
         course_name: enrollment.course?.name || 'Unknown Course',
         status: enrollment.status,
         previous_status: previousStatus,
         created_at: enrollment.created_at,
         updated_at: enrollment.updated_at,
       },
+      ...(paymentData && { payment: paymentData }),
     };
 
+    console.log('Sending webhook with payment data:', !!paymentData);
     await sendWebhook(settings.n8n_webhook_url, payload, enrollmentId);
   } catch (error) {
     console.error('Error triggering enrollment webhook:', error);
@@ -128,11 +171,25 @@ export const testWebhook = async (webhookUrl: string): Promise<{ success: boolea
         id: 'test-id',
         student_name: 'Teste Webhook',
         student_email: 'teste@exemplo.com',
+        student_phone: '(11) 98765-4321',
+        student_whatsapp: '(11) 91234-5678',
         course_name: 'Curso de Teste',
         status: 'test',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
+      payment: {
+        id: 'test-payment-id',
+        asaas_payment_id: 'pay_test123456',
+        amount: 100.00,
+        currency: 'BRL',
+        status: 'confirmed',
+        paid_at: new Date().toISOString(),
+        pix_qr_code: 'test-qr-code-base64',
+        pix_payload: '00020126580014br.gov.bcb.pix...',
+        pix_expiration_date: new Date(Date.now() + 86400000).toISOString(),
+        created_at: new Date().toISOString(),
+      }
     };
 
     const response = await fetch(webhookUrl, {

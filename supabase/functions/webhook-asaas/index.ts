@@ -2,7 +2,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
 
 // Helper function to trigger N8N webhook
-const triggerN8NWebhook = async (supabaseClient: any, enrollmentId: string, eventType: string) => {
+const triggerN8NWebhook = async (
+  supabaseClient: any, 
+  enrollmentId: string, 
+  eventType: string,
+  paymentId?: string
+) => {
   try {
     // Get system settings to check if webhook is configured
     const { data: settings } = await supabaseClient
@@ -30,6 +35,31 @@ const triggerN8NWebhook = async (supabaseClient: any, enrollmentId: string, even
       return;
     }
 
+    // Fetch payment data if paymentId is provided
+    let paymentData = null;
+    if (paymentId) {
+      const { data: payment } = await supabaseClient
+        .from('payments')
+        .select('*')
+        .eq('id', paymentId)
+        .single();
+
+      if (payment) {
+        paymentData = {
+          id: payment.id,
+          asaas_payment_id: payment.asaas_payment_id,
+          amount: payment.amount,
+          currency: payment.currency,
+          status: payment.status,
+          paid_at: payment.paid_at,
+          pix_qr_code: payment.pix_qr_code,
+          pix_payload: payment.pix_payload,
+          pix_expiration_date: payment.pix_expiration_date,
+          created_at: payment.created_at,
+        };
+      }
+    }
+
     const payload = {
       event: eventType,
       timestamp: new Date().toISOString(),
@@ -37,13 +67,17 @@ const triggerN8NWebhook = async (supabaseClient: any, enrollmentId: string, even
         id: enrollment.id,
         student_name: enrollment.full_name,
         student_email: enrollment.email,
-        student_phone: enrollment.phone || enrollment.whatsapp,
+        student_phone: enrollment.phone || null,
+        student_whatsapp: enrollment.whatsapp || null,
         course_name: enrollment.course?.name || 'Unknown Course',
         status: enrollment.status,
         created_at: enrollment.created_at,
         updated_at: enrollment.updated_at,
       },
+      ...(paymentData && { payment: paymentData }),
     };
+
+    console.log('Triggering N8N webhook with payment data:', !!paymentData);
 
     const response = await fetch(settings.n8n_webhook_url, {
       method: 'POST',
@@ -193,8 +227,8 @@ serve(async (req) => {
       } else {
         console.log('Pre-enrollment status updated to payment_confirmed');
         
-        // Trigger N8N webhook for payment confirmation
-        await triggerN8NWebhook(supabaseClient, dbPayment.pre_enrollment_id, 'payment_confirmed');
+      // Trigger N8N webhook for payment confirmation
+      await triggerN8NWebhook(supabaseClient, dbPayment.pre_enrollment_id, 'payment_confirmed', dbPayment.id);
       }
     }
 
