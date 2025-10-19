@@ -40,6 +40,7 @@ interface PreEnrollment {
   organ_approval_status?: string;
   organ_approval_date?: string;
   organ_approval_notes?: string;
+  manual_approval?: boolean;
   courses?: {
     name: string;
     duration_hours: number;
@@ -119,7 +120,7 @@ const EnrollmentsPage = () => {
     }
   };
 
-  const updateEnrollmentStatus = async (id: string, status: string, notes?: string) => {
+  const updateEnrollmentStatus = async (id: string, status: string, notes?: string, manualApproval: boolean = false) => {
     try {
       // Get current enrollment status for webhook
       const { data: currentEnrollment } = await supabase
@@ -136,6 +137,9 @@ const EnrollmentsPage = () => {
       if (status === 'approved') {
         updateData.approved_at = new Date().toISOString();
         updateData.approved_by = (await supabase.auth.getUser()).data.user?.id;
+        if (manualApproval) {
+          updateData.manual_approval = true;
+        }
       }
 
       const { error } = await supabase
@@ -154,7 +158,7 @@ const EnrollmentsPage = () => {
 
       toast({
         title: "Sucesso",
-        description: `Pré-matrícula ${status === 'approved' ? 'aprovada' : 'rejeitada'} com sucesso!`
+        description: `Pré-matrícula ${status === 'approved' ? 'aprovada' : 'rejeitada'} com sucesso!${manualApproval ? ' (Aprovação Manual)' : ''}`
       });
 
       fetchEnrollments();
@@ -590,17 +594,24 @@ const EnrollmentsPage = () => {
                   <TableCell>{enrollment.courses?.name}</TableCell>
                   <TableCell>{enrollment.phone || 'N/A'}</TableCell>
                   <TableCell>
-                    <Badge variant={
-                      enrollment.status === 'approved' ? 'default' :
-                      enrollment.status === 'pending' ? 'secondary' :
-                      enrollment.status === 'rejected' ? 'destructive' :
-                      'outline'
-                    }>
-                      {enrollment.status === 'approved' ? 'Aprovado' :
-                       enrollment.status === 'pending' ? 'Pendente' :
-                       enrollment.status === 'rejected' ? 'Rejeitado' :
-                       enrollment.status === 'paid' ? 'Pago' : enrollment.status}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={
+                        enrollment.status === 'approved' ? 'default' :
+                        enrollment.status === 'pending' ? 'secondary' :
+                        enrollment.status === 'rejected' ? 'destructive' :
+                        'outline'
+                      }>
+                        {enrollment.status === 'approved' ? 'Aprovado' :
+                         enrollment.status === 'pending' ? 'Pendente' :
+                         enrollment.status === 'rejected' ? 'Rejeitado' :
+                         enrollment.status === 'paid' ? 'Pago' : enrollment.status}
+                      </Badge>
+                      {enrollment.manual_approval && (
+                        <Badge variant="outline" className="text-xs">
+                          Manual
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {enrollment.status === 'approved' && (
@@ -699,21 +710,52 @@ const EnrollmentsPage = () => {
                           </div>
 
                           {selectedEnrollment.status === 'pending' && (
-                            <div className="flex gap-2">
+                            <div className="space-y-3">
+                              <div className="flex gap-2">
+                                <Button 
+                                  onClick={() => updateEnrollmentStatus(selectedEnrollment.id, 'approved')}
+                                  className="flex-1"
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Aprovar
+                                </Button>
+                                <Button 
+                                  variant="destructive"
+                                  onClick={() => updateEnrollmentStatus(selectedEnrollment.id, 'rejected')}
+                                  className="flex-1"
+                                >
+                                  <XCircle className="h-4 w-4 mr-2" />
+                                  Rejeitar
+                                </Button>
+                              </div>
+                              <div className="pt-2 border-t">
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  Aprovar manualmente (ignorar validação de pagamento):
+                                </p>
+                                <Button 
+                                  onClick={() => updateEnrollmentStatus(selectedEnrollment.id, 'approved', undefined, true)}
+                                  className="w-full"
+                                  variant="outline"
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  ✅ Aprovação Manual (Cortesia/Erro Pagamento)
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {selectedEnrollment.status !== 'pending' && selectedEnrollment.status !== 'approved' && (
+                            <div className="pt-2 border-t">
+                              <p className="text-xs text-muted-foreground mb-2">
+                                Forçar aprovação manual desta matrícula:
+                              </p>
                               <Button 
-                                onClick={() => updateEnrollmentStatus(selectedEnrollment.id, 'approved')}
-                                className="flex-1"
+                                onClick={() => updateEnrollmentStatus(selectedEnrollment.id, 'approved', undefined, true)}
+                                className="w-full"
+                                variant="outline"
                               >
                                 <CheckCircle className="h-4 w-4 mr-2" />
-                                Aprovar
-                              </Button>
-                              <Button 
-                                variant="destructive"
-                                onClick={() => updateEnrollmentStatus(selectedEnrollment.id, 'rejected')}
-                                className="flex-1"
-                              >
-                                <XCircle className="h-4 w-4 mr-2" />
-                                Rejeitar
+                                ✅ Aprovação Manual
                               </Button>
                             </div>
                           )}
