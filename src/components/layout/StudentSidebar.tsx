@@ -26,11 +26,6 @@ import {
 
 const studentMenuItems = [
   {
-    title: "Dashboard",
-    url: "/student",
-    icon: LayoutDashboard,
-  },
-  {
     title: "Minhas Pré-matrículas",
     url: "/student/pre-enrollments",
     icon: BookOpen,
