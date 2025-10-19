@@ -617,15 +617,15 @@ const EnrollmentsPage = () => {
                                 <Download className="h-4 w-4 mr-2" />
                                 {downloadingPlans.has(selectedEnrollment.id) ? 'Gerando...' : 'Download Plano de Estudos'}
                               </Button>
-                              <Button 
-                                variant="outline"
-                                onClick={() => handleDownloadDeclaration(selectedEnrollment)}
-                                className="w-full"
-                                disabled={downloadingDeclarations.has(selectedEnrollment.id)}
-                              >
-                                <Download className="h-4 w-4 mr-2" />
-                                {downloadingDeclarations.has(selectedEnrollment.id) ? 'Gerando...' : 'Download Declaração de Matrícula'}
-                              </Button>
+                <Button 
+                  variant="secondary"
+                  onClick={() => handleDownloadDeclaration(selectedEnrollment)}
+                  className="w-full"
+                  disabled={downloadingDeclarations.has(selectedEnrollment.id)}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  {downloadingDeclarations.has(selectedEnrollment.id) ? 'Gerando...' : 'Download Declaração de Matrícula'}
+                </Button>
                             </div>
                           )}
                         </div>
