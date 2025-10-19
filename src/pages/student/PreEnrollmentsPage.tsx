@@ -414,19 +414,46 @@ export function PreEnrollmentsPage() {
                   </div>
 
                   {preEnrollment.status === "payment_confirmed" && !preEnrollment.organ_approval_confirmed && (
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                      <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-3">
-                        Pagamento confirmado! Agora você precisa confirmar a aprovação do seu órgão.
-                      </p>
-                      <Button
-                        onClick={() => handleOrganApproval(preEnrollment.id)}
-                        size="sm"
-                        className="flex items-center gap-2"
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        Confirmar Aprovação do Órgão
-                      </Button>
-                    </div>
+                    <>
+                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                        <p className="text-sm text-green-800 dark:text-green-200 mb-3">
+                          Pagamento confirmado! Baixe os documentos para apresentar ao seu órgão:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="secondary"
+                            onClick={() => handleDownloadDeclaration(preEnrollment.id)}
+                            size="sm"
+                            disabled={downloadingDeclarations.has(preEnrollment.id)}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            {downloadingDeclarations.has(preEnrollment.id) ? 'Baixando...' : 'Declaração de Matrícula'}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            onClick={() => handleDownloadStudyPlan(preEnrollment.id)}
+                            size="sm"
+                            disabled={downloadingStudyPlans.has(preEnrollment.id)}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            {downloadingStudyPlans.has(preEnrollment.id) ? 'Baixando...' : 'Plano de Estudos'}
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                        <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-3">
+                          Após apresentar os documentos ao órgão e receber a aprovação, clique no botão abaixo:
+                        </p>
+                        <Button
+                          onClick={() => handleOrganApproval(preEnrollment.id)}
+                          size="sm"
+                          className="flex items-center gap-2"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          Confirmar Aprovação do Órgão
+                        </Button>
+                      </div>
+                    </>
                   )}
 
                   {preEnrollment.status === "pending" && preEnrollment.courses.pre_enrollment_fee && !preEnrollment.organ_approval_confirmed && (
@@ -463,53 +490,26 @@ export function PreEnrollmentsPage() {
                   )}
 
                   {preEnrollment.organ_approval_confirmed && preEnrollment.status === "payment_confirmed" && (
-                    <>
-                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-200 mb-3">
-                          <CheckCircle className="h-4 w-4" />
-                          Aprovação do órgão confirmada em{" "}
-                          {preEnrollment.organ_approval_date && 
-                            new Date(preEnrollment.organ_approval_date).toLocaleDateString("pt-BR")
-                          }
-                        </div>
-                        <p className="text-sm text-green-800 dark:text-green-200 mb-3">
-                          Documentos disponíveis para apresentar ao órgão:
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="secondary"
-                            onClick={() => handleDownloadDeclaration(preEnrollment.id)}
-                            size="sm"
-                            disabled={downloadingDeclarations.has(preEnrollment.id)}
-                          >
-                            <Download className="h-4 w-4 mr-2" />
-                            {downloadingDeclarations.has(preEnrollment.id) ? 'Baixando...' : 'Declaração de Matrícula'}
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            onClick={() => handleDownloadStudyPlan(preEnrollment.id)}
-                            size="sm"
-                            disabled={downloadingStudyPlans.has(preEnrollment.id)}
-                          >
-                            <Download className="h-4 w-4 mr-2" />
-                            {downloadingStudyPlans.has(preEnrollment.id) ? 'Baixando...' : 'Plano de Estudos'}
-                          </Button>
-                        </div>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-sm text-blue-800 dark:text-blue-200 mb-3">
+                        <CheckCircle className="h-4 w-4" />
+                        Aprovação do órgão confirmada em{" "}
+                        {preEnrollment.organ_approval_date && 
+                          new Date(preEnrollment.organ_approval_date).toLocaleDateString("pt-BR")
+                        }
                       </div>
-                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                        <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
-                          Órgão aprovado! Agora você pode realizar sua matrícula no curso.
-                        </p>
-                        <Button
-                          onClick={() => handleEnrollment(preEnrollment)}
-                          size="lg"
-                          className="flex items-center gap-2"
-                        >
-                          <CheckCircle className="h-4 w-4" />
-                          Realizar Matrícula
-                        </Button>
-                      </div>
-                    </>
+                      <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
+                        Órgão aprovado! Agora você pode realizar sua matrícula no curso.
+                      </p>
+                      <Button
+                        onClick={() => handleEnrollment(preEnrollment)}
+                        size="lg"
+                        className="flex items-center gap-2"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        Realizar Matrícula
+                      </Button>
+                    </div>
                   )}
                 </div>
               </CardContent>
