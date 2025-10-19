@@ -43,6 +43,21 @@ const loadImage = (url: string): Promise<HTMLImageElement> => {
   });
 };
 
+// Helper function to format CPF
+const formatCPF = (cpf: string): string => {
+  if (!cpf) return 'não informado';
+  
+  // Remove tudo que não é dígito
+  const cleaned = cpf.replace(/\D/g, '');
+  
+  // Formata como XXX.XXX.XXX-XX
+  if (cleaned.length === 11) {
+    return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6, 9)}-${cleaned.slice(9, 11)}`;
+  }
+  
+  return cpf; // Retorna original se não tiver 11 dígitos
+};
+
 export const generateStudyPlan = async (
   enrollment: PreEnrollment,
   settings: SystemSettings
@@ -124,7 +139,7 @@ export const generateStudyPlan = async (
   pdf.text(`Nome: ${enrollment.full_name}`, 20, yPosition);
   if (enrollment.cpf) {
     yPosition += 5;
-    pdf.text(`CPF: ${enrollment.cpf}`, 20, yPosition);
+    pdf.text(`CPF: ${formatCPF(enrollment.cpf)}`, 20, yPosition);
   }
   if (enrollment.organization) {
     yPosition += 5;
@@ -304,20 +319,24 @@ export const generateStudyPlan = async (
   yPosition += 5;
   pdf.text('Horário de atendimento: Segunda a Sexta, 8h às 18h', 20, yPosition);
   yPosition += 5;
-  pdf.text('Plataforma: Sistema EAD Infomar Cursos', 20, yPosition);
+  pdf.text(`Plataforma: Sistema EAD ${settings.institution_name}`, 20, yPosition);
 
-  // Signature area - ensure enough space for signature section
-  yPosition = addPageBreakIfNeeded(yPosition, 70);
-  
-  yPosition += 20;
-  
+  // Forçar nova página para assinatura
+  pdf.addPage();
+  yPosition = 50;
+
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(10);
-  pdf.text(`São Paulo, ${new Date().toLocaleDateString('pt-BR')}.`, 20, yPosition);
-  
+
+  // Extrair cidade do endereço
+  const addressParts = settings.institution_address.split('-');
+  const city = addressParts.length > 1 ? addressParts[addressParts.length - 2].trim() : 'São Paulo';
+
+  pdf.text(`${city}, ${new Date().toLocaleDateString('pt-BR')}`, 20, yPosition);
+
   yPosition += 20;
 
-  // Add director signature if available
+  // Assinatura do diretor
   if (settings.director_signature_url) {
     try {
       const signature = await loadImage(settings.director_signature_url);
@@ -327,20 +346,22 @@ export const generateStudyPlan = async (
       canvas.height = signature.height;
       ctx?.drawImage(signature, 0, 0);
       const signatureData = canvas.toDataURL('image/png');
-      pdf.addImage(signatureData, 'PNG', 20, yPosition - 10, 40, 15);
+      pdf.addImage(signatureData, 'PNG', 20, yPosition, 40, 15);
+      yPosition += 20;
     } catch (error) {
       console.error('Error loading signature:', error);
+      yPosition += 15;
     }
   }
-  
+
   pdf.setLineWidth(0.5);
-  pdf.line(20, yPosition + 5, 80, yPosition + 5);
+  pdf.line(20, yPosition, 80, yPosition);
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(10);
-  pdf.text(settings.director_name, 20, yPosition + 10);
+  pdf.text(settings.director_name, 20, yPosition + 5);
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
-  pdf.text(settings.director_title, 20, yPosition + 15);
+  pdf.text(settings.director_title, 20, yPosition + 10);
 
   return pdf.output('blob');
 };
@@ -416,9 +437,9 @@ export const generateEnrollmentDeclaration = async (
   pdf.setFont('helvetica', 'normal');
 
   const orgText = enrollment.organization ? `, ${enrollment.organization},` : '';
-  const declarationText = `Declaramos para os devidos fins que ${enrollment.full_name.toUpperCase()}, portador(a) do CPF nº ${enrollment.cpf || 'não informado'}${orgText} encontra-se regularmente matriculado(a) no curso de "${enrollment.course.name.toUpperCase()}".
+  const declarationText = `Declaramos para os devidos fins que ${enrollment.full_name.toUpperCase()}, portador(a) do CPF nº ${formatCPF(enrollment.cpf || '')}${orgText} encontra-se regularmente matriculado(a) no curso de "${enrollment.course.name.toUpperCase()}".
 
-O referido curso possui carga horária total de ${enrollment.course.duration_hours || 390} (${numberToWords(enrollment.course.duration_hours || 390)}) horas, sendo realizado na modalidade de Ensino a Distância (EAD).
+O referido curso possui carga horária de ${enrollment.course.duration_hours || 390} (${numberToWords(enrollment.course.duration_hours || 390)}) horas, sendo realizado na modalidade de Ensino a Distância (EAD), com datas a serem definidas.
 
 O curso está devidamente registrado em nossa instituição e atende aos requisitos necessários para fins de capacitação profissional e licença para capacitação.
 
@@ -434,7 +455,12 @@ Esta declaração é válida para todos os fins de direito.`;
   // Date and location
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(10);
-  pdf.text(`São Paulo, ${new Date().toLocaleDateString('pt-BR')}.`, 20, yPosition);
+  
+  // Extrair cidade do endereço
+  const addressParts = settings.institution_address.split('-');
+  const city = addressParts.length > 1 ? addressParts[addressParts.length - 2].trim() : 'São Paulo';
+  
+  pdf.text(`${city}, ${new Date().toLocaleDateString('pt-BR')}.`, 20, yPosition);
 
   // Ensure we have enough space for signature area
   if (yPosition > 220) {
