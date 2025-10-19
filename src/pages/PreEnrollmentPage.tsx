@@ -47,6 +47,7 @@ const PreEnrollmentPage = () => {
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [selectedCourseName, setSelectedCourseName] = useState<string>("");
   const [selectedCourseDetails, setSelectedCourseDetails] = useState<CourseDetails | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const [formData, setFormData] = useState({
     course_id: searchParams.get("course") || "",
@@ -205,6 +206,65 @@ const PreEnrollmentPage = () => {
       .replace(/\D/g, '')
       .replace(/(\d{5})(\d)/, '$1-$2')
       .replace(/(-\d{3})\d+?$/, '$1');
+  };
+
+  const importFromProfile = async () => {
+    setImporting(true);
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", user?.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error fetching profile:", error);
+        toast({
+          title: "Erro",
+          description: "Erro ao buscar dados do perfil",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!data) {
+        toast({
+          title: "Nenhum perfil encontrado",
+          description: "Complete seu perfil primeiro para usar esta função",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        full_name: data.full_name || prev.full_name,
+        email: data.email || prev.email,
+        whatsapp: data.phone || prev.whatsapp,
+        cpf: data.cpf || prev.cpf,
+        birth_date: data.birth_date || prev.birth_date,
+        postal_code: data.postal_code || prev.postal_code,
+        address: data.address || prev.address,
+        address_number: data.address_number || prev.address_number,
+        complement: data.complement || prev.complement,
+        city: data.city || prev.city,
+        state: data.state || prev.state,
+      }));
+
+      toast({
+        title: "Dados importados!",
+        description: "Seus dados do perfil foram preenchidos automaticamente",
+      });
+    } catch (error) {
+      console.error("Error importing from profile:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao importar dados do perfil",
+        variant: "destructive",
+      });
+    } finally {
+      setImporting(false);
+    }
   };
 
   // Insere diretamente no banco com refresh forçado do token
@@ -453,6 +513,29 @@ const PreEnrollmentPage = () => {
                 </Alert>
               </CardContent>
             </Card>
+
+            {/* BOTÃO DE IMPORTAR DO PERFIL */}
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={importFromProfile}
+                disabled={importing || !user}
+                className="flex items-center gap-2"
+              >
+                {importing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                    Importando...
+                  </>
+                ) : (
+                  <>
+                    <User className="h-4 w-4" />
+                    Preencher com dados do perfil
+                  </>
+                )}
+              </Button>
+            </div>
 
             {/* SEÇÃO 1 - DADOS PESSOAIS */}
             <Card>
