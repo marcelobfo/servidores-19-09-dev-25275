@@ -298,7 +298,10 @@ const CourseDetailPage = () => {
                             {index + 1}
                           </div>
                           <div className="flex-1">
-                            <h3 className="text-xl font-semibold mb-2">{module.title}</h3>
+                            <h3 className="text-xl font-semibold mb-2">
+                              {module.name || module.title || `Módulo ${index + 1}`}
+                              {module.hours && <span className="text-sm text-muted-foreground ml-2">({module.hours}h)</span>}
+                            </h3>
                             {module.description && (
                               <p className="text-muted-foreground">{module.description}</p>
                             )}

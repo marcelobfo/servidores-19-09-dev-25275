@@ -81,22 +81,15 @@ ${settings?.director_title || 'Diretor Acadêmico Infomar Cursos Livres'}
     if (preEnrollment.courses.modules) {
       try {
         const parsedModules = JSON.parse(preEnrollment.courses.modules);
-        let modulesList: any[] = [];
         
-        // Handle new format with módulos key
-        if (parsedModules.módulos && Array.isArray(parsedModules.módulos)) {
-          modulesList = parsedModules.módulos;
-        } else if (Array.isArray(parsedModules)) {
-          modulesList = parsedModules;
-        }
-        
-        if (modulesList.length > 0) {
-          modulesText = modulesList.map((module, index) => {
+        if (Array.isArray(parsedModules)) {
+          modulesText = parsedModules.map((module, index) => {
+            // Prioritize 'name' and 'hours' (ModuleEditor format)
             const title = typeof module === 'string' 
               ? module 
-              : (module.nome || module.title || `Módulo ${index + 1}`);
-            const hours = typeof module === 'object' && module.carga_horaria 
-              ? ` - ${module.carga_horaria}h` 
+              : (module.name || module.nome || module.title || `Módulo ${index + 1}`);
+            const hours = typeof module === 'object' && (module.hours || module.carga_horaria)
+              ? ` - ${module.hours || module.carga_horaria}h` 
               : '';
             const description = typeof module === 'object' && module.description ? 
               module.description.replace(/<[^>]*>/g, '').trim() : '';
@@ -110,7 +103,6 @@ ${settings?.director_title || 'Diretor Acadêmico Infomar Cursos Livres'}
         }
       } catch (e) {
         console.warn('Could not parse modules JSON:', e);
-        modulesText = preEnrollment.courses.modules;
       }
     }
 

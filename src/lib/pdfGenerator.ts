@@ -143,27 +143,21 @@ export const generateStudyPlan = async (
     try {
       const parsedModules = JSON.parse(enrollment.course.modules);
       
-      // Handle new format with módulos key
-      if (parsedModules.módulos && Array.isArray(parsedModules.módulos)) {
-        modules = parsedModules.módulos.map((m: any) => ({
-          nome: m.nome || m.title || 'Módulo',
-          carga_horaria: m.carga_horaria || m.hours || 0
-        }));
-      } 
-      // Handle array format
-      else if (Array.isArray(parsedModules)) {
+      // Normalize to always use correct format
+      if (Array.isArray(parsedModules)) {
         modules = parsedModules.map((m: any) => {
           if (typeof m === 'string') {
             return { nome: m, carga_horaria: 0 };
           }
+          // Prioritize 'name' and 'hours' (ModuleEditor format)
           return {
-            nome: m.nome || m.title || 'Módulo',
-            carga_horaria: m.carga_horaria || m.hours || 0
+            nome: m.name || m.nome || m.title || 'Módulo',
+            carga_horaria: m.hours || m.carga_horaria || 0
           };
         });
       }
-    } catch {
-      // Use default if parsing fails
+    } catch (e) {
+      console.error('Error parsing modules:', e);
     }
   }
 
