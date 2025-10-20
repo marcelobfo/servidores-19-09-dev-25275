@@ -5,6 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { generateCertificateForEnrollment } from '@/lib/certificateService';
@@ -41,6 +44,12 @@ export default function CertificatesPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedCourse, setSelectedCourse] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  
+  // Manual certificate generation states
+  const [showGenerateDialog, setShowGenerateDialog] = useState(false);
+  const [availableEnrollments, setAvailableEnrollments] = useState<any[]>([]);
+  const [selectedEnrollmentId, setSelectedEnrollmentId] = useState<string>('');
+  const [loadingEnrollments, setLoadingEnrollments] = useState(false);
   
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -92,6 +101,51 @@ export default function CertificatesPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchEligibleEnrollments = async () => {
+    setLoadingEnrollments(true);
+    try {
+      // Buscar pré-matrículas aprovadas que ainda não têm certificado
+      const { data: enrollments, error } = await supabase
+        .from('pre_enrollments')
+        .select(`
+          id,
+          full_name,
+          email,
+          courses (
+            name,
+            duration_hours,
+            end_date
+          )
+        `)
+        .in('status', ['approved', 'payment_confirmed']);
+
+      if (error) throw error;
+
+      // Filtrar apenas as que não têm certificado
+      const { data: existingCerts } = await supabase
+        .from('certificates')
+        .select('enrollment_id');
+
+      const existingEnrollmentIds = new Set(
+        existingCerts?.map(cert => cert.enrollment_id) || []
+      );
+
+      const eligible = (enrollments || []).filter(
+        enrollment => !existingEnrollmentIds.has(enrollment.id)
+      );
+
+      setAvailableEnrollments(eligible);
+    } catch (error: any) {
+      toast({
+        title: 'Erro',
+        description: 'Falha ao carregar matrículas elegíveis',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoadingEnrollments(false);
     }
   };
 
@@ -224,11 +278,112 @@ export default function CertificatesPage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Gestão de Certificados</h1>
-        <Button onClick={() => navigate('/admin/enrollments')}>
+        <Button onClick={() => {
+          setShowGenerateDialog(true);
+          fetchEligibleEnrollments();
+        }}>
           <Plus className="w-4 h-4 mr-2" />
-          Gerar Certificados
+          Gerar Certificado Manualmente
         </Button>
       </div>
+
+      <Dialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Gerar Certificado Manualmente</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="enrollment-select">
+                Selecione a Pré-matrícula
+              </Label>
+              <Select 
+                value={selectedEnrollmentId} 
+                onValueChange={setSelectedEnrollmentId}
+              >
+                <SelectTrigger id="enrollment-select">
+                  <SelectValue placeholder="Escolha um aluno..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {loadingEnrollments ? (
+                    <SelectItem value="loading" disabled>
+                      Carregando...
+                    </SelectItem>
+                  ) : availableEnrollments.length === 0 ? (
+                    <SelectItem value="none" disabled>
+                      Nenhuma matrícula elegível encontrada
+                    </SelectItem>
+                  ) : (
+                    availableEnrollments.map(enrollment => (
+                      <SelectItem key={enrollment.id} value={enrollment.id}>
+                        {enrollment.full_name} - {enrollment.courses?.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedEnrollmentId && (
+              <div className="p-4 border rounded-lg bg-muted/50">
+                <h4 className="font-medium mb-2">Detalhes da Matrícula</h4>
+                {(() => {
+                  const selected = availableEnrollments.find(
+                    e => e.id === selectedEnrollmentId
+                  );
+                  if (!selected) return null;
+                  return (
+                    <div className="space-y-1 text-sm">
+                      <p><strong>Aluno:</strong> {selected.full_name}</p>
+                      <p><strong>Email:</strong> {selected.email}</p>
+                      <p><strong>Curso:</strong> {selected.courses?.name}</p>
+                      <p><strong>Carga Horária:</strong> {selected.courses?.duration_hours}h</p>
+                      <p><strong>Data de Conclusão:</strong> {
+                        selected.courses?.end_date 
+                          ? new Date(selected.courses.end_date).toLocaleDateString('pt-BR')
+                          : 'Não definida'
+                      }</p>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowGenerateDialog(false);
+                  setSelectedEnrollmentId('');
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!selectedEnrollmentId) {
+                    toast({
+                      title: 'Atenção',
+                      description: 'Selecione uma matrícula primeiro',
+                      variant: 'destructive'
+                    });
+                    return;
+                  }
+                  await handleGenerateCertificate(selectedEnrollmentId);
+                  setShowGenerateDialog(false);
+                  setSelectedEnrollmentId('');
+                }}
+                disabled={!selectedEnrollmentId || generatingCerts.has(selectedEnrollmentId)}
+              >
+                {generatingCerts.has(selectedEnrollmentId) 
+                  ? 'Gerando...' 
+                  : 'Gerar Certificado'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <FilterBar onClearFilters={clearFilters}>
         <SearchInput
