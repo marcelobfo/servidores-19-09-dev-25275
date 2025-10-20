@@ -37,16 +37,9 @@ serve(async (req) => {
 
     console.log(`Processing matricula checkout for enrollment: ${enrollment_id}`);
 
-    // Authenticate user
+    // Get authenticated user (JWT already verified by Supabase)
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Authentication required" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
+    const token = authHeader?.replace('Bearer ', '') || '';
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
 
     if (authError || !user) {
