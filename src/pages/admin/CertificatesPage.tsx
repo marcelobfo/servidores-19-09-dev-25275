@@ -244,6 +244,7 @@ export default function CertificatesPage() {
     setSelectedCourseFilter('all');
   };
 
+
   const filteredAvailableEnrollments = availableEnrollments.filter(enrollment => {
     const matchesSearch = enrollmentSearchTerm === "" ||
       enrollment.full_name.toLowerCase().includes(enrollmentSearchTerm.toLowerCase()) ||
