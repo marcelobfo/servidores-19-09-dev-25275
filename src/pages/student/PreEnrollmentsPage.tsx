@@ -337,12 +337,11 @@ export function PreEnrollmentsPage() {
           console.log('✅ [ENROLLMENT] Nova matrícula criada:', enrollmentId);
         }
 
-        // Chamar edge function unificada para criar checkout Asaas
-        console.log('🔄 [ENROLLMENT] Chamando edge function create-enrollment-checkout...');
-        const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
+        // Chamar edge function específica para criar checkout de matrícula
+        console.log('🔄 [ENROLLMENT] Chamando edge function create-enrollment-payment...');
+        const { data, error } = await supabase.functions.invoke('create-enrollment-payment', {
           body: {
-            enrollment_id: enrollmentId,
-            pre_enrollment_id: preEnrollment.id
+            enrollment_id: enrollmentId
           }
         });
 
