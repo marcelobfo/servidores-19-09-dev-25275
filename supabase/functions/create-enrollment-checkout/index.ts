@@ -25,8 +25,8 @@ serve(async (req) => {
   );
 
   try {
-    // Parse the request body
-    const { pre_enrollment_id } = await req.json();
+    // Parse the request body - accept both pre_enrollment_id and enrollment_id
+    const { pre_enrollment_id, enrollment_id } = await req.json();
 
     if (!pre_enrollment_id) {
       console.error("Missing pre_enrollment_id in request");
@@ -36,7 +36,10 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Processing checkout for pre-enrollment: ${pre_enrollment_id}`);
+    // Determine if this is for pre-enrollment or enrollment
+    const isEnrollmentCheckout = !!enrollment_id;
+    console.log(`Processing ${isEnrollmentCheckout ? 'enrollment' : 'pre-enrollment'} checkout`);
+    console.log(`Pre-enrollment ID: ${pre_enrollment_id}${enrollment_id ? `, Enrollment ID: ${enrollment_id}` : ''}`);
 
     // Check if user is authenticated
     const authHeader = req.headers.get('Authorization');
@@ -119,17 +122,33 @@ serve(async (req) => {
     }
 
     // Get pre-enrollment data using service client to bypass RLS
-    const { data: preEnrollment, error: enrollmentError } = await serviceClient
+    const { data: preEnrollment, error: preEnrollmentError } = await serviceClient
       .from('pre_enrollments')
       .select(`
         *,
         courses (
           name,
-          pre_enrollment_fee
+          pre_enrollment_fee,
+          enrollment_fee
         )
       `)
       .eq('id', pre_enrollment_id)
       .single();
+
+    // Get enrollment data if enrollment_id is provided
+    let enrollment = null;
+    let enrollmentError = null;
+    
+    if (isEnrollmentCheckout) {
+      const enrollmentResult = await serviceClient
+        .from('enrollments')
+        .select('*')
+        .eq('id', enrollment_id)
+        .single();
+      
+      enrollment = enrollmentResult.data;
+      enrollmentError = enrollmentResult.error;
+    }
 
     // Get user profile data as fallback
     const { data: userProfile } = await serviceClient
@@ -139,11 +158,30 @@ serve(async (req) => {
       .single();
 
     // Validate pre-enrollment exists BEFORE accessing its properties
-    if (enrollmentError || !preEnrollment) {
-      console.error("Pre-enrollment query failed:", enrollmentError);
+    if (preEnrollmentError || !preEnrollment) {
+      console.error("Pre-enrollment query failed:", preEnrollmentError);
       console.error("Pre-enrollment ID:", pre_enrollment_id);
       return new Response(JSON.stringify({ error: "Pre-enrollment not found" }), {
         status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Validate enrollment exists if this is an enrollment checkout
+    if (isEnrollmentCheckout && (enrollmentError || !enrollment)) {
+      console.error("Enrollment query failed:", enrollmentError);
+      console.error("Enrollment ID:", enrollment_id);
+      return new Response(JSON.stringify({ error: "Enrollment not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Validate ownership
+    if (isEnrollmentCheckout && enrollment && enrollment.user_id !== user.id) {
+      console.error(`User ${user.id} attempted to access enrollment ${enrollment_id} owned by ${enrollment.user_id}`);
+      return new Response(JSON.stringify({ error: "Unauthorized access to enrollment" }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
@@ -170,15 +208,21 @@ serve(async (req) => {
     console.log(`Pre-enrollment found for course: ${preEnrollment.courses?.name || 'UNKNOWN'}`);
 
     // ETAPA 1: Verificar se já existe um pagamento pendente
-    const { data: existingPayment } = await serviceClient
+    const checkoutKind = isEnrollmentCheckout ? 'enrollment' : 'pre_enrollment';
+    let paymentQuery = serviceClient
       .from('payments')
       .select('id, status, asaas_payment_id')
       .eq('pre_enrollment_id', pre_enrollment_id)
-      .eq('kind', 'pre_enrollment')
+      .eq('kind', checkoutKind)
       .in('status', ['pending', 'waiting'])
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+    
+    if (isEnrollmentCheckout && enrollment_id) {
+      paymentQuery = paymentQuery.eq('enrollment_id', enrollment_id);
+    }
+    
+    const { data: existingPayment } = await paymentQuery.maybeSingle();
 
     if (existingPayment) {
       console.log('Reusing existing payment:', existingPayment.id);
@@ -207,16 +251,22 @@ serve(async (req) => {
       });
     }
 
-    const preEnrollmentFee = preEnrollment.courses.pre_enrollment_fee;
+    // Determine which fee to use based on checkout type
+    const checkoutFee = isEnrollmentCheckout 
+      ? preEnrollment.courses.enrollment_fee 
+      : preEnrollment.courses.pre_enrollment_fee;
     
-    if (!preEnrollmentFee || preEnrollmentFee <= 0) {
-      console.error("Course pre-enrollment fee not configured:", {
+    const feeType = isEnrollmentCheckout ? 'matrícula' : 'pré-matrícula';
+    
+    if (!checkoutFee || checkoutFee <= 0) {
+      console.error(`Course ${feeType} fee not configured:`, {
         courseId: preEnrollment.course_id,
         courseName: preEnrollment.courses.name,
-        fee: preEnrollmentFee
+        fee: checkoutFee,
+        type: feeType
       });
       return new Response(JSON.stringify({ 
-        error: "Taxa de pré-matrícula não configurada para este curso. Entre em contato com o suporte." 
+        error: `Taxa de ${feeType} não configurada para este curso. Entre em contato com o suporte.` 
       }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -293,21 +343,26 @@ serve(async (req) => {
     } : 'No profile data');
 
     // Create Asaas checkout following official documentation
+    const redirectPath = isEnrollmentCheckout ? '/student/enrollments' : '/student/pre-enrollments';
+    const itemDescription = isEnrollmentCheckout 
+      ? `Matrícula - ${preEnrollment.courses.name}`
+      : `Pré-matrícula - ${preEnrollment.courses.name}`;
+    
     const checkoutData = {
       billingTypes: ["CREDIT_CARD", "PIX", "BOLETO"],
       chargeTypes: ["DETACHED"],
       minutesToExpire: 60,
       callback: {
-        successUrl: `${req.headers.get("origin")}/student/pre-enrollments?payment_success=true`,
-        cancelUrl: `${req.headers.get("origin")}/student/pre-enrollments?payment_cancelled=true`,
-        expiredUrl: `${req.headers.get("origin")}/student/pre-enrollments?payment_expired=true`
+        successUrl: `${req.headers.get("origin")}${redirectPath}?payment_success=true`,
+        cancelUrl: `${req.headers.get("origin")}${redirectPath}?payment_cancelled=true`,
+        expiredUrl: `${req.headers.get("origin")}${redirectPath}?payment_expired=true`
       },
       items: [{
-        externalReference: pre_enrollment_id,
-        description: `Pré-matrícula - ${preEnrollment.courses.name}`,
+        externalReference: isEnrollmentCheckout ? enrollment_id : pre_enrollment_id,
+        description: itemDescription,
         name: truncateName(preEnrollment.courses.name),
         quantity: 1,
-        value: preEnrollmentFee
+        value: checkoutFee
       }],
       customerData: {
         name: getValueWithFallback(preEnrollment.full_name, userProfile?.full_name, "Nome não informado"),
@@ -354,16 +409,22 @@ serve(async (req) => {
 
     // ETAPA 3: Store checkout info in payments table with try-catch
     try {
+      const paymentInsertData: any = {
+        pre_enrollment_id: pre_enrollment_id,
+        amount: checkoutFee,
+        currency: 'BRL',
+        status: 'pending',
+        kind: checkoutKind,
+        asaas_payment_id: checkoutResult.id
+      };
+      
+      if (isEnrollmentCheckout && enrollment_id) {
+        paymentInsertData.enrollment_id = enrollment_id;
+      }
+      
       const { data: newPayment, error: paymentError } = await serviceClient
         .from('payments')
-        .insert({
-          pre_enrollment_id: pre_enrollment_id,
-          amount: preEnrollmentFee,
-          currency: 'BRL',
-          status: 'pending',
-          kind: 'pre_enrollment',
-          asaas_payment_id: checkoutResult.id
-        })
+        .insert(paymentInsertData)
         .select()
         .single();
 
@@ -373,6 +434,18 @@ serve(async (req) => {
         // O checkout do Asaas já foi criado com sucesso
       } else {
         console.log("Payment record created:", newPayment.id);
+        
+        // Update enrollment with payment reference if this is an enrollment checkout
+        if (isEnrollmentCheckout && enrollment_id) {
+          const { error: updateError } = await serviceClient
+            .from('enrollments')
+            .update({ enrollment_payment_id: checkoutResult.id })
+            .eq('id', enrollment_id);
+          
+          if (updateError) {
+            console.error("Error updating enrollment with payment ID:", updateError);
+          }
+        }
       }
     } catch (paymentInsertError) {
       console.error("Exception storing payment:", paymentInsertError);
