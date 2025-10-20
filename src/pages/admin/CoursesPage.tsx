@@ -168,7 +168,7 @@ useEffect(() => {
       .replace(/[\u0300-\u036f]/g, '') // Remove acentos
       .replace(/[^a-zA-Z0-9\s]/g, '') // Remove caracteres especiais
       .trim()
-      .substring(0, 50); // Limita a 50 caracteres para Asaas
+      .substring(0, 30); // Limita a 30 caracteres para Asaas
   };
 
   const handleGenerateAsaasTitle = () => {
@@ -518,12 +518,13 @@ setEditingCourse(null);
                         .replace(/[\u0300-\u036f]/g, '')
                         .replace(/[^a-zA-Z0-9\s]/g, '')
                         .trim()
-                        .substring(0, 50);
+                        .substring(0, 30);
                       if (sanitized !== e.target.value) {
                         setFormData({ ...formData, asaas_title: sanitized });
                       }
                     }}
-                    placeholder="Ex: Curso de Programacao Web"
+                    placeholder="Ex: Programacao Web"
+                    maxLength={30}
                   />
                   <Button
                     type="button"
