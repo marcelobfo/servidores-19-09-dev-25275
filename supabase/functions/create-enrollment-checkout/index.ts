@@ -262,6 +262,12 @@ serve(async (req) => {
       return "00000000000";
     };
 
+    // Helper function to truncate name to Asaas limit
+    const truncateName = (name: string, maxLength: number = 30): string => {
+      if (name.length <= maxLength) return name;
+      return name.substring(0, maxLength - 3) + '...';
+    };
+
     // Helper function to get value with fallback from profile
     const getValueWithFallback = (preEnrollmentValue: any, profileValue: any, defaultValue: any) => {
       return preEnrollmentValue || profileValue || defaultValue;
@@ -299,7 +305,7 @@ serve(async (req) => {
       items: [{
         externalReference: pre_enrollment_id,
         description: `Pré-matrícula - ${preEnrollment.courses.name}`,
-        name: preEnrollment.courses.name,
+        name: truncateName(preEnrollment.courses.name),
         quantity: 1,
         value: preEnrollmentFee
       }],

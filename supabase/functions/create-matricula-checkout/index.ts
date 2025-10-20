@@ -164,6 +164,12 @@ serve(async (req) => {
       return cleaned.length === 11 ? cleaned : "00000000000";
     };
 
+    // Helper function to truncate name to Asaas limit
+    const truncateName = (name: string, maxLength: number = 30): string => {
+      if (name.length <= maxLength) return name;
+      return name.substring(0, maxLength - 3) + '...';
+    };
+
     const getValueWithFallback = (val1: any, val2: any, def: any) => val1 || val2 || def;
 
     // Create Asaas checkout
@@ -179,7 +185,7 @@ serve(async (req) => {
       items: [{
         externalReference: enrollment_id,
         description: `Matrícula - ${enrollment.courses.name}`,
-        name: enrollment.courses.name,
+        name: truncateName(enrollment.courses.name),
         quantity: 1,
         value: enrollmentFee
       }],
