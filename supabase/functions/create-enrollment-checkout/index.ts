@@ -385,25 +385,63 @@ serve(async (req) => {
     
     console.log(`Using Asaas API URL: ${asaasApiUrl} (environment: ${environment})`);
     
-    const asaasResponse = await fetch(asaasApiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "access_token": asaasApiKey
-      },
-      body: JSON.stringify(checkoutData)
-    });
-
-    if (!asaasResponse.ok) {
-      const errorText = await asaasResponse.text();
-      console.error("Asaas API error:", errorText);
-      return new Response(JSON.stringify({ error: "Failed to create checkout" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+    let checkoutResult;
+    try {
+      console.log('🔄 Chamando API Asaas...');
+      const asaasResponse = await fetch(asaasApiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "access_token": asaasApiKey
+        },
+        body: JSON.stringify(checkoutData)
       });
-    }
 
-    const checkoutResult = await asaasResponse.json();
+      const responseText = await asaasResponse.text();
+      
+      console.log('📊 Asaas API Response Status:', asaasResponse.status);
+      console.log('📊 Asaas API Response Headers:', JSON.stringify(Object.fromEntries(asaasResponse.headers)));
+      console.log('📊 Asaas API Response Body:', responseText);
+
+      if (!asaasResponse.ok) {
+        console.error('❌ ASAAS API ERROR:');
+        console.error('   Status:', asaasResponse.status);
+        console.error('   Response:', responseText);
+        
+        // Tentar parsear o erro para extrair detalhes
+        try {
+          const errorData = JSON.parse(responseText);
+          console.error('   Parsed Error:', JSON.stringify(errorData, null, 2));
+          if (errorData.errors) {
+            errorData.errors.forEach((err: any, index: number) => {
+              console.error(`   Error ${index + 1}:`, err);
+            });
+          }
+        } catch (parseError) {
+          console.error('   Could not parse error response');
+        }
+        
+        return new Response(JSON.stringify({ 
+          error: "Failed to create checkout",
+          details: responseText,
+          status: asaasResponse.status
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      checkoutResult = JSON.parse(responseText);
+      console.log('✅ Asaas checkout criado com sucesso:', checkoutResult.id);
+    } catch (error) {
+      console.error('💥 Exception ao chamar API Asaas:', error);
+      if (error instanceof Error) {
+        console.error('   Error name:', error.name);
+        console.error('   Error message:', error.message);
+        console.error('   Error stack:', error.stack);
+      }
+      throw error;
+    }
     console.log('Asaas checkout response:', checkoutResult);
 
     // ETAPA 3: Store checkout info in payments table with try-catch
