@@ -205,6 +205,7 @@ serve(async (req) => {
         *,
         courses (
           name,
+          asaas_title,
           price,
           pre_enrollment_fee,
           enrollment_fee
@@ -330,12 +331,13 @@ serve(async (req) => {
     console.log('Customer created:', customer.id);
 
     // Create payment in Asaas
+    const courseName = preEnrollment.courses?.asaas_title || preEnrollment.courses?.name || 'Curso';
     const paymentData = {
       customer: customer.id,
       billingType: 'PIX',
       value: parseFloat(finalAmount.toString()),
       dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Tomorrow
-      description: paymentSettings.payment_description || `Pagamento - ${preEnrollment.courses?.name || 'Curso'}`,
+      description: paymentSettings.payment_description || `Pagamento - ${courseName}`,
       postalService: false
     };
 

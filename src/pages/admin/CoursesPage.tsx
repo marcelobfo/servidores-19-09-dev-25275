@@ -23,6 +23,7 @@ interface Course {
   id: string;
   name: string;
   subtitle?: string;
+  asaas_title?: string;
   slug: string;
   description: string;
   brief_description: string;
@@ -68,6 +69,7 @@ const CoursesPage = () => {
 const [formData, setFormData] = useState({
   name: "",
   subtitle: "",
+  asaas_title: "",
   slug: "",
   description: "",
   brief_description: "",
@@ -347,6 +349,7 @@ setModules(parsedModules);
 setFormData({
   name: course.name,
   subtitle: course.subtitle || "",
+  asaas_title: course.asaas_title || "",
   slug: course.slug,
   description: course.description || "",
   brief_description: course.brief_description || "",
@@ -386,6 +389,7 @@ setIsDialogOpen(true);
 setFormData({
   name: "",
   subtitle: "",
+  asaas_title: "",
   slug: "",
   description: "",
   brief_description: "",
@@ -478,6 +482,19 @@ setEditingCourse(null);
                   onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
                   placeholder="Texto complementar do curso (opcional)"
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="asaas_title">Título Asaas (interno)</Label>
+                <Input
+                  id="asaas_title"
+                  value={formData.asaas_title}
+                  onChange={(e) => setFormData({ ...formData, asaas_title: e.target.value })}
+                  placeholder="Título usado na API Asaas (sem caracteres especiais)"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Campo interno para integração com Asaas. Evite caracteres especiais.
+                </p>
               </div>
 
               <div>
