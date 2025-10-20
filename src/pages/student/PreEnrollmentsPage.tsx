@@ -279,51 +279,87 @@ export function PreEnrollmentsPage() {
     try {
       const enrollmentFee = preEnrollment.courses.enrollment_fee || 0;
       
-      console.log('🎓 [ENROLLMENT] Iniciando checkout de matrícula');
+      console.log('🎓 [ENROLLMENT] Iniciando processo de matrícula');
       console.log('📋 Pré-matrícula ID:', preEnrollment.id);
       console.log('💰 Taxa de matrícula:', enrollmentFee);
       
       // Se há taxa de matrícula, redirecionar para checkout Asaas
       if (enrollmentFee > 0) {
-        // Primeiro criar a matrícula com status pending_payment
-        const { data: enrollment, error: enrollmentError } = await supabase
+        // Verificar se já existe uma matrícula para esta pré-matrícula
+        const { data: existingEnrollment, error: checkError } = await supabase
           .from("enrollments")
-          .insert({
-            user_id: user?.id,
-            course_id: preEnrollment.courses.id,
-            pre_enrollment_id: preEnrollment.id,
-            status: "pending_payment",
-            payment_status: "pending",
-            enrollment_amount: enrollmentFee
-          })
-          .select()
-          .single();
+          .select('*')
+          .eq('pre_enrollment_id', preEnrollment.id)
+          .maybeSingle();
 
-        if (enrollmentError) {
-          console.error('❌ [ENROLLMENT] Erro ao criar enrollment:', enrollmentError);
-          throw enrollmentError;
+        if (checkError) {
+          console.error('❌ [ENROLLMENT] Erro ao verificar enrollment existente:', checkError);
+          throw checkError;
         }
 
-        console.log('✅ [ENROLLMENT] Enrollment criado:', enrollment.id);
+        let enrollmentId: string;
+
+        if (existingEnrollment) {
+          console.log('📌 [ENROLLMENT] Matrícula já existe:', existingEnrollment.id);
+          console.log('📊 [ENROLLMENT] Status:', existingEnrollment.status);
+          
+          // Se já está ativa e paga, informar o usuário
+          if (existingEnrollment.status === 'active' && existingEnrollment.payment_status === 'paid') {
+            toast.info("Matrícula já foi realizada e paga!");
+            window.location.href = "/student/enrollments";
+            return;
+          }
+          
+          // Reutilizar a matrícula existente
+          enrollmentId = existingEnrollment.id;
+          console.log('♻️ [ENROLLMENT] Reutilizando matrícula existente');
+        } else {
+          // Criar nova matrícula com status pending_payment
+          const { data: newEnrollment, error: enrollmentError } = await supabase
+            .from("enrollments")
+            .insert({
+              user_id: user?.id,
+              course_id: preEnrollment.courses.id,
+              pre_enrollment_id: preEnrollment.id,
+              status: "pending_payment",
+              payment_status: "pending",
+              enrollment_amount: enrollmentFee
+            })
+            .select()
+            .single();
+
+          if (enrollmentError) {
+            console.error('❌ [ENROLLMENT] Erro ao criar enrollment:', enrollmentError);
+            throw enrollmentError;
+          }
+
+          enrollmentId = newEnrollment.id;
+          console.log('✅ [ENROLLMENT] Nova matrícula criada:', enrollmentId);
+        }
 
         // Chamar edge function para criar checkout Asaas
         console.log('🔄 [ENROLLMENT] Chamando edge function create-matricula-checkout...');
         const { data, error } = await supabase.functions.invoke('create-matricula-checkout', {
           body: {
-            enrollment_id: enrollment.id,
+            enrollment_id: enrollmentId,
             pre_enrollment_id: preEnrollment.id
           }
         });
 
         console.log('✅ [ENROLLMENT] Resposta da edge function:', data);
-        console.log('❌ [ENROLLMENT] Erro da edge function:', error);
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ [ENROLLMENT] Erro da edge function:', error);
+          throw error;
+        }
 
         if (data?.checkout_url) {
-          console.log('🔗 [ENROLLMENT] Redirecionando para:', data.checkout_url);
-          // Redirecionar para checkout Asaas
-          window.location.href = data.checkout_url;
+          console.log('🔗 [ENROLLMENT] Redirecionando para checkout:', data.checkout_url);
+          toast.success("Gerando checkout completo com PIX, Boleto e Cartão...");
+          // Pequeno delay para mostrar o toast antes de redirecionar
+          setTimeout(() => {
+            window.location.href = data.checkout_url;
+          }, 1000);
         } else {
           console.error('❌ [ENROLLMENT] URL de checkout não foi gerada');
           throw new Error("URL de checkout não foi gerada");
@@ -332,6 +368,19 @@ export function PreEnrollmentsPage() {
       }
       
       // Se não há taxa, criar matrícula diretamente com status ativo
+      // Verificar se já existe matrícula
+      const { data: existingFreeEnrollment } = await supabase
+        .from("enrollments")
+        .select('*')
+        .eq('pre_enrollment_id', preEnrollment.id)
+        .maybeSingle();
+
+      if (existingFreeEnrollment) {
+        toast.info("Matrícula já foi realizada!");
+        window.location.href = "/student/enrollments";
+        return;
+      }
+
       const { error } = await supabase
         .from("enrollments")
         .insert({
