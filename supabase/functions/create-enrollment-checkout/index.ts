@@ -335,19 +335,27 @@ serve(async (req) => {
     } : 'No profile data');
 
     // Create Asaas checkout following official documentation
+    const origin = req.headers.get("origin") || "https://6be1b209-32ae-497f-88c1-5af12f9e3bfe.lovableproject.com";
+    console.log('🌐 Origin header:', origin);
+    
     const redirectPath = isEnrollmentCheckout ? '/student/enrollments' : '/student/pre-enrollments';
     const itemDescription = isEnrollmentCheckout 
       ? truncateName(`Matrícula - ${preEnrollment.courses.name}`, 30)
       : truncateName(`Pré-matrícula - ${preEnrollment.courses.name}`, 30);
+    
+    console.log('📝 Preparando dados do checkout...');
+    console.log('   Item description:', itemDescription);
+    console.log('   Course name:', preEnrollment.courses.name);
+    console.log('   Checkout fee:', checkoutFee);
     
     const checkoutData = {
       billingTypes: ["CREDIT_CARD", "PIX", "BOLETO"],
       chargeTypes: ["DETACHED"],
       minutesToExpire: 60,
       callback: {
-        successUrl: `${req.headers.get("origin")}${redirectPath}?payment_success=true`,
-        cancelUrl: `${req.headers.get("origin")}${redirectPath}?payment_cancelled=true`,
-        expiredUrl: `${req.headers.get("origin")}${redirectPath}?payment_expired=true`
+        successUrl: `${origin}${redirectPath}?payment_success=true`,
+        cancelUrl: `${origin}${redirectPath}?payment_cancelled=true`,
+        expiredUrl: `${origin}${redirectPath}?payment_expired=true`
       },
       items: [{
         externalReference: isEnrollmentCheckout ? enrollment_id : pre_enrollment_id,
@@ -377,6 +385,9 @@ serve(async (req) => {
     console.log('customerData.province length:', checkoutData.customerData.province.length, '- Value:', checkoutData.customerData.province);
     console.log('customerData.city length:', checkoutData.customerData.city.length, '- Value:', checkoutData.customerData.city);
     console.log('=================================');
+    
+    console.log('📤 Dados completos do checkout:');
+    console.log(JSON.stringify(checkoutData, null, 2));
 
     // Use the configured environment from settings
     const asaasApiUrl = environment === 'production' 
