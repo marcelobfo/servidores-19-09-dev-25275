@@ -351,7 +351,7 @@ serve(async (req) => {
       },
       items: [{
         externalReference: isEnrollmentCheckout ? enrollment_id : pre_enrollment_id,
-        description: itemDescription,
+        description: truncateName(itemDescription),
         name: truncateName(preEnrollment.courses.name),
         quantity: 1,
         value: checkoutFee
