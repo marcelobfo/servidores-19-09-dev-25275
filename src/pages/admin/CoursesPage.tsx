@@ -22,6 +22,7 @@ import { CourseImageGenerator } from "@/components/admin/CourseImageGenerator";
 interface Course {
   id: string;
   name: string;
+  subtitle?: string;
   slug: string;
   description: string;
   brief_description: string;
@@ -66,6 +67,7 @@ const CoursesPage = () => {
 
 const [formData, setFormData] = useState({
   name: "",
+  subtitle: "",
   slug: "",
   description: "",
   brief_description: "",
@@ -344,6 +346,7 @@ if (parsedModules.length === 0) parsedModules = [{ name: "", hours: 0 }];
 setModules(parsedModules);
 setFormData({
   name: course.name,
+  subtitle: course.subtitle || "",
   slug: course.slug,
   description: course.description || "",
   brief_description: course.brief_description || "",
@@ -382,6 +385,7 @@ setIsDialogOpen(true);
   const resetForm = () => {
 setFormData({
   name: "",
+  subtitle: "",
   slug: "",
   description: "",
   brief_description: "",
@@ -463,6 +467,16 @@ setEditingCourse(null);
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="subtitle">Subtítulo</Label>
+                <Input
+                  id="subtitle"
+                  value={formData.subtitle}
+                  onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
+                  placeholder="Texto complementar do curso (opcional)"
                 />
               </div>
 
@@ -733,7 +747,12 @@ setEditingCourse(null);
               <CardContent className="p-6 flex flex-col justify-between">
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-4">
-                    <CardTitle className="line-clamp-2 text-xl">{course.name}</CardTitle>
+                    <div>
+                      <CardTitle className="line-clamp-2 text-xl">{course.name}</CardTitle>
+                      {course.subtitle && (
+                        <p className="text-sm text-muted-foreground mt-1">{course.subtitle}</p>
+                      )}
+                    </div>
                   </div>
                   
                   {course.areas?.name && (
