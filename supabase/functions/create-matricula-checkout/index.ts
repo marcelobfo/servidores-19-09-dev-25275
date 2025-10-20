@@ -7,9 +7,12 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight
+  // Handle CORS preflight - MUST return 200 OK
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { 
+      status: 200,
+      headers: corsHeaders 
+    });
   }
 
   const supabaseClient = createClient(
@@ -37,17 +40,28 @@ serve(async (req) => {
 
     console.log(`Processing matricula checkout for enrollment: ${enrollment_id}`);
 
-    // Get authenticated user (JWT already verified by Supabase)
+    // Authenticate user
     const authHeader = req.headers.get('Authorization');
-    const token = authHeader?.replace('Bearer ', '') || '';
+    if (!authHeader) {
+      console.error("Missing Authorization header");
+      return new Response(JSON.stringify({ error: "Authentication required" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
 
     if (authError || !user) {
+      console.error("Authentication error:", authError);
       return new Response(JSON.stringify({ error: "Invalid authentication" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
+
+    console.log(`✅ User authenticated: ${user.id}`);
 
     // Get payment settings
     const { data: paymentSettings, error: settingsError } = await serviceClient
