@@ -25,8 +25,13 @@ serve(async (req) => {
   );
 
   try {
+    console.log('🚀 Edge function started');
+    
     // Parse the request body - accept both pre_enrollment_id and enrollment_id
-    const { pre_enrollment_id, enrollment_id } = await req.json();
+    const body = await req.json();
+    console.log('📦 Request body:', JSON.stringify(body));
+    
+    const { pre_enrollment_id, enrollment_id } = body;
 
     if (!pre_enrollment_id) {
       console.error("Missing pre_enrollment_id in request");
@@ -79,13 +84,20 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Authenticated user: ${user.id}`);
+    console.log(`✅ Authenticated user: ${user.id}`);
 
     // Get payment settings using serviceClient to bypass RLS
+    console.log('💳 Fetching payment settings...');
     const { data: paymentSettings, error: settingsError } = await serviceClient
       .from('payment_settings')
       .select('environment, asaas_api_key_sandbox, asaas_api_key_production')
       .maybeSingle();
+    
+    console.log('Payment settings result:', { 
+      found: !!paymentSettings, 
+      error: settingsError?.message,
+      environment: paymentSettings?.environment 
+    });
 
     if (settingsError) {
       console.error("Payment settings database error:", settingsError);
@@ -122,6 +134,7 @@ serve(async (req) => {
     }
 
     // Get pre-enrollment data using service client to bypass RLS
+    console.log('📚 Fetching pre-enrollment:', pre_enrollment_id);
     const { data: preEnrollment, error: preEnrollmentError } = await serviceClient
       .from('pre_enrollments')
       .select(`
@@ -134,6 +147,11 @@ serve(async (req) => {
       `)
       .eq('id', pre_enrollment_id)
       .single();
+    
+    console.log('Pre-enrollment fetch result:', {
+      found: !!preEnrollment,
+      error: preEnrollmentError?.message
+    });
 
     // Get enrollment data if enrollment_id is provided
     let enrollment = null;
