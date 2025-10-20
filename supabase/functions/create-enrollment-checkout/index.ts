@@ -357,7 +357,7 @@ serve(async (req) => {
         value: checkoutFee
       }],
       customerData: {
-        name: getValueWithFallback(preEnrollment.full_name, userProfile?.full_name, "Nome não informado"),
+        name: truncateName(getValueWithFallback(preEnrollment.full_name, userProfile?.full_name, "Nome não informado")),
         cpfCnpj: cleanCPF(getValueWithFallback(preEnrollment.cpf, userProfile?.cpf, null)),
         email: getValueWithFallback(preEnrollment.email, userProfile?.email, "email@exemplo.com"),
         phone: cleanPhone(getValueWithFallback(preEnrollment.whatsapp, userProfile?.whatsapp, null)),
