@@ -323,7 +323,7 @@ export function PreEnrollmentsPage() {
               pre_enrollment_id: preEnrollment.id,
               status: "pending_payment",
               payment_status: "pending",
-              enrollment_amount: enrollmentFee
+              enrollment_amount: preEnrollment.courses.pre_enrollment_fee || 0
             })
             .select()
             .single();
@@ -338,9 +338,10 @@ export function PreEnrollmentsPage() {
         }
 
         // Chamar edge function específica para criar checkout de matrícula
-        console.log('🔄 [ENROLLMENT] Chamando edge function create-enrollment-payment...');
-        const { data, error } = await supabase.functions.invoke('create-enrollment-payment', {
+        console.log('🔄 [ENROLLMENT] Chamando edge function create-enrollment-checkout...');
+        const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
           body: {
+            pre_enrollment_id: preEnrollment.id,
             enrollment_id: enrollmentId
           }
         });
@@ -352,23 +353,16 @@ export function PreEnrollmentsPage() {
           throw error;
         }
 
-        if (data?.payment_id) {
-          console.log('✅ [ENROLLMENT] Pagamento criado:', data.payment_id);
-          toast.success("Pagamento gerado! Você pode pagar via PIX, Boleto ou Cartão.");
+        if (data?.checkout_url) {
+          console.log('✅ [ENROLLMENT] Checkout criado:', data.checkout_url);
+          toast.success("Checkout criado! Redirecionando para pagamento...");
           
-          // Redirecionar para a página de faturas onde o usuário pode ver o pagamento
-          if (data.invoice_url) {
-            setTimeout(() => {
-              window.open(data.invoice_url, '_blank');
-            }, 500);
-          }
-          
-          // Redirecionar para a página de matrículas
+          // Redirecionar para o checkout do Asaas
           setTimeout(() => {
-            window.location.href = "/student/enrollments";
+            window.location.href = data.checkout_url;
           }, 1000);
         } else {
-          throw new Error('Resposta inválida da função de pagamento');
+          throw new Error('Resposta inválida da função de checkout');
         }
         return;
       }
