@@ -50,6 +50,8 @@ export default function CertificatesPage() {
   const [availableEnrollments, setAvailableEnrollments] = useState<any[]>([]);
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState<string>('');
   const [loadingEnrollments, setLoadingEnrollments] = useState(false);
+  const [enrollmentSearchTerm, setEnrollmentSearchTerm] = useState('');
+  const [selectedCourseFilter, setSelectedCourseFilter] = useState('all');
   
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -235,6 +237,24 @@ export default function CertificatesPage() {
     window.open(verificationUrl, '_blank');
   };
 
+  const handleCloseDialog = () => {
+    setShowGenerateDialog(false);
+    setSelectedEnrollmentId('');
+    setEnrollmentSearchTerm('');
+    setSelectedCourseFilter('all');
+  };
+
+  const filteredAvailableEnrollments = availableEnrollments.filter(enrollment => {
+    const matchesSearch = enrollmentSearchTerm === "" ||
+      enrollment.full_name.toLowerCase().includes(enrollmentSearchTerm.toLowerCase()) ||
+      enrollment.email.toLowerCase().includes(enrollmentSearchTerm.toLowerCase());
+    
+    const matchesCourse = selectedCourseFilter === "all" ||
+      enrollment.courses?.name === selectedCourseFilter;
+    
+    return matchesSearch && matchesCourse;
+  });
+
   const filteredCertificates = certificates.filter(cert => {
     const matchesSearch = searchTerm === "" ||
       cert.student_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -287,43 +307,77 @@ export default function CertificatesPage() {
         </Button>
       </div>
 
-      <Dialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Gerar Certificado Manualmente</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="enrollment-select">
-                Selecione a Pré-matrícula
-              </Label>
-              <Select 
-                value={selectedEnrollmentId} 
-                onValueChange={setSelectedEnrollmentId}
-              >
-                <SelectTrigger id="enrollment-select">
-                  <SelectValue placeholder="Escolha um aluno..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {loadingEnrollments ? (
-                    <SelectItem value="loading" disabled>
-                      Carregando...
-                    </SelectItem>
-                  ) : availableEnrollments.length === 0 ? (
-                    <SelectItem value="none" disabled>
-                      Nenhuma matrícula elegível encontrada
-                    </SelectItem>
-                  ) : (
-                    availableEnrollments.map(enrollment => (
-                      <SelectItem key={enrollment.id} value={enrollment.id}>
-                        {enrollment.full_name} - {enrollment.courses?.name}
+        <Dialog open={showGenerateDialog} onOpenChange={handleCloseDialog}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Gerar Certificado Manualmente</DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              {/* Filtros */}
+              <div className="space-y-3 p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <Label htmlFor="enrollment-search">Buscar Aluno</Label>
+                  <Input
+                    id="enrollment-search"
+                    placeholder="Digite o nome ou email do aluno..."
+                    value={enrollmentSearchTerm}
+                    onChange={(e) => setEnrollmentSearchTerm(e.target.value)}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="course-filter">Filtrar por Curso</Label>
+                  <Select value={selectedCourseFilter} onValueChange={setSelectedCourseFilter}>
+                    <SelectTrigger id="course-filter">
+                      <SelectValue placeholder="Todos os cursos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os cursos</SelectItem>
+                      {Array.from(new Set(availableEnrollments.map(e => e.courses?.name).filter(Boolean))).map(courseName => (
+                        <SelectItem key={courseName} value={courseName!}>
+                          {courseName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="text-sm text-muted-foreground">
+                  Mostrando {filteredAvailableEnrollments.length} de {availableEnrollments.length} matrículas elegíveis
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="enrollment-select">
+                  Selecione a Pré-matrícula
+                </Label>
+                <Select 
+                  value={selectedEnrollmentId} 
+                  onValueChange={setSelectedEnrollmentId}
+                >
+                  <SelectTrigger id="enrollment-select">
+                    <SelectValue placeholder="Escolha um aluno..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {loadingEnrollments ? (
+                      <SelectItem value="loading" disabled>
+                        Carregando...
                       </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+                    ) : filteredAvailableEnrollments.length === 0 ? (
+                      <SelectItem value="none" disabled>
+                        Nenhuma matrícula encontrada
+                      </SelectItem>
+                    ) : (
+                      filteredAvailableEnrollments.map(enrollment => (
+                        <SelectItem key={enrollment.id} value={enrollment.id}>
+                          {enrollment.full_name} - {enrollment.courses?.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
 
             {selectedEnrollmentId && (
               <div className="p-4 border rounded-lg bg-muted/50">
@@ -350,16 +404,13 @@ export default function CertificatesPage() {
               </div>
             )}
 
-            <div className="flex justify-end gap-2">
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setShowGenerateDialog(false);
-                  setSelectedEnrollmentId('');
-                }}
-              >
-                Cancelar
-              </Button>
+              <div className="flex justify-end gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={handleCloseDialog}
+                >
+                  Cancelar
+                </Button>
               <Button
                 onClick={async () => {
                   if (!selectedEnrollmentId) {
@@ -370,9 +421,8 @@ export default function CertificatesPage() {
                     });
                     return;
                   }
-                  await handleGenerateCertificate(selectedEnrollmentId);
-                  setShowGenerateDialog(false);
-                  setSelectedEnrollmentId('');
+                    await handleGenerateCertificate(selectedEnrollmentId);
+                    handleCloseDialog();
                 }}
                 disabled={!selectedEnrollmentId || generatingCerts.has(selectedEnrollmentId)}
               >
