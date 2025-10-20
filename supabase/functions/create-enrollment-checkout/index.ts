@@ -361,11 +361,11 @@ serve(async (req) => {
         cpfCnpj: cleanCPF(getValueWithFallback(preEnrollment.cpf, userProfile?.cpf, null)),
         email: getValueWithFallback(preEnrollment.email, userProfile?.email, "email@exemplo.com"),
         phone: cleanPhone(getValueWithFallback(preEnrollment.whatsapp, userProfile?.whatsapp, null)),
-        address: getValueWithFallback(preEnrollment.address, userProfile?.address, "Rua não informada"),
+        address: truncateName(getValueWithFallback(preEnrollment.address, userProfile?.address, "Rua não informada"), 60),
         addressNumber: getValueWithFallback(preEnrollment.address_number, userProfile?.address_number, "S/N"),
         postalCode: cleanPostalCode(getValueWithFallback(preEnrollment.postal_code, userProfile?.postal_code, null)),
-        province: getValueWithFallback(preEnrollment.state, userProfile?.state, "SP"),
-        city: getValueWithFallback(preEnrollment.city, userProfile?.city, "São Paulo")
+        province: truncateName(getValueWithFallback(preEnrollment.state, userProfile?.state, "SP"), 30),
+        city: truncateName(getValueWithFallback(preEnrollment.city, userProfile?.city, "São Paulo"), 40)
       }
     };
 
