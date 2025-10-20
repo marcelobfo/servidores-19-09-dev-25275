@@ -110,43 +110,43 @@ export function EnrollmentsPage() {
     try {
       setGeneratingPayment(true);
       
-      console.log('💳 [ENROLLMENT-PAYMENT] Gerando pagamento de matrícula');
+      console.log('💳 [ENROLLMENT-CHECKOUT] Gerando checkout de matrícula');
       console.log('📋 Enrollment ID:', enrollment.id);
+      console.log('📋 Pre-Enrollment ID:', enrollment.pre_enrollments?.id);
       console.log('💰 Valor:', enrollment.courses.enrollment_fee);
 
-      const { data, error } = await supabase.functions.invoke('create-enrollment-payment', {
+      const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
         body: {
+          pre_enrollment_id: enrollment.pre_enrollments?.id,
           enrollment_id: enrollment.id
         }
       });
 
       if (error) {
-        console.error("❌ [ENROLLMENT-PAYMENT] Erro:", error);
-        toast.error("Erro ao gerar pagamento. Tente novamente.");
+        console.error("❌ [ENROLLMENT-CHECKOUT] Erro:", error);
+        toast.error("Erro ao gerar checkout. Tente novamente.");
         throw error;
       }
 
-      if (data?.payment_id) {
-        console.log('✅ [ENROLLMENT-PAYMENT] Pagamento criado:', data.payment_id);
-        toast.success("Pagamento gerado! Você pode pagar via PIX, Boleto ou Cartão.");
+      if (data?.checkout_url) {
+        console.log('✅ [ENROLLMENT-CHECKOUT] Checkout criado:', data.checkout_url);
+        toast.success("Checkout criado! Redirecionando para pagamento...");
         
-        // Abrir fatura em nova aba
-        if (data.invoice_url) {
-          setTimeout(() => {
-            window.open(data.invoice_url, '_blank');
-          }, 500);
-        }
+        // Redirecionar para o checkout Asaas
+        setTimeout(() => {
+          window.location.href = data.checkout_url;
+        }, 1000);
         
-        // Recarregar lista após um momento
+        // Recarregar lista após redirecionamento
         setTimeout(() => {
           fetchEnrollments();
-        }, 1000);
+        }, 2000);
       } else {
-        throw new Error('Resposta inválida da função de pagamento');
+        throw new Error('Resposta inválida da função de checkout');
       }
     } catch (error) {
-      console.error("Error generating enrollment payment:", error);
-      toast.error("Erro ao gerar pagamento. Tente novamente.");
+      console.error("Error generating enrollment checkout:", error);
+      toast.error("Erro ao gerar checkout. Tente novamente.");
     } finally {
       setGeneratingPayment(false);
     }
