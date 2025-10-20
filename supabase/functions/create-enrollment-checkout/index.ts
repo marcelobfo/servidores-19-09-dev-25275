@@ -141,6 +141,7 @@ serve(async (req) => {
         *,
         courses (
           name,
+          asaas_title,
           pre_enrollment_fee,
           enrollment_fee
         )
@@ -357,9 +358,10 @@ serve(async (req) => {
     console.log('🌐 Origin header:', origin);
     
     const redirectPath = isEnrollmentCheckout ? '/student/enrollments' : '/student/pre-enrollments';
+    const courseName = preEnrollment.courses.asaas_title || preEnrollment.courses.name;
     const itemDescription = isEnrollmentCheckout 
-      ? truncateName(`Matrícula - ${preEnrollment.courses.name}`, 30)
-      : truncateName(`Pré-matrícula - ${preEnrollment.courses.name}`, 30);
+      ? truncateName(`Matrícula - ${courseName}`, 30)
+      : truncateName(`Pré-matrícula - ${courseName}`, 30);
     
     console.log('📝 Preparando dados do checkout...');
     console.log('   Item description:', itemDescription);
@@ -378,7 +380,7 @@ serve(async (req) => {
       items: [{
         externalReference: isEnrollmentCheckout ? enrollment_id : pre_enrollment_id,
         description: truncateName(itemDescription, 30),
-        name: truncateName(preEnrollment.courses.name, 30),
+        name: truncateName(courseName, 30),
         quantity: 1,
         value: checkoutFee
       }],
