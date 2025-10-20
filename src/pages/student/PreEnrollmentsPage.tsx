@@ -352,16 +352,23 @@ export function PreEnrollmentsPage() {
           throw error;
         }
 
-        if (data?.checkout_url) {
-          console.log('🔗 [ENROLLMENT] Redirecionando para checkout:', data.checkout_url);
-          toast.success("Gerando checkout completo com PIX, Boleto e Cartão...");
-          // Pequeno delay para mostrar o toast antes de redirecionar
+        if (data?.payment_id) {
+          console.log('✅ [ENROLLMENT] Pagamento criado:', data.payment_id);
+          toast.success("Pagamento gerado! Você pode pagar via PIX, Boleto ou Cartão.");
+          
+          // Redirecionar para a página de faturas onde o usuário pode ver o pagamento
+          if (data.invoice_url) {
+            setTimeout(() => {
+              window.open(data.invoice_url, '_blank');
+            }, 500);
+          }
+          
+          // Redirecionar para a página de matrículas
           setTimeout(() => {
-            window.location.href = data.checkout_url;
+            window.location.href = "/student/enrollments";
           }, 1000);
         } else {
-          console.error('❌ [ENROLLMENT] URL de checkout não foi gerada');
-          throw new Error("URL de checkout não foi gerada");
+          throw new Error('Resposta inválida da função de pagamento');
         }
         return;
       }

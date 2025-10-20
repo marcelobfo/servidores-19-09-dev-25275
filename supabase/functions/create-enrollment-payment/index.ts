@@ -138,7 +138,7 @@ serve(async (req) => {
     // Check for existing pending payment
     const { data: existingPayment } = await serviceClient
       .from('payments')
-      .select('id, asaas_payment_id')
+      .select('id, asaas_payment_id, asaas_customer_id')
       .eq('enrollment_id', enrollment_id)
       .eq('kind', 'enrollment')
       .in('status', ['pending', 'waiting'])
@@ -148,11 +148,9 @@ serve(async (req) => {
 
     if (existingPayment?.asaas_payment_id) {
       console.log('Reusing existing payment:', existingPayment.id);
-      const checkoutUrl = `https://${environment === 'production' ? 'asaas.com' : 'sandbox.asaas.com'}/checkoutSession/show?id=${existingPayment.asaas_payment_id}`;
       
       return new Response(JSON.stringify({
-        checkout_url: checkoutUrl,
-        checkout_id: existingPayment.asaas_payment_id,
+        payment_id: existingPayment.asaas_payment_id,
         reused: true
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -178,10 +176,6 @@ serve(async (req) => {
       return cleaned.length === 11 ? cleaned : "00000000000";
     };
 
-    const truncateName = (name: string, maxLength: number = 30): string => {
-      return name.length <= maxLength ? name : name.substring(0, maxLength - 3) + '...';
-    };
-
     // Get user profile for fallback data
     const { data: userProfile } = await serviceClient
       .from('profiles')
@@ -192,62 +186,82 @@ serve(async (req) => {
     const preEnrollment = enrollment.pre_enrollment;
     const courseName = preEnrollment?.course?.name || 'Curso';
 
-    // Create Asaas checkout
-    const checkoutData = {
-      billingTypes: ["CREDIT_CARD", "PIX", "BOLETO"],
-      chargeTypes: ["DETACHED"],
-      minutesToExpire: 60,
-      callback: {
-        successUrl: `${req.headers.get("origin")}/student/enrollments?payment_success=true`,
-        cancelUrl: `${req.headers.get("origin")}/student/enrollments?payment_cancelled=true`,
-        expiredUrl: `${req.headers.get("origin")}/student/enrollments?payment_expired=true`
-      },
-      items: [{
-        externalReference: enrollment_id,
-        description: `Matrícula - ${courseName}`,
-        name: truncateName(courseName),
-        quantity: 1,
-        value: enrollmentFee
-      }],
-      customerData: {
-        name: preEnrollment?.full_name || userProfile?.full_name || "Nome não informado",
-        cpfCnpj: cleanCPF(preEnrollment?.cpf || userProfile?.cpf),
-        email: preEnrollment?.email || userProfile?.email || "email@exemplo.com",
-        phone: cleanPhone(preEnrollment?.whatsapp || userProfile?.whatsapp),
-        address: preEnrollment?.address || userProfile?.address || "Rua não informada",
-        addressNumber: preEnrollment?.address_number || userProfile?.address_number || "S/N",
-        postalCode: cleanPostalCode(preEnrollment?.postal_code || userProfile?.postal_code),
-        province: preEnrollment?.state || userProfile?.state || "SP",
-        city: preEnrollment?.city || userProfile?.city || "São Paulo"
-      }
+    const asaasBaseUrl = environment === 'production' 
+      ? "https://api.asaas.com/v3" 
+      : "https://sandbox.asaas.com/api/v3";
+
+    // Step 1: Create or get customer in Asaas
+    const customerData = {
+      name: preEnrollment?.full_name || userProfile?.full_name || "Nome não informado",
+      cpfCnpj: cleanCPF(preEnrollment?.cpf || userProfile?.cpf),
+      email: preEnrollment?.email || userProfile?.email || "email@exemplo.com",
+      phone: cleanPhone(preEnrollment?.whatsapp || userProfile?.whatsapp),
+      mobilePhone: cleanPhone(preEnrollment?.whatsapp || userProfile?.whatsapp),
+      address: preEnrollment?.address || userProfile?.address || "Rua não informada",
+      addressNumber: preEnrollment?.address_number || userProfile?.address_number || "S/N",
+      province: preEnrollment?.state || userProfile?.state || "SP",
+      postalCode: cleanPostalCode(preEnrollment?.postal_code || userProfile?.postal_code)
     };
 
-    console.log('Creating Asaas checkout:', { environment, enrollmentFee, courseName });
+    console.log('Creating Asaas customer:', { environment, cpf: customerData.cpfCnpj });
 
-    const asaasApiUrl = environment === 'production' 
-      ? "https://api.asaas.com/v3/checkouts" 
-      : "https://sandbox.asaas.com/api/v3/checkouts";
-
-    const asaasResponse = await fetch(asaasApiUrl, {
+    const customerResponse = await fetch(`${asaasBaseUrl}/customers`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "access_token": asaasApiKey
       },
-      body: JSON.stringify(checkoutData)
+      body: JSON.stringify(customerData)
     });
 
-    if (!asaasResponse.ok) {
-      const errorText = await asaasResponse.text();
-      console.error("Asaas API error:", errorText);
-      return new Response(JSON.stringify({ error: "Erro ao criar checkout" }), {
+    if (!customerResponse.ok) {
+      const errorText = await customerResponse.text();
+      console.error("Asaas customer creation error:", errorText);
+      return new Response(JSON.stringify({ error: "Erro ao criar cliente" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    const checkoutResult = await asaasResponse.json();
-    console.log('Asaas checkout created:', checkoutResult.id);
+    const customer = await customerResponse.json();
+    console.log('Asaas customer created:', customer.id);
+
+    // Step 2: Create payment using /v3/lean/payments
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 7); // 7 days from now
+    
+    const paymentData = {
+      customer: customer.id,
+      billingType: "UNDEFINED", // Permite PIX, BOLETO e CREDIT_CARD
+      value: enrollmentFee,
+      dueDate: dueDate.toISOString().split('T')[0], // YYYY-MM-DD
+      description: `Matrícula - ${courseName}`,
+      externalReference: enrollment_id
+    };
+
+    console.log('Creating Asaas payment:', { environment, enrollmentFee, courseName });
+
+    const paymentResponse = await fetch(`${asaasBaseUrl}/lean/payments`, {
+      method: "POST",
+      headers: {
+        "accept": "application/json",
+        "Content-Type": "application/json",
+        "access_token": asaasApiKey
+      },
+      body: JSON.stringify(paymentData)
+    });
+
+    if (!paymentResponse.ok) {
+      const errorText = await paymentResponse.text();
+      console.error("Asaas payment creation error:", errorText);
+      return new Response(JSON.stringify({ error: "Erro ao criar pagamento" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const payment = await paymentResponse.json();
+    console.log('Asaas payment created:', payment.id);
 
     // Store payment in database
     try {
@@ -260,7 +274,8 @@ serve(async (req) => {
           currency: 'BRL',
           status: 'pending',
           kind: 'enrollment',
-          asaas_payment_id: checkoutResult.id
+          asaas_payment_id: payment.id,
+          asaas_customer_id: customer.id
         })
         .select()
         .single();
@@ -273,19 +288,20 @@ serve(async (req) => {
         // Update enrollment with payment reference
         await serviceClient
           .from('enrollments')
-          .update({ enrollment_payment_id: checkoutResult.id })
+          .update({ enrollment_payment_id: payment.id })
           .eq('id', enrollment_id);
       }
     } catch (error) {
       console.error("Exception storing payment:", error);
     }
 
-    const checkoutUrl = checkoutResult.url || 
-      `https://${environment === 'production' ? 'asaas.com' : 'sandbox.asaas.com'}/checkoutSession/show?id=${checkoutResult.id}`;
-
     return new Response(JSON.stringify({
-      checkout_url: checkoutUrl,
-      checkout_id: checkoutResult.id
+      payment_id: payment.id,
+      payment_status: payment.status,
+      invoice_url: payment.invoiceUrl,
+      bank_slip_url: payment.bankSlipUrl,
+      due_date: payment.dueDate,
+      value: payment.value
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
