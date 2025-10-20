@@ -162,6 +162,26 @@ useEffect(() => {
       .replace(/\s+/g, "-");
   };
 
+  const generateAsaasTitle = (courseName: string): string => {
+    return courseName
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .replace(/[^a-zA-Z0-9\s]/g, '') // Remove caracteres especiais
+      .trim()
+      .substring(0, 50); // Limita a 50 caracteres para Asaas
+  };
+
+  const handleGenerateAsaasTitle = () => {
+    if (formData.name) {
+      const generatedTitle = generateAsaasTitle(formData.name);
+      setFormData({ ...formData, asaas_title: generatedTitle });
+      toast({
+        title: "Título gerado",
+        description: "Título Asaas gerado automaticamente sem caracteres especiais.",
+      });
+    }
+  };
+
   const generateCourseImage = async (courseName: string, areaName?: string, description?: string) => {
     try {
       // Verificar se a API key está configurada
@@ -486,14 +506,37 @@ setEditingCourse(null);
 
               <div>
                 <Label htmlFor="asaas_title">Título Asaas (interno)</Label>
-                <Input
-                  id="asaas_title"
-                  value={formData.asaas_title}
-                  onChange={(e) => setFormData({ ...formData, asaas_title: e.target.value })}
-                  placeholder="Título usado na API Asaas (sem caracteres especiais)"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="asaas_title"
+                    value={formData.asaas_title}
+                    onChange={(e) => setFormData({ ...formData, asaas_title: e.target.value })}
+                    onBlur={(e) => {
+                      // Auto-sanitiza ao sair do campo
+                      const sanitized = e.target.value
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '')
+                        .replace(/[^a-zA-Z0-9\s]/g, '')
+                        .trim()
+                        .substring(0, 50);
+                      if (sanitized !== e.target.value) {
+                        setFormData({ ...formData, asaas_title: sanitized });
+                      }
+                    }}
+                    placeholder="Ex: Curso de Programacao Web"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleGenerateAsaasTitle}
+                    disabled={!formData.name}
+                    title="Gerar automaticamente do nome do curso"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                  </Button>
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Campo interno para integração com Asaas. Evite caracteres especiais.
+                  Usado APENAS para API Asaas. Sem acentos/caracteres especiais. O nome oficial do curso permanece inalterado.
                 </p>
               </div>
 
