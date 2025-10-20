@@ -685,30 +685,19 @@ export function PreEnrollmentsPage() {
 
                   {preEnrollment.status === "pending_payment" && preEnrollment.courses.pre_enrollment_fee && !preEnrollment.organ_approval_confirmed && (
                     <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-                      <div className="space-y-3">
-                        <div className="flex items-start gap-3">
-                          <Mail className="h-5 w-5 text-orange-600 mt-0.5" />
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold text-orange-800 dark:text-orange-200 mb-1">
-                              Pagamento pendente
-                            </p>
-                            <p className="text-sm text-orange-700 dark:text-orange-300 mb-2">
-                              Verifique seu e-mail <strong>{preEnrollment.email}</strong> para acessar o link de pagamento.
-                            </p>
-                            <p className="text-xs text-orange-600 dark:text-orange-400">
-                              O link de pagamento também foi enviado por e-mail e é válido por 60 minutos.
-                            </p>
-                          </div>
+                      <div className="flex items-start gap-3">
+                        <Mail className="h-5 w-5 text-orange-600 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-orange-800 dark:text-orange-200 mb-1">
+                            Pagamento pendente
+                          </p>
+                          <p className="text-sm text-orange-700 dark:text-orange-300 mb-2">
+                            Verifique seu e-mail <strong>{preEnrollment.email}</strong> para acessar o link de pagamento.
+                          </p>
+                          <p className="text-xs text-orange-600 dark:text-orange-400">
+                            O link de pagamento também foi enviado por e-mail e é válido por 60 minutos.
+                          </p>
                         </div>
-                        <Button
-                          onClick={() => handlePreEnrollmentPayment(preEnrollment)}
-                          size="sm"
-                          variant="outline"
-                          className="w-full flex items-center justify-center gap-2"
-                        >
-                          <DollarSign className="h-4 w-4" />
-                          Gerar Nova Cobrança
-                        </Button>
                       </div>
                     </div>
                   )}

@@ -110,12 +110,14 @@ export function EnrollmentsPage() {
     try {
       setGeneratingPayment(true);
       
-      console.log('💳 [ENROLLMENT-PAYMENT] Gerando pagamento de matrícula');
+      console.log('💳 [ENROLLMENT-PAYMENT] Gerando checkout de matrícula');
       console.log('📋 Enrollment ID:', enrollment.id);
+      console.log('📋 Pre-enrollment ID:', enrollment.pre_enrollments?.id);
       console.log('💰 Valor:', enrollment.courses.enrollment_fee);
 
-      const { data, error } = await supabase.functions.invoke('create-enrollment-payment', {
+      const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
         body: {
+          pre_enrollment_id: enrollment.pre_enrollments?.id,
           enrollment_id: enrollment.id
         }
       });
@@ -127,23 +129,16 @@ export function EnrollmentsPage() {
         throw error;
       }
 
-      if (data?.payment_id) {
-        console.log('✅ [ENROLLMENT-PAYMENT] Pagamento criado:', data.payment_id);
-        toast.success("Pagamento gerado! Você pode pagar via PIX, Boleto ou Cartão.");
+      if (data?.checkout_url) {
+        console.log('🔗 [ENROLLMENT-PAYMENT] Redirecionando para:', data.checkout_url);
+        toast.success("Checkout criado! Redirecionando para pagamento...");
         
-        // Abrir fatura em nova aba
-        if (data.invoice_url) {
-          setTimeout(() => {
-            window.open(data.invoice_url, '_blank');
-          }, 500);
-        }
-        
-        // Recarregar lista após um momento
+        // Redirecionar para o checkout do Asaas
         setTimeout(() => {
-          fetchEnrollments();
+          window.location.href = data.checkout_url;
         }, 1000);
       } else {
-        throw new Error('Resposta inválida da função de pagamento');
+        throw new Error('Resposta inválida da função de checkout');
       }
     } catch (error) {
       console.error("Error generating enrollment payment:", error);
