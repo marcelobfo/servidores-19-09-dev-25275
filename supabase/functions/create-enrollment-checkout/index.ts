@@ -337,8 +337,8 @@ serve(async (req) => {
     // Create Asaas checkout following official documentation
     const redirectPath = isEnrollmentCheckout ? '/student/enrollments' : '/student/pre-enrollments';
     const itemDescription = isEnrollmentCheckout 
-      ? `Matrícula - ${preEnrollment.courses.name}`
-      : `Pré-matrícula - ${preEnrollment.courses.name}`;
+      ? truncateName(`Matrícula - ${preEnrollment.courses.name}`, 30)
+      : truncateName(`Pré-matrícula - ${preEnrollment.courses.name}`, 30);
     
     const checkoutData = {
       billingTypes: ["CREDIT_CARD", "PIX", "BOLETO"],
@@ -351,8 +351,8 @@ serve(async (req) => {
       },
       items: [{
         externalReference: isEnrollmentCheckout ? enrollment_id : pre_enrollment_id,
-        description: truncateName(itemDescription),
-        name: truncateName(preEnrollment.courses.name),
+        description: truncateName(itemDescription, 30),
+        name: truncateName(preEnrollment.courses.name, 30),
         quantity: 1,
         value: checkoutFee
       }],
@@ -369,7 +369,14 @@ serve(async (req) => {
       }
     };
 
-    console.log('Final customer data:', checkoutData.customerData);
+    console.log('=== VALIDAÇÃO DE LIMITES ASAAS ===');
+    console.log('items[0].name length:', checkoutData.items[0].name.length, '- Value:', checkoutData.items[0].name);
+    console.log('items[0].description length:', checkoutData.items[0].description.length, '- Value:', checkoutData.items[0].description);
+    console.log('customerData.name length:', checkoutData.customerData.name.length, '- Value:', checkoutData.customerData.name);
+    console.log('customerData.address length:', checkoutData.customerData.address.length, '- Value:', checkoutData.customerData.address);
+    console.log('customerData.province length:', checkoutData.customerData.province.length, '- Value:', checkoutData.customerData.province);
+    console.log('customerData.city length:', checkoutData.customerData.city.length, '- Value:', checkoutData.customerData.city);
+    console.log('=================================');
 
     // Use the configured environment from settings
     const asaasApiUrl = environment === 'production' 
