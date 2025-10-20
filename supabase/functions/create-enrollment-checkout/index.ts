@@ -137,17 +137,33 @@ serve(async (req) => {
 
     // Get enrollment data if enrollment_id is provided
     let enrollment = null;
-    let enrollmentError = null;
     
     if (isEnrollmentCheckout) {
-      const enrollmentResult = await serviceClient
+      const { data: enrollmentData, error: enrollmentError } = await serviceClient
         .from('enrollments')
         .select('*')
         .eq('id', enrollment_id)
         .single();
       
-      enrollment = enrollmentResult.data;
-      enrollmentError = enrollmentResult.error;
+      if (enrollmentError || !enrollmentData) {
+        console.error("Enrollment query failed:", enrollmentError);
+        console.error("Enrollment ID:", enrollment_id);
+        return new Response(JSON.stringify({ error: "Matrícula não encontrada" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      
+      // Validate ownership
+      if (enrollmentData.user_id !== user.id) {
+        console.error(`User ${user.id} attempted to access enrollment ${enrollment_id} owned by ${enrollmentData.user_id}`);
+        return new Response(JSON.stringify({ error: "Acesso não autorizado à matrícula" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      
+      enrollment = enrollmentData;
     }
 
     // Get user profile data as fallback
@@ -161,45 +177,16 @@ serve(async (req) => {
     if (preEnrollmentError || !preEnrollment) {
       console.error("Pre-enrollment query failed:", preEnrollmentError);
       console.error("Pre-enrollment ID:", pre_enrollment_id);
-      return new Response(JSON.stringify({ error: "Pre-enrollment not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
-    // Validate enrollment exists if this is an enrollment checkout
-    if (isEnrollmentCheckout && (enrollmentError || !enrollment)) {
-      console.error("Enrollment query failed:", enrollmentError);
-      console.error("Enrollment ID:", enrollment_id);
-      return new Response(JSON.stringify({ error: "Enrollment not found" }), {
+      return new Response(JSON.stringify({ error: "Pré-matrícula não encontrada" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
     // Validate ownership
-    if (isEnrollmentCheckout && enrollment && enrollment.user_id !== user.id) {
-      console.error(`User ${user.id} attempted to access enrollment ${enrollment_id} owned by ${enrollment.user_id}`);
-      return new Response(JSON.stringify({ error: "Unauthorized access to enrollment" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
-    // ETAPA 4: Adicionar logging melhorado
-    console.log('Pre-enrollment data retrieved:', {
-      id: preEnrollment.id,
-      user_id: preEnrollment.user_id,
-      course_id: preEnrollment.course_id,
-      course_name: preEnrollment.courses?.name,
-      has_courses: !!preEnrollment.courses,
-      pre_enrollment_fee: preEnrollment.courses?.pre_enrollment_fee
-    });
-
-    // Validate user ownership of the pre-enrollment
     if (preEnrollment.user_id !== user.id) {
       console.error(`User ${user.id} attempted to access pre-enrollment ${pre_enrollment_id} owned by ${preEnrollment.user_id}`);
-      return new Response(JSON.stringify({ error: "Unauthorized access to pre-enrollment" }), {
+      return new Response(JSON.stringify({ error: "Acesso não autorizado à pré-matrícula" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -253,17 +240,22 @@ serve(async (req) => {
 
     // Determine which fee to use based on checkout type
     const checkoutFee = isEnrollmentCheckout 
-      ? preEnrollment.courses.enrollment_fee 
-      : preEnrollment.courses.pre_enrollment_fee;
+      ? (preEnrollment.courses.enrollment_fee || 0)
+      : (preEnrollment.courses.pre_enrollment_fee || 0);
     
     const feeType = isEnrollmentCheckout ? 'matrícula' : 'pré-matrícula';
+    
+    console.log(`Checkout fee for ${feeType}:`, checkoutFee);
     
     if (!checkoutFee || checkoutFee <= 0) {
       console.error(`Course ${feeType} fee not configured:`, {
         courseId: preEnrollment.course_id,
         courseName: preEnrollment.courses.name,
+        pre_enrollment_fee: preEnrollment.courses.pre_enrollment_fee,
+        enrollment_fee: preEnrollment.courses.enrollment_fee,
         fee: checkoutFee,
-        type: feeType
+        type: feeType,
+        isEnrollmentCheckout
       });
       return new Response(JSON.stringify({ 
         error: `Taxa de ${feeType} não configurada para este curso. Entre em contato com o suporte.` 
