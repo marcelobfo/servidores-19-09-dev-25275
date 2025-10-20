@@ -55,17 +55,26 @@ serve(async (req) => {
 
     console.log(`Processing enrollment payment for user: ${user.id}, enrollment: ${enrollment_id}`);
 
-    // Get enrollment with pre_enrollment and course data
+    // Get enrollment with course data
     const { data: enrollment, error: enrollmentError } = await serviceClient
       .from('enrollments')
       .select(`
         *,
-        pre_enrollment:pre_enrollments (
-          *,
-          course:courses (
-            name,
-            enrollment_fee
-          )
+        courses (
+          id,
+          name,
+          enrollment_fee
+        ),
+        pre_enrollments (
+          id,
+          full_name,
+          email,
+          cpf,
+          whatsapp,
+          address,
+          address_number,
+          state,
+          postal_code
         )
       `)
       .eq('id', enrollment_id)
@@ -89,11 +98,11 @@ serve(async (req) => {
     }
 
     // Check if enrollment_fee is configured
-    const enrollmentFee = enrollment.pre_enrollment?.course?.enrollment_fee;
+    const enrollmentFee = enrollment.courses?.enrollment_fee;
     if (!enrollmentFee || enrollmentFee <= 0) {
       console.error("Enrollment fee not configured:", {
         enrollmentId: enrollment_id,
-        courseName: enrollment.pre_enrollment?.course?.name,
+        courseName: enrollment.courses?.name,
         fee: enrollmentFee
       });
       return new Response(JSON.stringify({ 
@@ -149,12 +158,33 @@ serve(async (req) => {
     if (existingPayment?.asaas_payment_id) {
       console.log('Reusing existing payment:', existingPayment.id);
       
-      return new Response(JSON.stringify({
-        payment_id: existingPayment.asaas_payment_id,
-        reused: true
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      // Get payment details from Asaas
+      const asaasBaseUrl = environment === 'production' 
+        ? "https://api.asaas.com/v3" 
+        : "https://sandbox.asaas.com/api/v3";
+        
+      const paymentResponse = await fetch(`${asaasBaseUrl}/payments/${existingPayment.asaas_payment_id}`, {
+        method: "GET",
+        headers: {
+          "accept": "application/json",
+          "access_token": asaasApiKey
+        }
       });
+
+      if (paymentResponse.ok) {
+        const payment = await paymentResponse.json();
+        return new Response(JSON.stringify({
+          payment_id: payment.id,
+          payment_status: payment.status,
+          invoice_url: payment.invoiceUrl,
+          bank_slip_url: payment.bankSlipUrl,
+          due_date: payment.dueDate,
+          value: payment.value,
+          reused: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
     }
 
     // Helper functions
@@ -183,8 +213,8 @@ serve(async (req) => {
       .eq('user_id', user.id)
       .maybeSingle();
 
-    const preEnrollment = enrollment.pre_enrollment;
-    const courseName = preEnrollment?.course?.name || 'Curso';
+    const preEnrollment = enrollment.pre_enrollments;
+    const courseName = enrollment.courses?.name || 'Curso';
 
     const asaasBaseUrl = environment === 'production' 
       ? "https://api.asaas.com/v3" 
@@ -194,7 +224,7 @@ serve(async (req) => {
     const customerData = {
       name: preEnrollment?.full_name || userProfile?.full_name || "Nome não informado",
       cpfCnpj: cleanCPF(preEnrollment?.cpf || userProfile?.cpf),
-      email: preEnrollment?.email || userProfile?.email || "email@exemplo.com",
+      email: preEnrollment?.email || userProfile?.email || user.email || "email@exemplo.com",
       phone: cleanPhone(preEnrollment?.whatsapp || userProfile?.whatsapp),
       mobilePhone: cleanPhone(preEnrollment?.whatsapp || userProfile?.whatsapp),
       address: preEnrollment?.address || userProfile?.address || "Rua não informada",
@@ -308,7 +338,10 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("Unexpected error:", error);
-    return new Response(JSON.stringify({ error: "Erro interno do servidor" }), {
+    return new Response(JSON.stringify({ 
+      error: "Erro interno do servidor",
+      details: error instanceof Error ? error.message : String(error)
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
