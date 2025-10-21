@@ -69,7 +69,7 @@ const CoursesPage = () => {
 const [formData, setFormData] = useState({
   name: "",
   subtitle: "",
-  asaas_title: "",
+  asaas_title: "Licenca Capacitacao",
   slug: "",
   description: "",
   brief_description: "",
@@ -172,14 +172,15 @@ useEffect(() => {
   };
 
   const handleGenerateAsaasTitle = () => {
-    if (formData.name) {
-      const generatedTitle = generateAsaasTitle(formData.name);
-      setFormData({ ...formData, asaas_title: generatedTitle });
-      toast({
-        title: "Título gerado",
-        description: "Título Asaas gerado automaticamente sem caracteres especiais.",
-      });
-    }
+    // Sempre usar "Licenca Capacitacao" para todos os cursos
+    setFormData({ 
+      ...formData, 
+      asaas_title: 'Licenca Capacitacao' 
+    });
+    toast({
+      title: "Título definido",
+      description: "Título Asaas: Licenca Capacitacao",
+    });
   };
 
   const generateCourseImage = async (courseName: string, areaName?: string, description?: string) => {
@@ -409,7 +410,7 @@ setIsDialogOpen(true);
 setFormData({
   name: "",
   subtitle: "",
-  asaas_title: "",
+  asaas_title: "Licenca Capacitacao",
   slug: "",
   description: "",
   brief_description: "",
@@ -523,21 +524,20 @@ setEditingCourse(null);
                         setFormData({ ...formData, asaas_title: sanitized });
                       }
                     }}
-                    placeholder="Ex: Programacao Web"
+                    placeholder="Licenca Capacitacao (padrão)"
                     maxLength={30}
                   />
                   <Button
                     type="button"
                     variant="outline"
                     onClick={handleGenerateAsaasTitle}
-                    disabled={!formData.name}
-                    title="Gerar automaticamente do nome do curso"
+                    title="Preencher com 'Licenca Capacitacao'"
                   >
                     <Sparkles className="h-4 w-4" />
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Usado APENAS para API Asaas. Sem acentos/caracteres especiais. O nome oficial do curso permanece inalterado.
+                  Título usado apenas na API Asaas para pagamentos (padrão: "Licenca Capacitacao"). O nome completo do curso é usado para certificados, documentos e no resto do sistema.
                 </p>
               </div>
 
