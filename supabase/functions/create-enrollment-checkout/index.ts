@@ -325,8 +325,9 @@ serve(async (req) => {
 
     // Helper function to truncate name to Asaas limit
     const truncateName = (name: string, maxLength: number = 30): string => {
-      if (name.length <= maxLength) return name;
-      return name.substring(0, maxLength - 3) + '...';
+      const trimmed = name.trim(); // Remove espaços extras primeiro
+      if (trimmed.length <= maxLength) return trimmed;
+      return trimmed.substring(0, maxLength - 3) + '...';
     };
 
     // Helper function to get value with fallback from profile
@@ -358,7 +359,7 @@ serve(async (req) => {
     console.log('🌐 Origin header:', origin);
     
     const redirectPath = isEnrollmentCheckout ? '/student/enrollments' : '/student/pre-enrollments';
-    const courseName = preEnrollment.courses.asaas_title || preEnrollment.courses.name;
+    const courseName = preEnrollment.courses.asaas_title || 'Licenca Capacitacao';
     const itemDescription = isEnrollmentCheckout 
       ? truncateName(`Matrícula - ${courseName}`, 30)
       : truncateName(`Pré-matrícula - ${courseName}`, 30);
@@ -408,6 +409,13 @@ serve(async (req) => {
     
     console.log('📤 Dados completos do checkout:');
     console.log(JSON.stringify(checkoutData, null, 2));
+    
+    console.log('=== VALIDAÇÃO FINAL ANTES DO ENVIO À ASAAS ===');
+    console.log('courseName usado:', courseName);
+    console.log('asaas_title do curso:', preEnrollment.courses.asaas_title);
+    console.log('items[0].name:', checkoutData.items[0].name, '(length:', checkoutData.items[0].name.length, ')');
+    console.log('customerData.name:', checkoutData.customerData.name, '(length:', checkoutData.customerData.name.length, ')');
+    console.log('============================================');
 
     // Use the configured environment from settings
     const asaasApiUrl = environment === 'production' 
