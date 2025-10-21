@@ -32,6 +32,12 @@ serve(async (req) => {
       return null;
     };
 
+    // Helper function to truncate name to Asaas limit (max 30 characters)
+    const truncateName = (name: string, maxLength: number = 30): string => {
+      if (name.length <= maxLength) return name;
+      return name.substring(0, maxLength - 3) + '...';
+    };
+
     // Validate request has body
     const contentLength = req.headers.get('content-length');
     if (!contentLength || contentLength === '0') {
@@ -278,7 +284,7 @@ serve(async (req) => {
     }
 
     const customerData = {
-      name: preEnrollment.full_name.trim(),
+      name: truncateName(preEnrollment.full_name.trim()),
       email: preEnrollment.email.trim(),
       cpfCnpj: cleanedCPF,
       ...(validPhone && { phone: validPhone })
