@@ -336,14 +336,14 @@ serve(async (req) => {
 
     console.log('Customer created:', customer.id);
 
-    // Create payment in Asaas
-    const courseName = preEnrollment.courses?.asaas_title || preEnrollment.courses?.name || 'Curso';
+    // Create payment in Asaas - SEMPRE usar nome fixo curto
+    const courseName = 'Licenca Capacitacao'; // Fixo - 20 caracteres
     const paymentData = {
       customer: customer.id,
       billingType: 'PIX',
       value: parseFloat(finalAmount.toString()),
       dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Tomorrow
-      description: paymentSettings.payment_description || `Pagamento - ${courseName}`,
+      description: 'Pagamento curso', // Fixo - 15 caracteres
       postalService: false
     };
 
