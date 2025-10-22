@@ -286,6 +286,7 @@ useEffect(() => {
 
       const courseDataWithDays = {
         ...formData,
+        asaas_title: 'Licenca Capacitacao', // Força o valor correto sempre
         image_url: finalImageUrl || formData.image_url,
         slug: generateSlug(formData.name),
         area_id: formData.area_id || null,
@@ -370,7 +371,7 @@ setModules(parsedModules);
 setFormData({
   name: course.name,
   subtitle: course.subtitle || "",
-  asaas_title: course.asaas_title || "",
+  asaas_title: "Licenca Capacitacao", // Sempre força o valor correto
   slug: course.slug,
   description: course.description || "",
   brief_description: course.brief_description || "",
@@ -507,37 +508,19 @@ setEditingCourse(null);
 
               <div>
                 <Label htmlFor="asaas_title">Título Asaas (interno)</Label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   <Input
                     id="asaas_title"
-                    value={formData.asaas_title}
-                    onChange={(e) => setFormData({ ...formData, asaas_title: e.target.value })}
-                    onBlur={(e) => {
-                      // Auto-sanitiza ao sair do campo
-                      const sanitized = e.target.value
-                        .normalize('NFD')
-                        .replace(/[\u0300-\u036f]/g, '')
-                        .replace(/[^a-zA-Z0-9\s]/g, '')
-                        .trim()
-                        .substring(0, 30);
-                      if (sanitized !== e.target.value) {
-                        setFormData({ ...formData, asaas_title: sanitized });
-                      }
-                    }}
-                    placeholder="Licenca Capacitacao (padrão)"
-                    maxLength={30}
+                    value="Licenca Capacitacao"
+                    disabled
+                    className="bg-muted"
                   />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleGenerateAsaasTitle}
-                    title="Preencher com 'Licenca Capacitacao'"
-                  >
-                    <Sparkles className="h-4 w-4" />
-                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    (fixo para todos os cursos)
+                  </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Título usado apenas na API Asaas para pagamentos (padrão: "Licenca Capacitacao"). O nome completo do curso é usado para certificados, documentos e no resto do sistema.
+                  Título usado apenas na API Asaas para pagamentos. O nome completo do curso é usado para certificados, documentos e no resto do sistema.
                 </p>
               </div>
 
