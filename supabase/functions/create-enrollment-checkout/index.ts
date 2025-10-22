@@ -201,8 +201,7 @@ serve(async (req) => {
       .from("profiles")
       .select("*")
       .eq("user_id", user.id)
-      .single()
-      .catch(() => ({ data: null }));
+      .maybeSingle();
 
     // Valida curso e taxa
     const course = preEnrollment.courses;
@@ -251,10 +250,9 @@ serve(async (req) => {
     // Monta dados do checkout (com truncamentos centralizados)
     const origin = req.headers.get("origin") || "";
     const redirectPath = isEnrollmentCheckout ? "/student/enrollments" : "/student/pre-enrollments";
-    const courseName = course.asaas_title ?? ("Licenca Capacitacao" as string);
+    const courseName = 'Licenca Capacitacao'; // Sempre fixo - 20 caracteres
 
-    const rawItemDescription = isEnrollmentCheckout ? `Matrícula - ${courseName}` : `Pré-matrícula - ${courseName}`;
-    const itemDescription = truncateName(rawItemDescription, ASAAS_MAX_LENGTH);
+    const itemDescription = isEnrollmentCheckout ? 'Matricula' : 'Pre-Matricula'; // Sempre fixo - 9-13 caracteres
 
     const checkoutData = {
       billingTypes: ["CREDIT_CARD", "PIX", "BOLETO"],
@@ -268,8 +266,8 @@ serve(async (req) => {
       items: [
         {
           externalReference: isEnrollmentCheckout ? enrollment_id : pre_enrollment_id,
-          description: truncateName(itemDescription, ASAAS_MAX_LENGTH),
-          name: truncateName(courseName, ASAAS_MAX_LENGTH),
+          description: itemDescription, // Já é curto o suficiente
+          name: 'Licenca Capacitacao', // Fixo - 20 caracteres
           quantity: 1,
           value: checkoutFee,
         },
@@ -293,11 +291,25 @@ serve(async (req) => {
       },
     };
 
-    console.log("Checkout data preview:", {
-      itemNameLength: checkoutData.items[0].name.length,
-      descriptionLength: checkoutData.items[0].description.length,
-      customerNameLength: checkoutData.customerData.name.length,
-    });
+    console.log('=== VALIDAÇÃO FINAL ANTES DO ENVIO ===');
+    console.log('items[0].name:', checkoutData.items[0].name, '| Length:', checkoutData.items[0].name.length);
+    console.log('items[0].description:', checkoutData.items[0].description, '| Length:', checkoutData.items[0].description.length);
+    console.log('customerData.name:', checkoutData.customerData.name, '| Length:', checkoutData.customerData.name.length);
+    
+    // Validação extra de segurança - garantir limites
+    if (checkoutData.items[0].name.length > 30) {
+      console.error('❌ CRÍTICO: items[0].name excede 30 chars:', checkoutData.items[0].name);
+      checkoutData.items[0].name = 'Licenca Capacitacao';
+    }
+    if (checkoutData.items[0].description.length > 30) {
+      console.error('❌ CRÍTICO: items[0].description excede 30 chars:', checkoutData.items[0].description);
+      checkoutData.items[0].description = checkoutData.items[0].description.substring(0, 30);
+    }
+    if (checkoutData.customerData.name.length > 100) {
+      console.error('❌ CRÍTICO: customerData.name excede 100 chars:', checkoutData.customerData.name);
+      checkoutData.customerData.name = checkoutData.customerData.name.substring(0, 100);
+    }
+    console.log('======================================');
 
     const asaasApiUrl =
       environment === "production"
