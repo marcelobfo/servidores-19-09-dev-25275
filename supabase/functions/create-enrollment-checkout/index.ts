@@ -359,10 +359,10 @@ serve(async (req) => {
     console.log('🌐 Origin header:', origin);
     
     const redirectPath = isEnrollmentCheckout ? '/student/enrollments' : '/student/pre-enrollments';
-    const courseName = preEnrollment.courses.asaas_title || 'Licenca Capacitacao';
+    const courseName = 'Licenca Capacitacao'; // Sempre fixo para Asaas
     const itemDescription = isEnrollmentCheckout 
-      ? truncateName(`Matrícula - ${courseName}`, 30)
-      : truncateName(`Pré-matrícula - ${courseName}`, 30);
+      ? 'Matricula'
+      : 'Pre-Matricula';
     
     console.log('📝 Preparando dados do checkout...');
     console.log('   Item description:', itemDescription);
@@ -380,8 +380,8 @@ serve(async (req) => {
       },
       items: [{
         externalReference: isEnrollmentCheckout ? enrollment_id : pre_enrollment_id,
-        description: truncateName(itemDescription, 30),
-        name: truncateName(courseName, 30),
+        description: itemDescription, // Já é curto o suficiente ('Matricula' ou 'Pre-Matricula')
+        name: courseName, // Sempre 'Licenca Capacitacao' (20 caracteres)
         quantity: 1,
         value: checkoutFee
       }],
@@ -416,6 +416,23 @@ serve(async (req) => {
     console.log('items[0].name:', checkoutData.items[0].name, '(length:', checkoutData.items[0].name.length, ')');
     console.log('customerData.name:', checkoutData.customerData.name, '(length:', checkoutData.customerData.name.length, ')');
     console.log('============================================');
+    
+    // Validação extra de segurança - garantir limites de 30 caracteres
+    if (checkoutData.items[0].name.length > 30) {
+      console.error('❌ ERRO CRÍTICO: items[0].name excede 30 caracteres:', checkoutData.items[0].name);
+      checkoutData.items[0].name = 'Licenca Capacitacao';
+      console.log('✅ Corrigido para:', checkoutData.items[0].name);
+    }
+    if (checkoutData.items[0].description.length > 30) {
+      console.error('❌ ERRO CRÍTICO: items[0].description excede 30 caracteres:', checkoutData.items[0].description);
+      checkoutData.items[0].description = checkoutData.items[0].description.substring(0, 30);
+      console.log('✅ Corrigido para:', checkoutData.items[0].description);
+    }
+    if (checkoutData.customerData.name.length > 100) {
+      console.error('❌ ERRO CRÍTICO: customerData.name excede 100 caracteres:', checkoutData.customerData.name);
+      checkoutData.customerData.name = checkoutData.customerData.name.substring(0, 100);
+      console.log('✅ Corrigido para:', checkoutData.customerData.name);
+    }
 
     // Use the configured environment from settings
     const asaasApiUrl = environment === 'production' 
