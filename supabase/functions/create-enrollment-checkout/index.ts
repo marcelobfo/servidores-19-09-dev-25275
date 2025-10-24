@@ -343,11 +343,11 @@ serve(async (req) => {
       return "00000000000";
     };
 
-    // Helper function to truncate name to Asaas limit
+    // Helper function to truncate name to Asaas limit (SEM adicionar "...")
     const truncateName = (name: string, maxLength: number = 30): string => {
       const trimmed = name.trim(); // Remove espaços extras primeiro
       if (trimmed.length <= maxLength) return trimmed;
-      return trimmed.substring(0, maxLength - 3) + "...";
+      return trimmed.substring(0, maxLength); // SEM os "..."
     };
 
     // Helper function to get value with fallback from profile
@@ -463,35 +463,122 @@ serve(async (req) => {
     console.log("📤 Dados completos do checkout:");
     console.log(JSON.stringify(checkoutData, null, 2));
 
+    // ========================================
+    // VALIDAÇÃO COMPLETA ANTES DO ENVIO ASAAS
+    // ========================================
+    
+    const validateCheckoutData = (data: any): string[] => {
+      const errors: string[] = [];
+      
+      // Validar items[0]
+      if (data.items[0].name.length > 30) {
+        errors.push(`items[0].name excede 30 chars: "${data.items[0].name}" (${data.items[0].name.length} chars)`);
+      }
+      if (data.items[0].description.length > 30) {
+        errors.push(`items[0].description excede 30 chars: "${data.items[0].description}" (${data.items[0].description.length} chars)`);
+      }
+      
+      // Validar customerData
+      if (data.customerData.name.length > 100) {
+        errors.push(`customerData.name excede 100 chars: "${data.customerData.name}" (${data.customerData.name.length} chars)`);
+      }
+      if (data.customerData.address.length > 60) {
+        errors.push(`customerData.address excede 60 chars: "${data.customerData.address}" (${data.customerData.address.length} chars)`);
+      }
+      if (data.customerData.province.length > 30) {
+        errors.push(`customerData.province excede 30 chars: "${data.customerData.province}" (${data.customerData.province.length} chars)`);
+      }
+      if (data.customerData.city.length > 40) {
+        errors.push(`customerData.city excede 40 chars: "${data.customerData.city}" (${data.customerData.city.length} chars)`);
+      }
+      if (data.customerData.cpfCnpj.length !== 11 && data.customerData.cpfCnpj.length !== 14) {
+        errors.push(`customerData.cpfCnpj deve ter 11 ou 14 dígitos: "${data.customerData.cpfCnpj}" (${data.customerData.cpfCnpj.length} chars)`);
+      }
+      if (data.customerData.postalCode.length !== 8) {
+        errors.push(`customerData.postalCode deve ter 8 dígitos: "${data.customerData.postalCode}" (${data.customerData.postalCode.length} chars)`);
+      }
+      if (data.customerData.phone.length < 10 || data.customerData.phone.length > 11) {
+        errors.push(`customerData.phone deve ter 10 ou 11 dígitos: "${data.customerData.phone}" (${data.customerData.phone.length} chars)`);
+      }
+      
+      return errors;
+    };
+    
     console.log("=== VALIDAÇÃO FINAL ANTES DO ENVIO À ASAAS ===");
+    const validationErrors = validateCheckoutData(checkoutData);
+    
+    if (validationErrors.length > 0) {
+      console.error("❌ ERROS DE VALIDAÇÃO ENCONTRADOS:");
+      validationErrors.forEach((error, index) => {
+        console.error(`   ${index + 1}. ${error}`);
+      });
+      
+      // Aplicar correções automáticas
+      console.log("🔧 Aplicando correções automáticas...");
+      
+      if (checkoutData.items[0].name.length > 30) {
+        checkoutData.items[0].name = "Licenca Capacitacao";
+        console.log("   ✅ items[0].name corrigido para:", checkoutData.items[0].name);
+      }
+      
+      if (checkoutData.items[0].description.length > 30) {
+        checkoutData.items[0].description = checkoutData.items[0].description.substring(0, 30);
+        console.log("   ✅ items[0].description corrigido para:", checkoutData.items[0].description);
+      }
+      
+      if (checkoutData.customerData.name.length > 100) {
+        checkoutData.customerData.name = checkoutData.customerData.name.substring(0, 100);
+        console.log("   ✅ customerData.name corrigido para:", checkoutData.customerData.name);
+      }
+      
+      if (checkoutData.customerData.address.length > 60) {
+        checkoutData.customerData.address = checkoutData.customerData.address.substring(0, 60);
+        console.log("   ✅ customerData.address corrigido para:", checkoutData.customerData.address);
+      }
+      
+      if (checkoutData.customerData.province.length > 30) {
+        checkoutData.customerData.province = checkoutData.customerData.province.substring(0, 30);
+        console.log("   ✅ customerData.province corrigido para:", checkoutData.customerData.province);
+      }
+      
+      if (checkoutData.customerData.city.length > 40) {
+        checkoutData.customerData.city = checkoutData.customerData.city.substring(0, 40);
+        console.log("   ✅ customerData.city corrigido para:", checkoutData.customerData.city);
+      }
+      
+      // Re-validar após correções
+      const revalidationErrors = validateCheckoutData(checkoutData);
+      if (revalidationErrors.length > 0) {
+        console.error("❌ AINDA HÁ ERROS APÓS CORREÇÃO AUTOMÁTICA:");
+        revalidationErrors.forEach((error, index) => {
+          console.error(`   ${index + 1}. ${error}`);
+        });
+        
+        return new Response(
+          JSON.stringify({
+            error: "Dados inválidos para checkout",
+            details: revalidationErrors,
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+    }
+    
+    console.log("✅ Todos os campos validados com sucesso!");
     console.log("courseName usado:", courseName);
-    console.log("asaas_title do curso:", preEnrollment.courses.asaas_title);
-    console.log("items[0].name:", checkoutData.items[0].name, "(length:", checkoutData.items[0].name.length, ")");
-    console.log(
-      "customerData.name:",
-      checkoutData.customerData.name,
-      "(length:",
-      checkoutData.customerData.name.length,
-      ")",
-    );
+    console.log("items[0].name:", checkoutData.items[0].name, `(${checkoutData.items[0].name.length} chars)`);
+    console.log("items[0].description:", checkoutData.items[0].description, `(${checkoutData.items[0].description.length} chars)`);
+    console.log("customerData.name:", checkoutData.customerData.name, `(${checkoutData.customerData.name.length} chars)`);
+    console.log("customerData.address:", checkoutData.customerData.address, `(${checkoutData.customerData.address.length} chars)`);
+    console.log("customerData.province:", checkoutData.customerData.province, `(${checkoutData.customerData.province.length} chars)`);
+    console.log("customerData.city:", checkoutData.customerData.city, `(${checkoutData.customerData.city.length} chars)`);
+    console.log("customerData.cpfCnpj:", checkoutData.customerData.cpfCnpj, `(${checkoutData.customerData.cpfCnpj.length} chars)`);
+    console.log("customerData.postalCode:", checkoutData.customerData.postalCode, `(${checkoutData.customerData.postalCode.length} chars)`);
+    console.log("customerData.phone:", checkoutData.customerData.phone, `(${checkoutData.customerData.phone.length} chars)`);
     console.log("============================================");
-
-    // Validação extra de segurança - garantir limites de 30 caracteres
-    if (checkoutData.items[0].name.length > 30) {
-      console.error("❌ ERRO CRÍTICO: items[0].name excede 30 caracteres:", checkoutData.items[0].name);
-      checkoutData.items[0].name = "Licenca Capacitacao";
-      console.log("✅ Corrigido para:", checkoutData.items[0].name);
-    }
-    if (checkoutData.items[0].description.length > 30) {
-      console.error("❌ ERRO CRÍTICO: items[0].description excede 30 caracteres:", checkoutData.items[0].description);
-      checkoutData.items[0].description = checkoutData.items[0].description.substring(0, 30);
-      console.log("✅ Corrigido para:", checkoutData.items[0].description);
-    }
-    if (checkoutData.customerData.name.length > 100) {
-      console.error("❌ ERRO CRÍTICO: customerData.name excede 100 caracteres:", checkoutData.customerData.name);
-      checkoutData.customerData.name = checkoutData.customerData.name.substring(0, 100);
-      console.log("✅ Corrigido para:", checkoutData.customerData.name);
-    }
 
     // Use the configured environment from settings
     const asaasApiUrl =
