@@ -580,6 +580,48 @@ serve(async (req) => {
     console.log("customerData.phone:", checkoutData.customerData.phone, `(${checkoutData.customerData.phone.length} chars)`);
     console.log("============================================");
 
+    // ✅ VALIDAÇÃO CRÍTICA FINAL - FORÇAR 30 CHARS PARA TODOS OS CAMPOS "name"
+    console.log("🔒 VALIDAÇÃO CRÍTICA FINAL - Garantindo limites Asaas...");
+    
+    // Forçar limite de 30 caracteres para TODOS os campos "name"
+    if (checkoutData.items[0].name.length > 30) {
+      console.error("❌ CRÍTICO: items[0].name ainda excede 30 chars!");
+      checkoutData.items[0].name = checkoutData.items[0].name.substring(0, 30);
+    }
+    
+    if (checkoutData.items[0].description.length > 30) {
+      console.error("❌ CRÍTICO: items[0].description ainda excede 30 chars!");
+      checkoutData.items[0].description = checkoutData.items[0].description.substring(0, 30);
+    }
+    
+    if (checkoutData.customerData.name.length > 30) {
+      console.error("❌ CRÍTICO: customerData.name ainda excede 30 chars!");
+      checkoutData.customerData.name = checkoutData.customerData.name.substring(0, 30);
+    }
+    
+    // Log final dos campos validados
+    console.log("✅ VALIDAÇÃO FINAL COMPLETA:");
+    console.log("   items[0].name:", checkoutData.items[0].name, `(${checkoutData.items[0].name.length} chars)`);
+    console.log("   items[0].description:", checkoutData.items[0].description, `(${checkoutData.items[0].description.length} chars)`);
+    console.log("   customerData.name:", checkoutData.customerData.name, `(${checkoutData.customerData.name.length} chars)`);
+    
+    // Garantir que NENHUM campo excede os limites
+    if (checkoutData.items[0].name.length > 30 || 
+        checkoutData.items[0].description.length > 30 || 
+        checkoutData.customerData.name.length > 30) {
+      console.error("❌ FALHA CRÍTICA: Campos ainda excedem limites após correção!");
+      return new Response(
+        JSON.stringify({
+          error: "Erro interno: não foi possível validar dados do checkout",
+          details: "Campos excedem limites da API Asaas"
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     // Use the configured environment from settings
     const asaasApiUrl =
       environment === "production"
@@ -591,13 +633,20 @@ serve(async (req) => {
     let checkoutResult;
     try {
       console.log("🔄 Chamando API Asaas...");
+      
+      // Log COMPLETO do que está sendo enviado
+      const requestBody = JSON.stringify(checkoutData);
+      console.log("📤 REQUEST BODY COMPLETO:");
+      console.log(requestBody);
+      console.log("📊 TAMANHO DO REQUEST:", requestBody.length, "bytes");
+      
       const asaasResponse = await fetch(asaasApiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           access_token: asaasApiKey,
         },
-        body: JSON.stringify(checkoutData),
+        body: requestBody,
       });
 
       const responseText = await asaasResponse.text();
@@ -615,10 +664,26 @@ serve(async (req) => {
         try {
           const errorData = JSON.parse(responseText);
           console.error("   Parsed Error:", JSON.stringify(errorData, null, 2));
+          console.error("❌ ASAAS API error:", JSON.stringify(errorData));
+          
           if (errorData.errors) {
             errorData.errors.forEach((err: any, index: number) => {
               console.error(`   Error ${index + 1}:`, err);
+              console.error(`      Code: ${err.code}`);
+              console.error(`      Description: ${err.description}`);
             });
+            
+            // Se o erro for sobre o campo "name", mostrar TODOS os campos "name" enviados
+            const hasNameError = errorData.errors.some((err: any) => 
+              err.description && err.description.includes('name')
+            );
+            
+            if (hasNameError) {
+              console.error("🔍 DETALHAMENTO DOS CAMPOS 'NAME' ENVIADOS:");
+              console.error("   items[0].name:", checkoutData.items[0].name, `(${checkoutData.items[0].name.length} chars)`);
+              console.error("   items[0].description:", checkoutData.items[0].description, `(${checkoutData.items[0].description.length} chars)`);
+              console.error("   customerData.name:", checkoutData.customerData.name, `(${checkoutData.customerData.name.length} chars)`);
+            }
           }
         } catch (parseError) {
           console.error("   Could not parse error response");
