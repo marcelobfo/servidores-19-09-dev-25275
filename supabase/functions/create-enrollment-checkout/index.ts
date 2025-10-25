@@ -478,9 +478,9 @@ serve(async (req) => {
         errors.push(`items[0].description excede 30 chars: "${data.items[0].description}" (${data.items[0].description.length} chars)`);
       }
       
-      // Validar customerData
-      if (data.customerData.name.length > 100) {
-        errors.push(`customerData.name excede 100 chars: "${data.customerData.name}" (${data.customerData.name.length} chars)`);
+      // Validar customerData - ASAAS EXIGE MÁXIMO DE 30 CHARS PARA TODOS OS CAMPOS "name"
+      if (data.customerData.name.length > 30) {
+        errors.push(`customerData.name excede 30 chars: "${data.customerData.name}" (${data.customerData.name.length} chars)`);
       }
       if (data.customerData.address.length > 60) {
         errors.push(`customerData.address excede 60 chars: "${data.customerData.address}" (${data.customerData.address.length} chars)`);
@@ -526,8 +526,8 @@ serve(async (req) => {
         console.log("   ✅ items[0].description corrigido para:", checkoutData.items[0].description);
       }
       
-      if (checkoutData.customerData.name.length > 100) {
-        checkoutData.customerData.name = checkoutData.customerData.name.substring(0, 100);
+      if (checkoutData.customerData.name.length > 30) {
+        checkoutData.customerData.name = checkoutData.customerData.name.substring(0, 30);
         console.log("   ✅ customerData.name corrigido para:", checkoutData.customerData.name);
       }
       
