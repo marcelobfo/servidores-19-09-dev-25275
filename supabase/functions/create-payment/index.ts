@@ -34,8 +34,9 @@ serve(async (req) => {
 
     // Helper function to truncate name to Asaas limit (max 30 characters)
     const truncateName = (name: string, maxLength: number = 30): string => {
-      if (name.length <= maxLength) return name;
-      return name.substring(0, maxLength - 3) + '...';
+      const trimmed = name.trim();
+      if (trimmed.length <= maxLength) return trimmed;
+      return trimmed.substring(0, maxLength); // SEM "..." para não exceder limite
     };
 
     // Validate request has body
@@ -290,6 +291,23 @@ serve(async (req) => {
       ...(validPhone && { phone: validPhone })
     };
 
+    // ✅ VALIDAÇÃO CRÍTICA - Garantir que customerData.name NUNCA exceda 30 caracteres
+    console.log('=== VALIDAÇÃO CUSTOMERDATA ===');
+    console.log('customerData.name:', customerData.name, '| Length:', customerData.name.length);
+    console.log('customerData.email:', customerData.email, '| Length:', customerData.email.length);
+    console.log('customerData.cpfCnpj:', customerData.cpfCnpj, '| Length:', customerData.cpfCnpj.length);
+    if (customerData.phone) {
+      console.log('customerData.phone:', customerData.phone, '| Length:', customerData.phone.length);
+    }
+
+    // Garantir que name NUNCA exceda 30 caracteres
+    if (customerData.name.length > 30) {
+      console.error('❌ CRÍTICO: customerData.name excede 30 chars, truncando...');
+      customerData.name = customerData.name.substring(0, 30);
+      console.log('✅ customerData.name corrigido para:', customerData.name);
+    }
+    console.log('==============================');
+
     console.log('Creating customer with data:', customerData);
 
     console.log('Making request to Asaas API - Create Customer');
@@ -346,6 +364,13 @@ serve(async (req) => {
       description: 'Pagamento curso', // Fixo - 15 caracteres
       postalService: false
     };
+
+    // ✅ VALIDAÇÃO PAYMENTDATA
+    console.log('=== VALIDAÇÃO PAYMENTDATA ===');
+    console.log('description:', paymentData.description, '| Length:', paymentData.description.length);
+    console.log('value:', paymentData.value);
+    console.log('dueDate:', paymentData.dueDate);
+    console.log('==============================');
 
     console.log('Creating payment with data:', paymentData);
 
