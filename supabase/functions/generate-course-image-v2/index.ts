@@ -40,7 +40,7 @@ serve(async (req) => {
       .single();
     
     if (settingsError || !settings?.gemini_api_key) {
-      console.error('Gemini API key not found:', settingsError);
+      console.error('❌ Gemini API key not found:', settingsError);
       return new Response(
         JSON.stringify({ 
           error: 'Chave da API do Gemini não configurada. Configure em Sistema > Integração com IA (Gemini).' 
@@ -50,7 +50,18 @@ serve(async (req) => {
     }
     
     const GEMINI_API_KEY = settings.gemini_api_key;
-    console.log('Gemini API key found:', GEMINI_API_KEY.substring(0, 10) + '...');
+    console.log('✅ Gemini API key found:', GEMINI_API_KEY.substring(0, 10) + '...');
+    
+    // Validar formato da API key
+    if (!GEMINI_API_KEY.startsWith('AIza')) {
+      console.error('❌ Invalid Gemini API key format. Key should start with "AIza"');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Chave da API do Gemini inválida. A chave deve começar com "AIza". Verifique a configuração em Sistema.' 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Construir prompt otimizado para capa de curso
     const prompt = `Crie uma capa de curso educacional profissional e moderna para:
@@ -94,31 +105,60 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Google Gemini API error:', response.status, errorText);
-      console.error('Full error response:', errorText);
+      console.error('❌ Gemini API error:');
+      console.error('📍 Status:', response.status);
+      console.error('📍 Status Text:', response.statusText);
+      console.error('📍 Error Body:', errorText);
+      console.error('📍 Request URL:', geminiUrl.replace(GEMINI_API_KEY, 'API_KEY_HIDDEN'));
+      console.error('📍 Model:', 'gemini-2.5-flash-image-preview');
+      
+      // Tentar parsear como JSON para mais detalhes
+      let errorDetails;
+      try {
+        errorDetails = JSON.parse(errorText);
+        console.error('📍 Error Details (JSON):', JSON.stringify(errorDetails, null, 2));
+      } catch {
+        console.error('📍 Error is not in JSON format');
+      }
       
       if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'Limite de requisições atingido. Tente novamente em alguns instantes.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return new Response(JSON.stringify({ 
+          error: 'Limite de requisições atingido. Tente novamente em alguns instantes.' 
+        }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
       }
       
       if (response.status === 400) {
-        return new Response(
-          JSON.stringify({ error: 'Chave da API do Gemini inválida. Verifique a configuração em Sistema.' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return new Response(JSON.stringify({ 
+          error: 'Chave da API do Gemini inválida ou modelo não disponível. Verifique a configuração em Sistema.',
+          hint: errorDetails?.error?.message || errorText
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      if (response.status === 404) {
+        return new Response(JSON.stringify({ 
+          error: 'Modelo de geração de imagens não encontrado. O modelo "gemini-2.5-flash-image-preview" pode não estar disponível.',
+          hint: 'Verifique se a API key tem permissões para geração de imagens'
+        }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
       }
 
-      return new Response(
-        JSON.stringify({ 
-          error: 'Erro ao gerar imagem com o Gemini.',
-          details: errorText,
-          status: response.status
-        }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ 
+        error: 'Erro ao gerar imagem com o Gemini.',
+        details: errorDetails?.error?.message || errorText || response.statusText,
+        status: response.status,
+        model: 'gemini-2.5-flash-image-preview'
+      }), {
+        status: response.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     const data = await response.json();
