@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,20 +27,30 @@ serve(async (req) => {
       );
     }
 
-    // Usar Lovable AI Gateway (chave já configurada automaticamente)
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    // Criar cliente Supabase para buscar a API key do Gemini
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    console.log('LOVABLE_API_KEY exists:', !!LOVABLE_API_KEY);
+    // Buscar gemini_api_key da tabela system_settings
+    console.log('Fetching Gemini API key from system_settings...');
+    const { data: settings, error: settingsError } = await supabase
+      .from('system_settings')
+      .select('gemini_api_key')
+      .single();
     
-    if (!LOVABLE_API_KEY) {
-      console.error('Lovable API key not configured');
+    if (settingsError || !settings?.gemini_api_key) {
+      console.error('Gemini API key not found:', settingsError);
       return new Response(
-        JSON.stringify({ error: 'Configuração do sistema incompleta' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ 
+          error: 'Chave da API do Gemini não configurada. Configure em Sistema > Integração com IA (Gemini).' 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    console.log('Using Lovable AI for image generation');
+    const GEMINI_API_KEY = settings.gemini_api_key;
+    console.log('Gemini API key found:', GEMINI_API_KEY.substring(0, 10) + '...');
 
     // Construir prompt otimizado para capa de curso
     const prompt = `Crie uma capa de curso educacional profissional e moderna para:
@@ -53,39 +64,37 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
     console.log('Generating image for course:', courseName);
     console.log('Using prompt:', prompt);
 
-    // Chamar Lovable AI Gateway para geração de imagem
+    // Chamar API direta do Google Gemini
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${GEMINI_API_KEY}`;
+    
     const requestBody = {
-      model: "google/gemini-2.5-flash-image-preview",
-      messages: [
+      contents: [
         {
-          role: "user",
-          content: prompt
+          parts: [
+            {
+              text: prompt
+            }
+          ]
         }
-      ],
-      modalities: ["image", "text"]
+      ]
     };
     
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
-    console.log('Calling Lovable AI Gateway...');
+    console.log('Calling Google Gemini API...');
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      }
-    );
+    const response = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    });
     
     console.log('Response status:', response.status);
-    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Lovable AI Gateway error:', response.status, errorText);
+      console.error('Google Gemini API error:', response.status, errorText);
       console.error('Full error response:', errorText);
       
       if (response.status === 429) {
@@ -95,16 +104,16 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
         );
       }
       
-      if (response.status === 402) {
+      if (response.status === 400) {
         return new Response(
-          JSON.stringify({ error: 'Créditos insuficientes. Adicione créditos em Settings → Workspace → Usage.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ error: 'Chave da API do Gemini inválida. Verifique a configuração em Sistema.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
       return new Response(
         JSON.stringify({ 
-          error: 'Erro ao gerar imagem com IA. Tente novamente.',
+          error: 'Erro ao gerar imagem com o Gemini.',
           details: errorText,
           status: response.status
         }),
@@ -113,11 +122,11 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
     }
 
     const data = await response.json();
-    console.log('Lovable AI response received');
+    console.log('Google Gemini response received');
     console.log('Full response structure:', JSON.stringify(data, null, 2));
 
-    // Extrair imagem do formato Lovable AI
-    const imageBase64 = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    // Extrair imagem do formato do Google Gemini
+    const imageBase64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     
     console.log('Image extraction result:', {
       hasImage: !!imageBase64,
@@ -139,10 +148,13 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
       );
     }
     
+    // Adicionar prefixo data:image/png;base64,
+    const imageUrl = `data:image/png;base64,${imageBase64}`;
+    
     console.log('Image generated successfully');
 
     return new Response(
-      JSON.stringify({ imageUrl: imageBase64 }),
+      JSON.stringify({ imageUrl }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

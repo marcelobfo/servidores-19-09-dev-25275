@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
 
 // Helper to safely truncate strings
-const truncateString = (str, maxLength) => {
+const truncateString = (str: string, maxLength: number): string => {
   if (!str || typeof str !== "string") return str;
   return str.length > maxLength ? str.substring(0, maxLength) : str;
 };
@@ -298,7 +298,6 @@ serve(async (req) => {
     }
 
     const customerData = {
-      name: truncateString(preEnrollment.full_name.trim(), 30),
       name: truncateName(preEnrollment.full_name.trim()),
       email: preEnrollment.email.trim(),
       cpfCnpj: cleanedCPF,
