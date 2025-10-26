@@ -1,147 +1,110 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
 serve(async (req) => {
-  console.log("🚀 generate-course-image-v2 function started");
-  if (req.method === "OPTIONS") {
-    console.log("✅ CORS preflight request handled");
-    return new Response(null, {
-      headers: corsHeaders,
-    });
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
   }
+
   try {
-    const { courseName, areaName, description } = await req.json();
-    console.log("📥 Request received:", {
-      courseName,
-      areaName,
-      hasDescription: !!description,
+    const { prompt, type = "course", courseName, areaName } = await req.json();
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY is not configured');
+    }
+
+    // Build context-aware prompt based on type
+    let fullPrompt = "";
+    
+    if (type === "course" && courseName) {
+      fullPrompt = `Create a modern, professional course banner image for "${courseName}"${areaName ? ` in the ${areaName} area` : ''}. 
+      Style: Dark purple/magenta gradient background with abstract 3D shapes, modern tech aesthetic, vibrant colors, high quality, professional. 
+      Include subtle abstract elements that represent learning and technology. 
+      The image should be suitable as a hero banner for an online course. Ultra high resolution. 16:9 aspect ratio.`;
+    } else if (type === "grid") {
+      fullPrompt = `Create a modern promotional banner for multiple online courses. 
+      Style: Dark purple/magenta gradient background, abstract 3D geometric shapes floating, vibrant tech aesthetic, modern design. 
+      Include elements that represent education, innovation, and digital learning. 
+      Professional, high quality, ultra high resolution. 16:9 aspect ratio.`;
+    } else if (prompt) {
+      fullPrompt = prompt;
+    } else {
+      throw new Error('Invalid parameters');
+    }
+
+    console.log('Generating image with prompt:', fullPrompt);
+
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-image-preview',
+        messages: [
+          {
+            role: 'user',
+            content: fullPrompt
+          }
+        ],
+        modalities: ['image', 'text']
+      })
     });
-    if (!courseName) {
-      console.error("Course name is required");
-      return new Response(
-        JSON.stringify({
-          error: "Nome do curso é obrigatório",
-        }),
-        {
-          status: 400,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        },
-      );
-    }
-    // ✅ Usa chave da API Gemini configurada no ambiente
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) {
-      console.error("Gemini API key not configured");
-      return new Response(
-        JSON.stringify({
-          error: "Configuração do sistema incompleta. Defina GEMINI_API_KEY no ambiente.",
-        }),
-        {
-          status: 500,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        },
-      );
-    }
-    console.log("Using Google Gemini API for image generation");
-    // 🔹 Cria prompt descritivo
-    const prompt = `
-Crie uma capa de curso educacional moderna e profissional:
 
-Título: ${courseName}
-${areaName ? `Área: ${areaName}` : ""}
-${description ? `Descrição: ${description}` : ""}
-
-Estilo: design gráfico profissional, cores vibrantes e elegantes, composição equilibrada, visual inspirador.
-Formato 16:9, alta resolução, sem texto.
-`;
-    console.log("🧠 Prompt:", prompt);
-    // 🔹 Requisição para Gemini (modelo de imagem)
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateImage?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: {
-            text: prompt,
-          },
-          aspectRatio: "16:9",
-        }),
-      },
-    );
-    console.log("Gemini API status:", response.status);
     if (!response.ok) {
+      if (response.status === 429) {
+        return new Response(JSON.stringify({ 
+          error: 'Rate limit exceeded. Please try again later.' 
+        }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ 
+          error: 'Payment required. Please add credits to your Lovable AI workspace.' 
+        }), {
+          status: 402,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
       const errorText = await response.text();
-      console.error("❌ Gemini API error:", errorText);
-      return new Response(
-        JSON.stringify({
-          error: "Erro ao gerar imagem com a API Gemini.",
-          details: errorText,
-        }),
-        {
-          status: response.status,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      console.error('AI gateway error:', response.status, errorText);
+      throw new Error(`AI gateway error: ${response.status}`);
     }
+
     const data = await response.json();
-    console.log("Gemini response received:", JSON.stringify(data, null, 2));
-    // 🔹 Extrai imagem base64
-    const imageBase64 = data.images?.[0]?.image || null;
-    if (!imageBase64) {
-      console.error("❌ Nenhuma imagem retornada pelo Gemini");
-      return new Response(
-        JSON.stringify({
-          error: "A API Gemini não retornou nenhuma imagem válida.",
-        }),
-        {
-          status: 500,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+
+    if (!imageUrl) {
+      throw new Error('No image generated');
     }
-    console.log("✅ Image generated successfully");
-    return new Response(
-      JSON.stringify({
-        imageUrl: `data:image/png;base64,${imageBase64}`,
-      }),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      },
-    );
+
+    console.log('Image generated successfully');
+
+    return new Response(JSON.stringify({ 
+      imageUrl,
+      prompt: fullPrompt 
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+
   } catch (error) {
-    console.error("💥 Error in generate-course-image-v2:", error);
-    return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "Erro interno ao gerar imagem",
-      }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    console.error('Error in generate-course-image:', error);
+    return new Response(JSON.stringify({ 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
   }
 });
+
+ljasbdibapsbdva´sdnvina´sdv[]
