@@ -1,203 +1,147 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
-
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
 serve(async (req) => {
-  console.log('🚀 generate-course-image function started');
-  
-  if (req.method === 'OPTIONS') {
-    console.log('✅ CORS preflight request handled');
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    const { prompt, type = "course", courseName, areaName } = await req.json();
-    console.log('📥 Request received:', { type, courseName, areaName, hasPrompt: !!prompt });
-    
-    // Criar cliente Supabase para buscar a API key do Gemini
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    // Buscar gemini_api_key da tabela system_settings
-    console.log('Fetching Gemini API key from system_settings...');
-    const { data: settings, error: settingsError } = await supabase
-      .from('system_settings')
-      .select('gemini_api_key')
-      .single();
-    
-    if (settingsError || !settings?.gemini_api_key) {
-      console.error('❌ Gemini API key not found:', settingsError);
-      return new Response(
-        JSON.stringify({ 
-          error: 'Chave da API do Gemini não configurada. Configure em Sistema > Integração com IA (Gemini).' 
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    const GEMINI_API_KEY = settings.gemini_api_key;
-    console.log('✅ Gemini API key found:', GEMINI_API_KEY.substring(0, 10) + '...');
-    
-    // Validar formato da API key
-    if (!GEMINI_API_KEY.startsWith('AIza')) {
-      console.error('❌ Invalid Gemini API key format. Key should start with "AIza"');
-      return new Response(
-        JSON.stringify({ 
-          error: 'Chave da API do Gemini inválida. A chave deve começar com "AIza". Verifique a configuração em Sistema.' 
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Build context-aware prompt based on type
-    let fullPrompt = "";
-    
-    if (type === "course" && courseName) {
-      fullPrompt = `Create a modern, professional course banner image for "${courseName}"${areaName ? ` in the ${areaName} area` : ''}. 
-      Style: Dark purple/magenta gradient background with abstract 3D shapes, modern tech aesthetic, vibrant colors, high quality, professional. 
-      Include subtle abstract elements that represent learning and technology. 
-      The image should be suitable as a hero banner for an online course. Ultra high resolution. 16:9 aspect ratio.`;
-    } else if (type === "grid") {
-      fullPrompt = `Create a modern promotional banner for multiple online courses. 
-      Style: Dark purple/magenta gradient background, abstract 3D geometric shapes floating, vibrant tech aesthetic, modern design. 
-      Include elements that represent education, innovation, and digital learning. 
-      Professional, high quality, ultra high resolution. 16:9 aspect ratio.`;
-    } else if (prompt) {
-      fullPrompt = prompt;
-    } else {
-      throw new Error('Invalid parameters');
-    }
-
-    console.log('Generating image with prompt:', fullPrompt);
-    
-    // Chamar API direta do Google Gemini
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${GEMINI_API_KEY}`;
-    
-    const requestBody = {
-      contents: [
-        {
-          parts: [
-            {
-              text: fullPrompt
-            }
-          ]
-        }
-      ]
-    };
-    
-    console.log('Calling Google Gemini API...');
-    console.log('Request body:', JSON.stringify(requestBody, null, 2));
-
-    const response = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody)
+  console.log("🚀 generate-course-image-v2 function started");
+  if (req.method === "OPTIONS") {
+    console.log("✅ CORS preflight request handled");
+    return new Response(null, {
+      headers: corsHeaders,
     });
+  }
+  try {
+    const { courseName, areaName, description } = await req.json();
+    console.log("📥 Request received:", {
+      courseName,
+      areaName,
+      hasDescription: !!description,
+    });
+    if (!courseName) {
+      console.error("Course name is required");
+      return new Response(
+        JSON.stringify({
+          error: "Nome do curso é obrigatório",
+        }),
+        {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }
+    // ✅ Usa chave da API Gemini configurada no ambiente
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      console.error("Gemini API key not configured");
+      return new Response(
+        JSON.stringify({
+          error: "Configuração do sistema incompleta. Defina GEMINI_API_KEY no ambiente.",
+        }),
+        {
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }
+    console.log("Using Google Gemini API for image generation");
+    // 🔹 Cria prompt descritivo
+    const prompt = `
+Crie uma capa de curso educacional moderna e profissional:
 
-    console.log('Response status:', response.status);
+Título: ${courseName}
+${areaName ? `Área: ${areaName}` : ""}
+${description ? `Descrição: ${description}` : ""}
 
+Estilo: design gráfico profissional, cores vibrantes e elegantes, composição equilibrada, visual inspirador.
+Formato 16:9, alta resolução, sem texto.
+`;
+    console.log("🧠 Prompt:", prompt);
+    // 🔹 Requisição para Gemini (modelo de imagem)
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0:generateImage?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: {
+            text: prompt,
+          },
+          aspectRatio: "16:9",
+        }),
+      },
+    );
+    console.log("Gemini API status:", response.status);
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ Gemini API error:');
-      console.error('📍 Status:', response.status);
-      console.error('📍 Status Text:', response.statusText);
-      console.error('📍 Error Body:', errorText);
-      console.error('📍 Request URL:', geminiUrl.replace(GEMINI_API_KEY, 'API_KEY_HIDDEN'));
-      console.error('📍 Model:', 'gemini-2.5-flash-image-preview');
-      
-      // Tentar parsear como JSON para mais detalhes
-      let errorDetails;
-      try {
-        errorDetails = JSON.parse(errorText);
-        console.error('📍 Error Details (JSON):', JSON.stringify(errorDetails, null, 2));
-      } catch {
-        console.error('📍 Error is not in JSON format');
-      }
-      
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ 
-          error: 'Limite de requisições atingido. Tente novamente em alguns instantes.' 
-        }), {
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-      
-      if (response.status === 400) {
-        return new Response(JSON.stringify({ 
-          error: 'Chave da API do Gemini inválida ou modelo não disponível. Verifique a configuração em Sistema.',
-          hint: errorDetails?.error?.message || errorText
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-      
-      if (response.status === 404) {
-        return new Response(JSON.stringify({ 
-          error: 'Modelo de geração de imagens não encontrado. O modelo "gemini-2.5-flash-image-preview" pode não estar disponível.',
-          hint: 'Verifique se a API key tem permissões para geração de imagens'
-        }), {
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-
-      return new Response(JSON.stringify({ 
-        error: 'Erro ao gerar imagem com o Gemini.',
-        details: errorDetails?.error?.message || errorText || response.statusText,
-        status: response.status,
-        model: 'gemini-2.5-flash-image-preview'
-      }), {
-        status: response.status,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      console.error("❌ Gemini API error:", errorText);
+      return new Response(
+        JSON.stringify({
+          error: "Erro ao gerar imagem com a API Gemini.",
+          details: errorText,
+        }),
+        {
+          status: response.status,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        },
+      );
     }
-
     const data = await response.json();
-    console.log('Google Gemini response received');
-    
-    // Extrair imagem do formato do Google Gemini
-    const imageBase64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-
+    console.log("Gemini response received:", JSON.stringify(data, null, 2));
+    // 🔹 Extrai imagem base64
+    const imageBase64 = data.images?.[0]?.image || null;
     if (!imageBase64) {
-      console.error('Failed to extract image from response');
-      console.error('Response structure:', JSON.stringify(data, null, 2));
-      return new Response(JSON.stringify({ 
-        error: 'Nenhuma imagem foi gerada pela IA.',
-        details: 'A resposta da API não contém dados de imagem'
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      console.error("❌ Nenhuma imagem retornada pelo Gemini");
+      return new Response(
+        JSON.stringify({
+          error: "A API Gemini não retornou nenhuma imagem válida.",
+        }),
+        {
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        },
+      );
     }
-
-    // Adicionar prefixo data:image/png;base64,
-    const imageUrl = `data:image/png;base64,${imageBase64}`;
-    
-    console.log('Image generated successfully');
-
-    return new Response(JSON.stringify({ 
-      imageUrl,
-      prompt: fullPrompt 
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-
+    console.log("✅ Image generated successfully");
+    return new Response(
+      JSON.stringify({
+        imageUrl: `data:image/png;base64,${imageBase64}`,
+      }),
+      {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      },
+    );
   } catch (error) {
-    console.error('Error in generate-course-image:', error);
-    return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    console.error("💥 Error in generate-course-image-v2:", error);
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Erro interno ao gerar imagem",
+      }),
+      {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      },
+    );
   }
 });
