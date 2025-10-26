@@ -66,7 +66,7 @@ Formato 16:9, alta resolução, sem texto.
     console.log("🧠 Prompt:", prompt);
     // 🔹 Requisição para Gemini (modelo de imagem)
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0:generateImage?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateImage?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
