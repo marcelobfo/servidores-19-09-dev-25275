@@ -82,21 +82,17 @@ serve(async (req) => {
 
     console.log('🧠 Full prompt:', fullPrompt);
 
-    // Call Google Gemini API
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`;
-    console.log('🌐 Calling Gemini API...');
+    // Call Google Gemini API for image generation
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${GEMINI_API_KEY}`;
+    console.log('🌐 Calling Gemini Imagen API...');
 
     const requestBody = {
-      contents: [{
-        parts: [{
-          text: fullPrompt
-        }]
+      instances: [{
+        prompt: fullPrompt
       }],
-      generationConfig: {
-        temperature: 0.9,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 8192,
+      parameters: {
+        sampleCount: 1,
+        aspectRatio: "16:9"
       }
     };
 
@@ -167,8 +163,8 @@ serve(async (req) => {
     const data = await response.json();
     console.log('📦 Full Gemini response structure:', JSON.stringify(data, null, 2));
 
-    // Extract image from response
-    const imageBase64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    // Extract image from response (Imagen API format)
+    const imageBase64 = data.predictions?.[0]?.bytesBase64Encoded;
 
     if (!imageBase64) {
       console.error('❌ No image data in response');
