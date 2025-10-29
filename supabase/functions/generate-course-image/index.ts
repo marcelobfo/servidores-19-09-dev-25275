@@ -19,41 +19,20 @@ serve(async (req) => {
     const { prompt, type = "course", courseName, areaName } = await req.json();
     console.log('📥 Request received:', { type, courseName, areaName, hasPrompt: !!prompt });
 
-    // Create Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Fetch gemini_api_key from system_settings
-    console.log('📡 Fetching Gemini API key from system_settings...');
-    const { data: settings, error: settingsError } = await supabase
-      .from('system_settings')
-      .select('gemini_api_key')
-      .single();
-
-    if (settingsError || !settings?.gemini_api_key) {
-      console.error('❌ Gemini API key not found in system_settings:', settingsError);
+    // Get Lovable API key (automatically available in Supabase environment)
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    
+    if (!LOVABLE_API_KEY) {
+      console.error('❌ LOVABLE_API_KEY not found');
       return new Response(JSON.stringify({ 
-        error: 'Chave da API do Gemini não configurada. Configure em Sistema > Integração com IA (Gemini).' 
+        error: 'Chave da API do Lovable AI não está configurada.' 
       }), {
-        status: 400,
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    const GEMINI_API_KEY = settings.gemini_api_key;
-    console.log('✅ Gemini API key found:', GEMINI_API_KEY.substring(0, 10) + '...');
-
-    // Validate API key format
-    if (!GEMINI_API_KEY.startsWith('AIza')) {
-      console.error('❌ Invalid Gemini API key format');
-      return new Response(JSON.stringify({ 
-        error: 'Chave da API do Gemini inválida. A chave deve começar com "AIza".' 
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+    console.log('✅ Lovable API key found');
 
     // Build context-aware prompt based on type
     let fullPrompt = "";
@@ -82,33 +61,32 @@ serve(async (req) => {
 
     console.log('🧠 Full prompt:', fullPrompt);
 
-    // Call Google Gemini API for image generation
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${GEMINI_API_KEY}`;
-    console.log('🌐 Calling Gemini Imagen API...');
+    // Call Lovable AI for image generation
+    const lovableUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
+    console.log('🌐 Calling Lovable AI for image generation...');
 
     const requestBody = {
-      instances: [{
-        prompt: fullPrompt
-      }],
-      parameters: {
-        sampleCount: 1,
-        aspectRatio: "16:9"
-      }
+      model: "google/gemini-2.5-flash-image-preview",
+      messages: [
+        { role: "user", content: fullPrompt }
+      ],
+      modalities: ["image", "text"]
     };
 
-    const response = await fetch(geminiUrl, {
+    const response = await fetch(lovableUrl, {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody)
     });
 
-    console.log('📡 Gemini API response status:', response.status);
+    console.log('📡 Lovable AI response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ Gemini API error:');
+      console.error('❌ Lovable AI error:');
       console.error('📍 Status:', response.status);
       console.error('📍 Status Text:', response.statusText);
       console.error('📍 Error Body:', errorText);
@@ -123,35 +101,35 @@ serve(async (req) => {
 
       if (response.status === 429) {
         return new Response(JSON.stringify({ 
-          error: 'Limite de requisições atingido. Tente novamente em alguns instantes.' 
+          error: 'Limite de requisições do Lovable AI atingido. Tente novamente em alguns instantes.' 
         }), { 
           status: 429, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         });
       }
       
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ 
+          error: 'Créditos insuficientes no Lovable AI. Adicione créditos em Settings > Workspace > Usage.',
+          details: errorDetails?.error?.message || errorText
+        }), { 
+          status: 402, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
+      
       if (response.status === 400) {
         return new Response(JSON.stringify({ 
-          error: 'Chave da API do Gemini inválida ou modelo não disponível.',
+          error: 'Requisição inválida para o Lovable AI.',
           details: errorDetails?.error?.message || errorText
         }), { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         });
       }
-      
-      if (response.status === 404) {
-        return new Response(JSON.stringify({ 
-          error: 'Modelo de geração de imagens não encontrado.',
-          hint: 'Verifique se a API key tem permissões para geração de imagens'
-        }), { 
-          status: 404, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        });
-      }
 
       return new Response(JSON.stringify({ 
-        error: 'Erro ao gerar imagem com o Gemini.',
+        error: 'Erro ao gerar imagem com o Lovable AI.',
         details: errorDetails?.error?.message || errorText,
         status: response.status
       }), { 
@@ -161,12 +139,12 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    console.log('📦 Full Gemini response structure:', JSON.stringify(data, null, 2));
+    console.log('📦 Full Lovable AI response structure:', JSON.stringify(data, null, 2));
 
-    // Extract image from response (Imagen API format)
-    const imageBase64 = data.predictions?.[0]?.bytesBase64Encoded;
+    // Extract image from response (Lovable AI format)
+    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
 
-    if (!imageBase64) {
+    if (!imageUrl) {
       console.error('❌ No image data in response');
       return new Response(JSON.stringify({ 
         error: 'Nenhuma imagem foi gerada pela IA.',
@@ -178,9 +156,7 @@ serve(async (req) => {
       });
     }
 
-    console.log('✅ Image generated successfully');
-
-    const imageUrl = `data:image/png;base64,${imageBase64}`;
+    console.log('✅ Image generated successfully with Lovable AI');
 
     return new Response(JSON.stringify({ 
       imageUrl,
