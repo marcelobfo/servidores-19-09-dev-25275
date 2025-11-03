@@ -37,7 +37,8 @@ serve(async (req) => {
     const { data: settings, error: settingsError } = await supabase
       .from('system_settings')
       .select('gemini_api_key')
-      .single();
+      .limit(1)
+      .maybeSingle();
     
     if (settingsError || !settings?.gemini_api_key) {
       console.error('❌ Gemini API key not found:', settingsError);
@@ -63,54 +64,46 @@ serve(async (req) => {
       );
     }
 
-    // Construir prompt otimizado para capa de curso
-    const prompt = `Crie uma capa de curso educacional profissional e moderna para:
+    // Construir prompt otimizado para capa de curso (Imagen 3)
+    const prompt = `Crie uma capa de curso profissional e moderna com proporção 16:9.
 
 Título: ${courseName}
 ${areaName ? `Área: ${areaName}` : ''}
 ${description ? `Descrição: ${description}` : ''}
 
-Estilo: Design gráfico profissional para curso online, cores vibrantes mas elegantes, elementos visuais relacionados ao tema educacional, composição equilibrada e atraente. A imagem deve ser apropriada para uma capa de curso em uma plataforma de educação. Proporção 16:9.`;
+Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícones e elementos educacionais, iluminação suave, composição equilibrada. A imagem deve parecer uma thumbnail premium de curso em plataforma de ensino.`;
 
-    console.log('Generating image for course:', courseName);
-    console.log('Using prompt:', prompt);
+    console.log('🎨 Generating image for course:', courseName);
 
-    // Chamar API direta do Google Gemini
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${GEMINI_API_KEY}`;
+    // Chamar API do Google Imagen 3
+    const imagenUrl = 'https://generativelanguage.googleapis.com/v1beta/models/imagegeneration:generateImage';
     
     const requestBody = {
-      contents: [
-        {
-          parts: [
-            {
-              text: prompt
-            }
-          ]
-        }
-      ]
+      prompt: {
+        text: prompt
+      }
     };
     
-    console.log('Request body:', JSON.stringify(requestBody, null, 2));
-    console.log('Calling Google Gemini API...');
+    console.log('📤 Calling Google Imagen 3 API...');
 
-    const response = await fetch(geminiUrl, {
+    const response = await fetch(imagenUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-goog-api-key': GEMINI_API_KEY
       },
       body: JSON.stringify(requestBody)
     });
     
-    console.log('Response status:', response.status);
+    console.log('📡 Response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ Gemini API error:');
+      console.error('❌ Imagen API error:');
       console.error('📍 Status:', response.status);
       console.error('📍 Status Text:', response.statusText);
       console.error('📍 Error Body:', errorText);
-      console.error('📍 Request URL:', geminiUrl.replace(GEMINI_API_KEY, 'API_KEY_HIDDEN'));
-      console.error('📍 Model:', 'gemini-2.5-flash-image-preview');
+      console.error('📍 Model:', 'imagegeneration');
       
       // Tentar parsear como JSON para mais detalhes
       let errorDetails;
@@ -142,7 +135,7 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
       
       if (response.status === 404) {
         return new Response(JSON.stringify({ 
-          error: 'Modelo de geração de imagens não encontrado. O modelo "gemini-2.5-flash-image-preview" pode não estar disponível.',
+          error: 'Modelo de geração de imagens não encontrado. O modelo "imagegeneration" pode não estar disponível.',
           hint: 'Verifique se a API key tem permissões para geração de imagens'
         }), {
           status: 404,
@@ -151,10 +144,10 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
       }
 
       return new Response(JSON.stringify({ 
-        error: 'Erro ao gerar imagem com o Gemini.',
+        error: 'Erro ao gerar imagem com o Imagen 3.',
         details: errorDetails?.error?.message || errorText || response.statusText,
         status: response.status,
-        model: 'gemini-2.5-flash-image-preview'
+        model: 'imagegeneration'
       }), {
         status: response.status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -162,20 +155,19 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
     }
 
     const data = await response.json();
-    console.log('Google Gemini response received');
-    console.log('Full response structure:', JSON.stringify(data, null, 2));
+    console.log('✅ Google Imagen 3 response received');
 
-    // Extrair imagem do formato do Google Gemini
-    const imageBase64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    // Extrair imagem do formato do Google Imagen 3
+    const imageBase64 = data?.images?.[0]?.data;
     
-    console.log('Image extraction result:', {
+    console.log('📸 Image extraction result:', {
       hasImage: !!imageBase64,
       dataLength: imageBase64 ? imageBase64.length : 0
     });
 
     if (!imageBase64) {
-      console.error('Failed to extract image from response');
-      console.error('Response structure:', JSON.stringify(data, null, 2));
+      console.error('❌ Failed to extract image from response');
+      console.error('📍 Response keys:', Object.keys(data));
       
       const errorMessage = data.error?.message;
       
@@ -191,10 +183,13 @@ Estilo: Design gráfico profissional para curso online, cores vibrantes mas eleg
     // Adicionar prefixo data:image/png;base64,
     const imageUrl = `data:image/png;base64,${imageBase64}`;
     
-    console.log('Image generated successfully');
+    console.log('✅ Image generated successfully with Google Imagen 3');
 
     return new Response(
-      JSON.stringify({ imageUrl }),
+      JSON.stringify({ 
+        imageUrl,
+        model_used: 'imagen-3.0-latest'
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
