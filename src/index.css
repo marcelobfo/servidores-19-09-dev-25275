@@ -148,6 +148,26 @@ All colors MUST be HSL.
   min-height: 120px;
 }
 
+/* Force all content inside editor to be visible */
+.ql-editor * {
+  color: hsl(var(--foreground)) !important;
+}
+
+.ql-editor p,
+.ql-editor span,
+.ql-editor div,
+.ql-editor h1,
+.ql-editor h2,
+.ql-editor h3,
+.ql-editor h4,
+.ql-editor h5,
+.ql-editor h6,
+.ql-editor strong,
+.ql-editor em,
+.ql-editor u {
+  color: hsl(var(--foreground)) !important;
+}
+
 .ql-toolbar .ql-stroke {
   stroke: hsl(var(--foreground)) !important;
 }
@@ -158,6 +178,19 @@ All colors MUST be HSL.
 
 .ql-toolbar .ql-picker-label {
   color: hsl(var(--foreground)) !important;
+}
+
+.ql-toolbar .ql-picker-options {
+  background: hsl(var(--background)) !important;
+  border-color: hsl(var(--border)) !important;
+}
+
+.ql-toolbar .ql-picker-item {
+  color: hsl(var(--foreground)) !important;
+}
+
+.ql-toolbar .ql-picker-item:hover {
+  background: hsl(var(--muted)) !important;
 }
 
 .ql-editor.ql-blank::before {
