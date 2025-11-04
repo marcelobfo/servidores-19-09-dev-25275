@@ -168,6 +168,17 @@ All colors MUST be HSL.
   color: hsl(var(--foreground)) !important;
 }
 
+/* Remove inline color styles that conflict with theme */
+.ql-editor [style*="color"] {
+  color: hsl(var(--foreground)) !important;
+}
+
+.ql-editor span[style*="color"],
+.ql-editor p[style*="color"],
+.ql-editor div[style*="color"] {
+  color: inherit !important;
+}
+
 .ql-toolbar .ql-stroke {
   stroke: hsl(var(--foreground)) !important;
 }

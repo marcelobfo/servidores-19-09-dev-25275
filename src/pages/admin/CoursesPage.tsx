@@ -551,13 +551,17 @@ setEditingCourse(null);
                     toolbar: [
                       [{ 'header': [1, 2, 3, false] }],
                       ['bold', 'italic', 'underline', 'strike'],
-                      [{ 'color': [] }, { 'background': [] }],
+                      [{ 'background': [] }],
                       [{ 'list': 'ordered'}, { 'list': 'bullet' }],
                       [{ 'align': [] }],
                       ['link', 'blockquote'],
                       ['clean']
                     ]
                   }}
+                  formats={[
+                    'header', 'bold', 'italic', 'underline', 'strike',
+                    'background', 'list', 'bullet', 'align', 'link', 'blockquote'
+                  ]}
                   className="bg-background mb-4"
                 />
               </div>
@@ -575,7 +579,7 @@ setEditingCourse(null);
                       [{ 'font': [] }],
                       [{ 'size': ['small', false, 'large', 'huge'] }],
                       ['bold', 'italic', 'underline', 'strike'],
-                      [{ 'color': [] }, { 'background': [] }],
+                      [{ 'background': [] }],
                       [{ 'script': 'sub'}, { 'script': 'super' }],
                       [{ 'list': 'ordered'}, { 'list': 'bullet' }, { 'indent': '-1'}, { 'indent': '+1' }],
                       [{ 'direction': 'rtl' }, { 'align': [] }],
@@ -583,6 +587,11 @@ setEditingCourse(null);
                       ['clean']
                     ]
                   }}
+                  formats={[
+                    'header', 'font', 'size', 'bold', 'italic', 'underline', 'strike',
+                    'background', 'script', 'list', 'bullet', 'indent', 'direction', 'align',
+                    'link', 'image', 'video', 'blockquote', 'code-block'
+                  ]}
                   className="bg-background mb-4"
                 />
               </div>
