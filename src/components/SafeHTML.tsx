@@ -26,13 +26,15 @@ export const SafeHTML = ({ html, className = "" }: SafeHTMLProps) => {
     <div 
       ref={contentRef}
       className={`
-        prose prose-slate dark:prose-invert max-w-none
+        prose dark:prose-invert max-w-none
         prose-p:text-foreground prose-p:leading-relaxed
         prose-headings:text-foreground
         prose-strong:text-foreground
         prose-ul:text-foreground
         prose-ol:text-foreground
         prose-li:text-foreground
+        prose-a:text-primary
+        [&_*]:text-foreground
         [&_.ql-align-justify]:text-justify
         [&_.ql-align-center]:text-center
         [&_.ql-align-right]:text-right

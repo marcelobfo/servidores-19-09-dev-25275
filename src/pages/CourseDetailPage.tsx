@@ -222,9 +222,12 @@ const CourseDetailPage = () => {
               </h1>
               
               {course.brief_description && (
-                <p className="text-lg text-white/90 max-w-2xl leading-relaxed">
-                  {course.brief_description}
-                </p>
+                <div className="text-lg text-white/90 max-w-2xl leading-relaxed">
+                  <SafeHTML 
+                    html={course.brief_description}
+                    className="[&_p]:text-white/90 [&_p]:leading-relaxed [&_*]:text-white/90"
+                  />
+                </div>
               )}
               
               <div className="flex flex-wrap gap-4 pt-2">
@@ -269,16 +272,20 @@ const CourseDetailPage = () => {
             {/* About Course */}
             <div>
               <h2 className="text-3xl font-bold mb-6 text-foreground">Sobre o Curso</h2>
-              {course.description && (
-                <Card>
-                  <CardContent className="pt-6">
+              <Card>
+                <CardContent className="pt-6">
+                  {course.description ? (
                     <SafeHTML 
                       html={course.description} 
                       className="text-base"
                     />
-                  </CardContent>
-                </Card>
-              )}
+                  ) : (
+                    <p className="text-muted-foreground text-center py-8">
+                      Nenhuma descrição disponível para este curso.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
             </div>
 
             {/* Modules */}
