@@ -276,6 +276,23 @@ All colors MUST be HSL.
   @apply text-primary hover:underline;
 }
 
+/* Force remove inline color styles from rendered content */
+.prose [style*="color"],
+.prose p[style*="color"],
+.prose span[style*="color"],
+.prose div[style*="color"],
+.prose h1[style*="color"],
+.prose h2[style*="color"],
+.prose h3[style*="color"],
+.prose h4[style*="color"],
+.prose h5[style*="color"],
+.prose h6[style*="color"],
+.prose strong[style*="color"],
+.prose em[style*="color"],
+.prose li[style*="color"] {
+  color: hsl(var(--foreground)) !important;
+}
+
 .prose img {
   @apply rounded-lg max-w-full h-auto mb-4;
 }
