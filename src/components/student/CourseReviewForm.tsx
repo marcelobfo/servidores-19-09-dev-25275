@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Star } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
+import { CourseReviewInsert, CourseReviewUpdate } from "@/types/course-reviews";
 
 const reviewSchema = z.object({
   rating: z.number().min(1, "Selecione uma avaliação").max(5),
@@ -66,12 +67,14 @@ export function CourseReviewForm({
     try {
       if (existingReview) {
         // Atualizar avaliação existente
-        const { error } = await supabase
+        const updateData: CourseReviewUpdate = {
+          rating,
+          comment: comment || null,
+        };
+        
+        const { error } = await (supabase as any)
           .from('course_reviews')
-          .update({
-            rating,
-            comment: comment || null,
-          })
+          .update(updateData)
           .eq('id', existingReview.id);
 
         if (error) throw error;
@@ -79,15 +82,17 @@ export function CourseReviewForm({
         setIsEditing(false);
       } else {
         // Criar nova avaliação
-        const { error } = await supabase
+        const insertData: CourseReviewInsert = {
+          course_id: courseId,
+          enrollment_id: enrollmentId,
+          user_id: user.id,
+          rating,
+          comment: comment || null,
+        };
+        
+        const { error } = await (supabase as any)
           .from('course_reviews')
-          .insert({
-            course_id: courseId,
-            enrollment_id: enrollmentId,
-            user_id: user.id,
-            rating,
-            comment: comment || null,
-          });
+          .insert(insertData);
 
         if (error) throw error;
         toast.success("Avaliação enviada com sucesso!");
@@ -109,7 +114,7 @@ export function CourseReviewForm({
 
     setLoading(true);
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('course_reviews')
         .delete()
         .eq('id', existingReview.id);

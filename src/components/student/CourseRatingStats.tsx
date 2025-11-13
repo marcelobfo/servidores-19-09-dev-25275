@@ -3,16 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Star } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-
-interface RatingStats {
-  average_rating: number;
-  total_reviews: number;
-  five_star_count: number;
-  four_star_count: number;
-  three_star_count: number;
-  two_star_count: number;
-  one_star_count: number;
-}
+import { CourseReviewStats as RatingStats } from "@/types/course-reviews";
 
 interface CourseRatingStatsProps {
   courseId: string;
@@ -28,7 +19,7 @@ export function CourseRatingStats({ courseId }: CourseRatingStatsProps) {
 
   const fetchStats = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('course_review_stats')
         .select('*')
         .eq('course_id', courseId)
@@ -36,7 +27,7 @@ export function CourseRatingStats({ courseId }: CourseRatingStatsProps) {
 
       if (error && error.code !== 'PGRST116') throw error;
       
-      setStats(data);
+      setStats(data as RatingStats);
     } catch (error) {
       console.error("Error fetching rating stats:", error);
     } finally {

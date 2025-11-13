@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Star, MessageSquare, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { CourseReviewWithProfile } from "@/types/course-reviews";
 
 interface Review {
   id: string;
@@ -41,7 +42,7 @@ export function CourseReviewList({ courseId }: CourseReviewListProps) {
       setLoading(true);
 
       // Query base
-      let query = supabase
+      let query = (supabase as any)
         .from('course_reviews')
         .select(`
           id,
@@ -83,7 +84,7 @@ export function CourseReviewList({ courseId }: CourseReviewListProps) {
 
       if (error) throw error;
 
-      setReviews(data || []);
+      setReviews((data || []) as Review[]);
       setTotalReviews(count || 0);
     } catch (error) {
       console.error("Error fetching reviews:", error);
