@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Image as ImageIcon, Globe, Clock, CheckCircle, XCircle } from "lucide-react";
+import { Upload, Image as ImageIcon, Globe, Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { testWebhook } from "@/lib/webhookService";
 
 interface SystemSettings {
@@ -43,6 +43,8 @@ const SystemSettingsPage = () => {
   const [uploading, setUploading] = useState<string | null>(null);
   const [webhookLogs, setWebhookLogs] = useState<WebhookLog[]>([]);
   const [testingWebhook, setTestingWebhook] = useState(false);
+  const [testingGeminiKey, setTestingGeminiKey] = useState(false);
+  const [geminiKeyStatus, setGeminiKeyStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -132,18 +134,61 @@ const SystemSettingsPage = () => {
         description: result.message,
         variant: result.success ? "default" : "destructive"
       });
-      
-      if (result.success) {
-        fetchWebhookLogs(); // Refresh logs after test
-      }
     } catch (error) {
       toast({
         title: "Erro",
-        description: "Erro ao testar webhook",
+        description: error instanceof Error ? error.message : "Erro ao testar webhook",
         variant: "destructive"
       });
     } finally {
       setTestingWebhook(false);
+      fetchWebhookLogs();
+    }
+  };
+
+  const handleTestGeminiKey = async () => {
+    if (!settings?.gemini_api_key) {
+      toast({
+        title: "Erro",
+        description: "Digite uma API Key primeiro",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setTestingGeminiKey(true);
+    setGeminiKeyStatus('idle');
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('test-gemini-api-key', {
+        body: { apiKey: settings.gemini_api_key }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setGeminiKeyStatus('success');
+        toast({
+          title: "✅ API Key Válida",
+          description: data.message
+        });
+      } else {
+        setGeminiKeyStatus('error');
+        toast({
+          title: "❌ API Key Inválida",
+          description: data.message,
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      setGeminiKeyStatus('error');
+      toast({
+        title: "❌ Erro ao testar",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive"
+      });
+    } finally {
+      setTestingGeminiKey(false);
     }
   };
 
@@ -518,13 +563,51 @@ const SystemSettingsPage = () => {
             <div>
               <Label htmlFor="gemini_api_key">Google AI Studio API Key</Label>
               <div className="space-y-2">
-                <Input
-                  id="gemini_api_key"
-                  type="password"
-                  value={settings.gemini_api_key || ""}
-                  onChange={(e) => updateField("gemini_api_key", e.target.value)}
-                  placeholder="Digite sua chave API do Google AI Studio"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="gemini_api_key"
+                    type="password"
+                    value={settings.gemini_api_key || ""}
+                    onChange={(e) => {
+                      updateField("gemini_api_key", e.target.value);
+                      setGeminiKeyStatus('idle');
+                    }}
+                    placeholder="Digite sua chave API do Google AI Studio"
+                    className="flex-1"
+                  />
+                  <Button
+                    onClick={handleTestGeminiKey}
+                    disabled={testingGeminiKey || !settings.gemini_api_key}
+                    variant="outline"
+                    size="default"
+                  >
+                    {testingGeminiKey ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Testando...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Testar
+                      </>
+                    )}
+                  </Button>
+                </div>
+                
+                {geminiKeyStatus === 'success' && (
+                  <Badge variant="default" className="bg-green-500">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    API Key válida e funcionando
+                  </Badge>
+                )}
+                {geminiKeyStatus === 'error' && (
+                  <Badge variant="destructive">
+                    <XCircle className="h-3 w-3 mr-1" />
+                    API Key inválida ou com erro
+                  </Badge>
+                )}
+                
                 <p className="text-xs text-muted-foreground">
                   Modelo: <strong>gemini-2.5-flash-image-preview</strong> (Nano Banana)
                   <br />

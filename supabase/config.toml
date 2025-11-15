@@ -23,3 +23,6 @@ verify_jwt = true
 
 [functions.check-certificate-availability]
 verify_jwt = false
+
+[functions.test-gemini-api-key]
+verify_jwt = false
