@@ -57,7 +57,8 @@ const SystemSettingsPage = () => {
       const { data, error } = await supabase
         .from("system_settings")
         .select("*")
-        .single();
+        .limit(1)
+        .maybeSingle();
 
       if (error) throw error;
       setSettings(data);
