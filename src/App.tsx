@@ -7,12 +7,16 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 import { Header } from "@/components/layout/Header";
+import { Footer } from "@/components/Footer";
+import { CookieConsent } from "@/components/CookieConsent";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import CoursesPage from "./pages/CoursesPage";
 import CourseDetailPage from "./pages/CourseDetailPage";
 import PreEnrollmentPage from "./pages/PreEnrollmentPage";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfUse from "./pages/TermsOfUse";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import CoursesPageAdmin from "./pages/admin/CoursesPage";
 import AreasPage from "./pages/admin/AreasPage";
@@ -40,49 +44,59 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
+          <CookieConsent />
           <BrowserRouter>
             <Routes>
-              {/* Public routes with header */}
+              {/* Public routes with header and footer */}
               <Route path="/" element={
-                <div className="min-h-screen bg-background">
+                <div className="min-h-screen bg-background flex flex-col">
                   <Header />
-                  <main className="container mx-auto px-4 py-8">
+                  <main className="flex-1">
                     <Index />
                   </main>
+                  <Footer />
                 </div>
               } />
               <Route path="/auth" element={
-                <div className="min-h-screen bg-background">
+                <div className="min-h-screen bg-background flex flex-col">
                   <Header />
-                  <main className="container mx-auto px-4 py-8">
+                  <main className="flex-1 container mx-auto px-4 py-8">
                     <Auth />
                   </main>
+                  <Footer />
                 </div>
               } />
               <Route path="/courses" element={
-                <div className="min-h-screen bg-background">
+                <div className="min-h-screen bg-background flex flex-col">
                   <Header />
-                  <main className="container mx-auto px-4 py-8">
+                  <main className="flex-1 container mx-auto px-4 py-8">
                     <CoursesPage />
                   </main>
+                  <Footer />
                 </div>
               } />
               <Route path="/course/:slug" element={
-                <div className="min-h-screen bg-background">
+                <div className="min-h-screen bg-background flex flex-col">
                   <Header />
-                  <main className="container mx-auto px-4 py-8">
+                  <main className="flex-1 container mx-auto px-4 py-8">
                     <CourseDetailPage />
                   </main>
+                  <Footer />
                 </div>
               } />
               <Route path="/verify-certificate/:code?" element={
-                <div className="min-h-screen bg-background">
+                <div className="min-h-screen bg-background flex flex-col">
                   <Header />
-                  <main className="container mx-auto px-4 py-8">
+                  <main className="flex-1 container mx-auto px-4 py-8">
                     <VerifyCertificate />
                   </main>
+                  <Footer />
                 </div>
               } />
+              
+              {/* Legal pages */}
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/terms-of-use" element={<TermsOfUse />} />
               <Route 
                 path="/pre-enrollment" 
                 element={
@@ -198,11 +212,12 @@ const App = () => (
 
               {/* 404 route */}
               <Route path="*" element={
-                <div className="min-h-screen bg-background">
+                <div className="min-h-screen bg-background flex flex-col">
                   <Header />
-                  <main className="container mx-auto px-4 py-8">
+                  <main className="flex-1 container mx-auto px-4 py-8">
                     <NotFound />
                   </main>
+                  <Footer />
                 </div>
               } />
             </Routes>
