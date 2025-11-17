@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Image as ImageIcon, Globe, Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Upload, Image as ImageIcon, Globe, Clock, CheckCircle, XCircle, Loader2, Facebook, Instagram, Linkedin } from "lucide-react";
 import { testWebhook } from "@/lib/webhookService";
 
 interface SystemSettings {
@@ -26,6 +26,13 @@ interface SystemSettings {
   n8n_webhook_url?: string;
   webhook_events?: string[];
   gemini_api_key?: string;
+  footer_description?: string;
+  social_facebook?: string;
+  social_instagram?: string;
+  social_linkedin?: string;
+  contact_email?: string;
+  dpo_email?: string;
+  business_hours?: string;
 }
 
 interface WebhookLog {
@@ -622,6 +629,91 @@ const SystemSettingsPage = () => {
                     Google AI Studio
                   </a>
                 </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Footer Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Configurações do Rodapé</CardTitle>
+            <CardDescription>
+              Informações que aparecerão no rodapé do site
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="footer_description">Descrição da Instituição</Label>
+              <Textarea 
+                id="footer_description"
+                value={settings.footer_description || ""}
+                onChange={(e) => updateField("footer_description", e.target.value)}
+                rows={3}
+                placeholder="Educação online de qualidade..."
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="contact_email">Email de Contato</Label>
+                <Input 
+                  id="contact_email"
+                  type="email"
+                  value={settings.contact_email || ""}
+                  onChange={(e) => updateField("contact_email", e.target.value)}
+                  placeholder="contato@empresa.com"
+                />
+              </div>
+              <div>
+                <Label htmlFor="dpo_email">Email do DPO (LGPD)</Label>
+                <Input 
+                  id="dpo_email"
+                  type="email"
+                  value={settings.dpo_email || ""}
+                  onChange={(e) => updateField("dpo_email", e.target.value)}
+                  placeholder="dpo@empresa.com"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="business_hours">Horário de Atendimento</Label>
+              <Input 
+                id="business_hours"
+                value={settings.business_hours || ""}
+                onChange={(e) => updateField("business_hours", e.target.value)}
+                placeholder="Seg-Sex: 9h às 18h"
+              />
+            </div>
+
+            <div className="space-y-3">
+              <Label>Redes Sociais</Label>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Facebook className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                  <Input 
+                    value={settings.social_facebook || ""}
+                    onChange={(e) => updateField("social_facebook", e.target.value)}
+                    placeholder="https://facebook.com/suapagina"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Instagram className="h-4 w-4 text-pink-600 flex-shrink-0" />
+                  <Input 
+                    value={settings.social_instagram || ""}
+                    onChange={(e) => updateField("social_instagram", e.target.value)}
+                    placeholder="https://instagram.com/seuperfil"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Linkedin className="h-4 w-4 text-blue-700 flex-shrink-0" />
+                  <Input 
+                    value={settings.social_linkedin || ""}
+                    onChange={(e) => updateField("social_linkedin", e.target.value)}
+                    placeholder="https://linkedin.com/company/suaempresa"
+                  />
+                </div>
               </div>
             </div>
           </CardContent>
