@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate, Link } from "react-router-dom";
 import { useTheme } from "next-themes";
-import { LogOut, User, GraduationCap, Shield, Moon, Sun, Menu } from "lucide-react";
+import { LogOut, User, GraduationCap, Shield, Moon, Sun, Menu, LayoutDashboard, MapPin, BookOpen, Users, Award, Settings } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -18,6 +18,14 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
 } from "@/components/ui/navigation-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export const Header = () => {
   const { user, signOut, isAdmin } = useAuth();
@@ -41,239 +49,320 @@ export const Header = () => {
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center space-x-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="h-9 w-9 px-0"
-          >
-            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-            <span className="sr-only">Toggle theme</span>
-          </Button>
-          
-          {user ? (
-            <>
-              <span className="text-sm text-muted-foreground truncate max-w-[180px]">
-                Olá, {user.email}
-              </span>
-              {isAdmin ? (
-                <NavigationMenu>
-                  <NavigationMenuList>
-                    <NavigationMenuItem>
-                      <NavigationMenuTrigger className="flex items-center space-x-2">
-                        <Shield className="h-4 w-4" />
-                        <span>Admin</span>
-                      </NavigationMenuTrigger>
-                      <NavigationMenuContent>
-                        <div className="grid gap-3 p-6 w-[400px]">
-                          <div className="row-span-3">
+        <nav className="hidden md:flex items-center gap-2 lg:gap-4">
+          {/* Public links */}
+          <Link to="/courses">
+            <Button variant="ghost" size="sm">Cursos</Button>
+          </Link>
+          <Link to="/verify-certificate">
+            <Button variant="ghost" size="sm" className="hidden lg:flex">
+              Verificar Certificado
+            </Button>
+          </Link>
+
+          <div className="flex items-center gap-2">
+            {/* Theme toggle */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="h-9 w-9 px-0"
+            >
+              <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+              <span className="sr-only">Toggle theme</span>
+            </Button>
+
+            {user ? (
+              <>
+                {/* Admin Menu - Compact */}
+                {isAdmin && (
+                  <NavigationMenu>
+                    <NavigationMenuList>
+                      <NavigationMenuItem>
+                        <NavigationMenuTrigger className="h-9">
+                          <Shield className="h-4 w-4 mr-1" />
+                          Admin
+                        </NavigationMenuTrigger>
+                        <NavigationMenuContent>
+                          <div className="grid gap-2 p-4 w-[280px]">
                             <NavigationMenuLink asChild>
                               <Link
-                                className="flex h-full w-full select-none flex-col justify-end rounded-md bg-gradient-to-b from-muted/50 to-muted p-6 no-underline outline-none focus:shadow-md"
                                 to="/admin"
+                                className="flex items-center gap-3 rounded-md p-3 hover:bg-accent transition-colors"
                               >
-                                <div className="mb-2 mt-4 text-lg font-medium">
-                                  Painel Administrativo
+                                <LayoutDashboard className="h-4 w-4 text-primary" />
+                                <div>
+                                  <div className="text-sm font-medium">Dashboard</div>
+                                  <p className="text-xs text-muted-foreground">Visão geral</p>
                                 </div>
-                                <p className="text-sm leading-tight text-muted-foreground">
-                                  Gerencie áreas, cursos, inscrições e configurações do sistema.
-                                </p>
                               </Link>
                             </NavigationMenuLink>
-                          </div>
-                          <div className="grid gap-2">
                             <NavigationMenuLink asChild>
                               <Link
                                 to="/admin/areas"
-                                className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                                className="flex items-center gap-3 rounded-md p-3 hover:bg-accent transition-colors"
                               >
-                                <div className="text-sm font-medium leading-none">Áreas</div>
-                                <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
-                                  Gerenciar áreas de conhecimento
-                                </p>
+                                <MapPin className="h-4 w-4 text-primary" />
+                                <div>
+                                  <div className="text-sm font-medium">Áreas</div>
+                                  <p className="text-xs text-muted-foreground">Gerenciar áreas</p>
+                                </div>
                               </Link>
                             </NavigationMenuLink>
                             <NavigationMenuLink asChild>
                               <Link
                                 to="/admin/courses"
-                                className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                                className="flex items-center gap-3 rounded-md p-3 hover:bg-accent transition-colors"
                               >
-                                <div className="text-sm font-medium leading-none">Cursos</div>
-                                <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
-                                  Criar e editar cursos
-                                </p>
+                                <BookOpen className="h-4 w-4 text-primary" />
+                                <div>
+                                  <div className="text-sm font-medium">Cursos</div>
+                                  <p className="text-xs text-muted-foreground">Gerenciar cursos</p>
+                                </div>
                               </Link>
                             </NavigationMenuLink>
                             <NavigationMenuLink asChild>
                               <Link
                                 to="/admin/enrollments"
-                                className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                                className="flex items-center gap-3 rounded-md p-3 hover:bg-accent transition-colors"
                               >
-                                <div className="text-sm font-medium leading-none">Inscrições</div>
-                                <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
-                                  Gerenciar inscrições de estudantes
-                                </p>
+                                <Users className="h-4 w-4 text-primary" />
+                                <div>
+                                  <div className="text-sm font-medium">Inscrições</div>
+                                  <p className="text-xs text-muted-foreground">Gerenciar alunos</p>
+                                </div>
                               </Link>
                             </NavigationMenuLink>
                             <NavigationMenuLink asChild>
                               <Link
                                 to="/admin/certificates"
-                                className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                                className="flex items-center gap-3 rounded-md p-3 hover:bg-accent transition-colors"
                               >
-                                <div className="text-sm font-medium leading-none">Certificados</div>
-                                <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
-                                  Gerenciar certificados emitidos
-                                </p>
+                                <Award className="h-4 w-4 text-primary" />
+                                <div>
+                                  <div className="text-sm font-medium">Certificados</div>
+                                  <p className="text-xs text-muted-foreground">Gerenciar certificados</p>
+                                </div>
+                              </Link>
+                            </NavigationMenuLink>
+                            <NavigationMenuLink asChild>
+                              <Link
+                                to="/admin/system-settings"
+                                className="flex items-center gap-3 rounded-md p-3 hover:bg-accent transition-colors"
+                              >
+                                <Settings className="h-4 w-4 text-primary" />
+                                <div>
+                                  <div className="text-sm font-medium">Configurações</div>
+                                  <p className="text-xs text-muted-foreground">Sistema</p>
+                                </div>
                               </Link>
                             </NavigationMenuLink>
                           </div>
-                        </div>
-                      </NavigationMenuContent>
-                    </NavigationMenuItem>
-                  </NavigationMenuList>
-                </NavigationMenu>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => navigate("/student")}
-                  className="flex items-center space-x-2"
-                >
-                  <User className="h-4 w-4" />
-                  <span>Minha Área</span>
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleSignOut}
-                className="flex items-center space-x-2"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Sair</span>
-              </Button>
-            </>
-          ) : (
-            <>
-              <Link to="/courses">
-                <Button variant="ghost" size="sm">
-                  Cursos
-                </Button>
-              </Link>
-              <Link to="/verify-certificate">
-                <Button variant="ghost" size="sm">
-                  Verificar Certificado
-                </Button>
-              </Link>
+                        </NavigationMenuContent>
+                      </NavigationMenuItem>
+                    </NavigationMenuList>
+                  </NavigationMenu>
+                )}
+                
+                {/* User menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-9 w-9 rounded-full">
+                      <User className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel className="truncate max-w-[200px]">
+                      {user.email}
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate(isAdmin ? "/admin" : "/student")}>
+                      <User className="h-4 w-4 mr-2" />
+                      Minha Área
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleSignOut}>
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Sair
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : (
               <Link to="/auth">
                 <Button size="sm">Entrar</Button>
               </Link>
-            </>
-          )}
+            )}
+          </div>
         </nav>
 
         {/* Mobile Navigation */}
-        <div className="flex md:hidden items-center space-x-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="h-9 w-9 px-0"
-          >
-            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-            <span className="sr-only">Toggle theme</span>
-          </Button>
-
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-9 w-9 px-0">
-                <Menu className="h-5 w-5" />
-                <span className="sr-only">Menu</span>
+        <Sheet>
+          <SheetTrigger asChild className="md:hidden">
+            <Button variant="ghost" size="sm" className="h-9 w-9 px-0">
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Toggle menu</span>
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+            <SheetHeader>
+              <SheetTitle>Menu</SheetTitle>
+            </SheetHeader>
+            <div className="flex flex-col space-y-4 mt-6">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                className="justify-start"
+              >
+                <Sun className="h-4 w-4 mr-2 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                <Moon className="absolute h-4 w-4 ml-1 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                <span className="ml-6">Alternar Tema</span>
               </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-[280px]">
-              <SheetHeader>
-                <SheetTitle>Menu</SheetTitle>
-              </SheetHeader>
-              <div className="mt-6 flex flex-col space-y-4">
-                {user ? (
-                  <>
-                    <div className="pb-4 border-b">
-                      <p className="text-sm text-muted-foreground mb-1">Conectado como:</p>
-                      <p className="text-sm font-medium truncate">{user.email}</p>
-                    </div>
-                    
-                    {isAdmin ? (
-                      <>
-                        <Link to="/admin" className="w-full">
-                          <Button variant="outline" className="w-full justify-start">
-                            <Shield className="mr-2 h-4 w-4" />
-                            Painel Admin
-                          </Button>
-                        </Link>
-                        <Link to="/admin/areas" className="w-full">
-                          <Button variant="ghost" className="w-full justify-start">
-                            Áreas
-                          </Button>
-                        </Link>
-                        <Link to="/admin/courses" className="w-full">
-                          <Button variant="ghost" className="w-full justify-start">
-                            Cursos
-                          </Button>
-                        </Link>
-                        <Link to="/admin/enrollments" className="w-full">
-                          <Button variant="ghost" className="w-full justify-start">
-                            Inscrições
-                          </Button>
-                        </Link>
-                        <Link to="/admin/certificates" className="w-full">
-                          <Button variant="ghost" className="w-full justify-start">
-                            Certificados
-                          </Button>
-                        </Link>
-                      </>
-                    ) : (
-                      <Link to="/student" className="w-full">
-                        <Button variant="outline" className="w-full justify-start">
-                          <User className="mr-2 h-4 w-4" />
-                          Minha Área
-                        </Button>
-                      </Link>
-                    )}
-                    
-                    <Button
-                      variant="destructive"
-                      onClick={handleSignOut}
-                      className="w-full justify-start"
-                    >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Sair
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Link to="/courses" className="w-full">
-                      <Button variant="outline" className="w-full justify-start">
+
+              {user ? (
+                <>
+                  <div className="px-4 py-2 text-sm text-muted-foreground">
+                    {user.email}
+                  </div>
+                  
+                  {isAdmin && (
+                    <div className="space-y-2">
+                      <div className="px-4 py-2 text-sm font-semibold flex items-center">
+                        <Shield className="h-4 w-4 mr-2" />
+                        Área Administrativa
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          navigate("/admin");
+                        }}
+                        className="w-full justify-start"
+                      >
+                        <LayoutDashboard className="h-4 w-4 mr-2" />
+                        Dashboard
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate("/admin/areas")}
+                        className="w-full justify-start"
+                      >
+                        <MapPin className="h-4 w-4 mr-2" />
+                        Áreas
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate("/admin/courses")}
+                        className="w-full justify-start"
+                      >
+                        <BookOpen className="h-4 w-4 mr-2" />
                         Cursos
                       </Button>
-                    </Link>
-                    <Link to="/verify-certificate" className="w-full">
-                      <Button variant="outline" className="w-full justify-start">
-                        Verificar Certificado
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate("/admin/enrollments")}
+                        className="w-full justify-start"
+                      >
+                        <Users className="h-4 w-4 mr-2" />
+                        Inscrições
                       </Button>
-                    </Link>
-                    <Link to="/auth" className="w-full">
-                      <Button className="w-full">Entrar</Button>
-                    </Link>
-                  </>
-                )}
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate("/admin/certificates")}
+                        className="w-full justify-start"
+                      >
+                        <Award className="h-4 w-4 mr-2" />
+                        Certificados
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate("/admin/system-settings")}
+                        className="w-full justify-start"
+                      >
+                        <Settings className="h-4 w-4 mr-2" />
+                        Configurações
+                      </Button>
+                    </div>
+                  )}
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate(isAdmin ? "/admin" : "/student")}
+                    className="justify-start"
+                  >
+                    <User className="h-4 w-4 mr-2" />
+                    Minha Área
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate("/courses")}
+                    className="justify-start"
+                  >
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Cursos
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate("/verify-certificate")}
+                    className="justify-start"
+                  >
+                    <Award className="h-4 w-4 mr-2" />
+                    Verificar Certificado
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSignOut}
+                    className="justify-start text-destructive"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sair
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate("/courses")}
+                    className="justify-start"
+                  >
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Cursos
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate("/verify-certificate")}
+                    className="justify-start"
+                  >
+                    <Award className="h-4 w-4 mr-2" />
+                    Verificar Certificado
+                  </Button>
+                  <Button
+                    onClick={() => navigate("/auth")}
+                    size="sm"
+                    className="justify-start"
+                  >
+                    Entrar
+                  </Button>
+                </>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </header>
   );
