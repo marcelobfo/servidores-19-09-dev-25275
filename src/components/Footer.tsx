@@ -30,7 +30,7 @@ export const Footer = () => {
       .limit(1)
       .maybeSingle();
     
-    if (data) setSettings(data);
+    if (data) setSettings(data as unknown as FooterSettings);
   };
 
   // Default values if settings not loaded
