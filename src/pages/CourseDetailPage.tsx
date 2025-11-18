@@ -198,75 +198,92 @@ const CourseDetailPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section with Gradient Background */}
-      <div className="relative overflow-hidden" style={{ background: 'var(--gradient-hero)' }}>
-        <div className="absolute inset-0 bg-black/20"></div>
-        <div className="container mx-auto px-4 py-16 relative z-10">
+      {/* Hero Section - Responsive Mobile-First Design */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-primary via-primary/90 to-secondary">
+        {/* Overlay para melhor contraste */}
+        <div className="absolute inset-0 bg-black/30"></div>
+        
+        <div className="container mx-auto px-4 py-8 md:py-12 lg:py-16 relative z-10">
+          {/* Breadcrumb / Back Button */}
           <Link 
             to="/courses" 
-            className="inline-flex items-center text-sm text-white/90 hover:text-white mb-6 transition-colors"
+            className="inline-flex items-center text-sm text-white/90 hover:text-white mb-4 md:mb-6 transition-colors"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Voltar aos Cursos
           </Link>
           
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8 items-start">
-            {/* Hero Content */}
-            <div className="space-y-4">
-              <Badge className="bg-white/20 text-white border-white/30 hover:bg-white/30 backdrop-blur-sm">
-                {course.areas?.name || 'Área não especificada'}
+          {/* Mobile/Tablet: Imagem primeiro, Desktop: Grid lado a lado */}
+          <div className="space-y-6 lg:space-y-0 lg:grid lg:grid-cols-[1.2fr_0.8fr] lg:gap-8 xl:gap-12 lg:items-center">
+            
+            {/* Hero Content - Ordem 2 em mobile, ordem 1 em desktop */}
+            <div className="space-y-4 md:space-y-5 order-2 lg:order-1">
+              {/* Badge da Área */}
+              <Badge className="bg-white/20 text-white border-white/30 hover:bg-white/30 backdrop-blur-sm inline-flex">
+                {course.areas?.name || 'Curso Livre'}
               </Badge>
               
-              <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight leading-tight drop-shadow-lg">
+              {/* Título Responsivo */}
+              <h1 className="text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold text-white tracking-tight leading-tight drop-shadow-lg">
                 {course.name}
               </h1>
               
+              {/* Descrição Breve */}
               {course.brief_description && (
-                <div className="text-lg text-white/90 max-w-2xl leading-relaxed">
+                <div className="text-base md:text-lg text-white/95 max-w-2xl leading-relaxed">
                   <SafeHTML 
                     html={course.brief_description}
-                    className="[&_p]:text-white/90 [&_p]:leading-relaxed [&_*]:text-white/90"
+                    className="[&_p]:text-white/95 [&_p]:leading-relaxed [&_*]:text-white/95"
                   />
                 </div>
               )}
               
-              <div className="flex flex-wrap gap-4 pt-2">
-                <div className="flex items-center gap-2 text-white/90 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full">
-                  <Clock className="h-5 w-5" />
-                  <span className="font-medium">{course.duration_hours}h</span>
+              {/* Badges de Informações - Grid responsivo */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
+                <div className="flex items-center gap-2 text-white/95 bg-white/15 backdrop-blur-sm px-4 py-2.5 rounded-lg">
+                  <Clock className="h-5 w-5 flex-shrink-0" />
+                  <span className="font-medium text-sm md:text-base">{course.duration_hours}h de conteúdo</span>
                 </div>
-                <div className="flex items-center gap-2 text-white/90 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full">
-                  <Award className="h-5 w-5" />
-                  <span className="font-medium">Certificado Incluído</span>
+                <div className="flex items-center gap-2 text-white/95 bg-white/15 backdrop-blur-sm px-4 py-2.5 rounded-lg">
+                  <Award className="h-5 w-5 flex-shrink-0" />
+                  <span className="font-medium text-sm md:text-base">Certificado Incluído</span>
                 </div>
-                <div className="flex items-center gap-2 text-white/90 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full">
-                  <Monitor className="h-5 w-5" />
-                  <span className="font-medium">100% Online</span>
+                <div className="flex items-center gap-2 text-white/95 bg-white/15 backdrop-blur-sm px-4 py-2.5 rounded-lg sm:col-span-2 lg:col-span-1">
+                  <Monitor className="h-5 w-5 flex-shrink-0" />
+                  <span className="font-medium text-sm md:text-base">100% Online</span>
                 </div>
               </div>
             </div>
 
-            {/* Hero Image */}
-            <div className="relative rounded-xl overflow-hidden aspect-[4/3] shadow-2xl border-4 border-white/20">
-              {course.image_url ? (
-                <img 
-                  src={course.image_url} 
-                  alt={course.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full bg-white/10 backdrop-blur-sm flex items-center justify-center">
-                  <BookOpen className="h-24 w-24 text-white/50" />
+            {/* Hero Image - Ordem 1 em mobile, ordem 2 em desktop */}
+            <div className="order-1 lg:order-2">
+              <div className="relative rounded-lg md:rounded-xl overflow-hidden shadow-2xl border-2 md:border-4 border-white/20">
+                {/* Aspect ratio responsivo */}
+                <div className="aspect-[16/10] md:aspect-[4/3]">
+                  {course.image_url ? (
+                    <img 
+                      src={course.image_url} 
+                      alt={`Imagem do curso ${course.name}`}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-white/10 backdrop-blur-sm flex items-center justify-center">
+                      <BookOpen className="h-16 w-16 md:h-24 md:w-24 text-white/50" />
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
+            
           </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_420px] gap-6 md:gap-8 lg:gap-12">
           {/* Left Column - Course Content */}
           <div className="space-y-10">
             {/* About Course */}
@@ -296,21 +313,24 @@ const CourseDetailPage = () => {
                   {modules.map((module, index) => (
                     <Card 
                       key={index} 
-                      className="border-l-4 border-l-primary hover:shadow-lg transition-shadow"
-                      style={{ boxShadow: 'var(--shadow-lg)' }}
+                      className="border-l-4 border-l-primary hover:shadow-lg transition-all duration-200"
                     >
-                      <CardContent className="p-6">
-                        <div className="flex items-start gap-4">
-                          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary font-bold flex-shrink-0">
+                      <CardContent className="p-4 md:p-6">
+                        <div className="flex items-start gap-3 md:gap-4">
+                          <div className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full bg-primary/10 text-primary font-bold text-sm md:text-base flex-shrink-0">
                             {index + 1}
                           </div>
-                          <div className="flex-1">
-                            <h3 className="text-xl font-semibold mb-2">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-lg md:text-xl font-semibold mb-1 md:mb-2">
                               {module.name || module.title || `Módulo ${index + 1}`}
-                              {module.hours && <span className="text-sm text-muted-foreground ml-2">({module.hours}h)</span>}
+                              {module.hours && (
+                                <span className="text-xs md:text-sm text-muted-foreground ml-2 block sm:inline">
+                                  ({module.hours}h)
+                                </span>
+                              )}
                             </h3>
                             {module.description && (
-                              <p className="text-muted-foreground">{module.description}</p>
+                              <p className="text-sm md:text-base text-muted-foreground">{module.description}</p>
                             )}
                           </div>
                         </div>
@@ -323,8 +343,8 @@ const CourseDetailPage = () => {
           </div>
 
           {/* Right Column - Sticky Sidebar */}
-          <div className="lg:sticky lg:top-6 h-fit">
-            <Card className="overflow-hidden" style={{ boxShadow: 'var(--shadow-xl)' }}>
+          <div className="lg:sticky lg:top-24 h-fit space-y-6">
+            <Card className="overflow-hidden shadow-xl">
               <CardContent className="p-0">
                 {/* Card Header with Gradient */}
                 <div className="p-6 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-b">
