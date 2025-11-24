@@ -115,7 +115,6 @@ export default function UsersManagementPage() {
                     <TableHead>Nome</TableHead>
                     <TableHead>Roles</TableHead>
                     <TableHead>Cadastrado em</TableHead>
-                    <TableHead>Último acesso</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -131,13 +130,6 @@ export default function UsersManagementPage() {
                             locale: ptBR,
                           })}
                         </TableCell>
-                        <TableCell>
-                          {user.last_sign_in_at
-                            ? format(new Date(user.last_sign_in_at), "dd/MM/yyyy HH:mm", {
-                                locale: ptBR,
-                              })
-                            : "Nunca"}
-                        </TableCell>
                         <TableCell className="text-right">
                           <UserActionsDropdown
                             userId={user.id}
@@ -149,7 +141,7 @@ export default function UsersManagementPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                         Nenhum usuário encontrado
                       </TableCell>
                     </TableRow>
