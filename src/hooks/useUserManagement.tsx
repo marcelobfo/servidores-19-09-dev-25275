@@ -31,20 +31,11 @@ export const useUsersList = () => {
 
       if (rolesError) throw rolesError;
 
-      // Buscar informações de auth (último login)
-      const { data: authData, error: usersError } = await supabase.auth.admin.listUsers();
-
-      if (usersError) throw usersError;
-      
-      const users = authData?.users || [];
-
-      // Combinar dados
+      // Combinar dados (sem auth.admin - não funciona no client-side)
       const usersWithRoles: UserWithRoles[] = profiles.map((profile) => {
         const roles = userRoles
           .filter((ur) => ur.user_id === profile.user_id)
           .map((ur) => ur.role);
-
-        const authUser = users.find((u) => u.id === profile.user_id);
 
         return {
           id: profile.user_id,
@@ -52,7 +43,7 @@ export const useUsersList = () => {
           full_name: profile.full_name,
           created_at: profile.created_at,
           roles: roles.length > 0 ? roles : ["student"],
-          last_sign_in_at: authUser?.last_sign_in_at || null,
+          last_sign_in_at: null, // Auth admin API não disponível no client-side
         };
       });
 
