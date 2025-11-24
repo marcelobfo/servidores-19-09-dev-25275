@@ -22,7 +22,8 @@ import {
   DollarSign,
   FolderOpen,
   UserCheck,
-  LogOut
+  LogOut,
+  UsersRound
 } from "lucide-react";
 
 const adminMenuItems = [
@@ -50,6 +51,11 @@ const adminMenuItems = [
     title: "Matrículas",
     url: "/admin/matriculas",
     icon: UserCheck,
+  },
+  {
+    title: "Usuários",
+    url: "/admin/users",
+    icon: UsersRound,
   },
   {
     title: "Certificados",
