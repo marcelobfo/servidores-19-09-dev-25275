@@ -62,7 +62,15 @@ export const useGrantAdminRole = () => {
         .from("user_roles")
         .insert({ user_id: userId, role: "admin" });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Erro ao conceder admin:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users-list"] });
@@ -72,9 +80,12 @@ export const useGrantAdminRole = () => {
       });
     },
     onError: (error: any) => {
+      const isRLSError = error.code === "42501" || error.message?.includes("row-level security");
       toast({
         title: "Erro ao conceder permissão",
-        description: error.message,
+        description: isRLSError 
+          ? "Você não tem permissão para esta ação. Verifique se você é admin."
+          : `${error.message}${error.hint ? ` (Dica: ${error.hint})` : ""}`,
         variant: "destructive",
       });
     },
@@ -93,7 +104,15 @@ export const useRevokeAdminRole = () => {
         .eq("user_id", userId)
         .eq("role", "admin");
 
-      if (error) throw error;
+      if (error) {
+        console.error("Erro ao remover admin:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users-list"] });
@@ -103,9 +122,12 @@ export const useRevokeAdminRole = () => {
       });
     },
     onError: (error: any) => {
+      const isRLSError = error.code === "42501" || error.message?.includes("row-level security");
       toast({
         title: "Erro ao remover permissão",
-        description: error.message,
+        description: isRLSError 
+          ? "Você não tem permissão para esta ação. Verifique se você é admin."
+          : `${error.message}${error.hint ? ` (Dica: ${error.hint})` : ""}`,
         variant: "destructive",
       });
     },
