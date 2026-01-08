@@ -253,11 +253,39 @@ serve(async (req) => {
 
     // Determine the correct amount based on payment kind and course fees
     let finalAmount = amount; // fallback to provided amount
+    let preEnrollmentDiscount = 0;
 
     if (kind === "pre_enrollment" && preEnrollment.courses?.pre_enrollment_fee) {
       finalAmount = Number(preEnrollment.courses.pre_enrollment_fee);
     } else if (kind === "enrollment" && preEnrollment.courses?.enrollment_fee) {
-      finalAmount = Number(preEnrollment.courses.enrollment_fee);
+      const originalEnrollmentFee = Number(preEnrollment.courses.enrollment_fee);
+      
+      // Buscar pagamento de pré-matrícula confirmado para aplicar desconto
+      console.log("🔍 Buscando pagamento de pré-matrícula confirmado para aplicar desconto...");
+      
+      const { data: confirmedPreEnrollmentPayment } = await supabaseClient
+        .from("payments")
+        .select("amount")
+        .eq("pre_enrollment_id", pre_enrollment_id)
+        .eq("kind", "pre_enrollment")
+        .in("status", ["confirmed", "received"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (confirmedPreEnrollmentPayment?.amount) {
+        preEnrollmentDiscount = Number(confirmedPreEnrollmentPayment.amount);
+        finalAmount = Math.max(originalEnrollmentFee - preEnrollmentDiscount, 5); // Mínimo R$ 5,00 do Asaas
+        
+        console.log("✅ Desconto de pré-matrícula aplicado:");
+        console.log(`   📊 Valor original enrollment_fee: R$ ${originalEnrollmentFee}`);
+        console.log(`   💰 Pagamento pré-matrícula confirmado: R$ ${preEnrollmentDiscount}`);
+        console.log(`   ✂️ Desconto aplicado: R$ ${preEnrollmentDiscount}`);
+        console.log(`   ✅ Valor final do pagamento: R$ ${finalAmount}`);
+      } else {
+        finalAmount = originalEnrollmentFee;
+        console.log("ℹ️ Nenhum pagamento de pré-matrícula confirmado encontrado - sem desconto");
+      }
     }
 
     // Validate final amount
@@ -271,19 +299,7 @@ serve(async (req) => {
       throw new Error("Valor mínimo para pagamento é R$ 5,00");
     }
 
-    console.log("Final amount determined:", { kind, finalAmount, courseFees: preEnrollment.courses });
-
-    // SECURITY: Validate the payment amount matches the expected course fee
-    const expectedAmount =
-      kind === "pre_enrollment" ? preEnrollment.courses?.pre_enrollment_fee : preEnrollment.courses?.enrollment_fee;
-
-    if (expectedAmount && Math.abs(Number(expectedAmount) - finalAmount) > 0.01) {
-      console.error("Payment amount mismatch:", {
-        expected: expectedAmount,
-        received: finalAmount,
-      });
-      throw new Error("Valor do pagamento não corresponde à taxa do curso");
-    }
+    console.log("Final amount determined:", { kind, finalAmount, preEnrollmentDiscount, courseFees: preEnrollment.courses });
 
     // Prepare customer data with validation and cleaning
     const cleanedCPF = cleanCPF(preEnrollment.cpf);
