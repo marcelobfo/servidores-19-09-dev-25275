@@ -275,11 +275,41 @@ serve(async (req) => {
     }
 
     // Determine which fee to use based on checkout type
-    const checkoutFee = isEnrollmentCheckout
+    let checkoutFee = isEnrollmentCheckout
       ? preEnrollment.courses.enrollment_fee || 0
       : preEnrollment.courses.pre_enrollment_fee || 0;
 
     const feeType = isEnrollmentCheckout ? "matrícula" : "pré-matrícula";
+    let preEnrollmentDiscount = 0;
+
+    // Se for checkout de matrícula, aplicar desconto do valor já pago na pré-matrícula
+    if (isEnrollmentCheckout) {
+      console.log("🔍 Buscando pagamento de pré-matrícula confirmado para aplicar desconto...");
+      
+      const { data: confirmedPreEnrollmentPayment } = await serviceClient
+        .from("payments")
+        .select("amount")
+        .eq("pre_enrollment_id", pre_enrollment_id)
+        .eq("kind", "pre_enrollment")
+        .in("status", ["confirmed", "received"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (confirmedPreEnrollmentPayment?.amount) {
+        preEnrollmentDiscount = Number(confirmedPreEnrollmentPayment.amount);
+        const originalFee = checkoutFee;
+        checkoutFee = Math.max(checkoutFee - preEnrollmentDiscount, 5); // Mínimo R$ 5,00 do Asaas
+        
+        console.log("✅ Desconto de pré-matrícula aplicado:");
+        console.log(`   📊 Valor original enrollment_fee: R$ ${originalFee}`);
+        console.log(`   💰 Pagamento pré-matrícula confirmado: R$ ${preEnrollmentDiscount}`);
+        console.log(`   ✂️ Desconto aplicado: R$ ${preEnrollmentDiscount}`);
+        console.log(`   ✅ Valor final do checkout: R$ ${checkoutFee}`);
+      } else {
+        console.log("ℹ️ Nenhum pagamento de pré-matrícula confirmado encontrado - sem desconto");
+      }
+    }
 
     console.log(`Checkout fee for ${feeType}:`, checkoutFee);
 
