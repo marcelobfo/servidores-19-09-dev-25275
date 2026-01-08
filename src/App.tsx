@@ -35,6 +35,7 @@ import VerifyCertificate from "./pages/VerifyCertificate";
 import CertificatesPage from "./pages/admin/CertificatesPage";
 import EnrollmentsManagementPage from "./pages/admin/EnrollmentsManagementPage";
 import UsersManagementPage from "./pages/admin/UsersManagementPage";
+import DiscountsReportPage from "./pages/admin/DiscountsReportPage";
 
 const queryClient = new QueryClient();
 
@@ -216,6 +217,16 @@ const App = () => (
                   <AuthGuard adminOnly>
                     <AdminLayout>
                       <UsersManagementPage />
+                    </AdminLayout>
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/admin/discounts-report" 
+                element={
+                  <AuthGuard adminOnly>
+                    <AdminLayout>
+                      <DiscountsReportPage />
                     </AdminLayout>
                   </AuthGuard>
                 } 

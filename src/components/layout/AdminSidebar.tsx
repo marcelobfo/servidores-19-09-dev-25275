@@ -23,7 +23,8 @@ import {
   FolderOpen,
   UserCheck,
   LogOut,
-  UsersRound
+  UsersRound,
+  Receipt
 } from "lucide-react";
 
 const adminMenuItems = [
@@ -61,6 +62,11 @@ const adminMenuItems = [
     title: "Certificados",
     url: "/admin/certificates",
     icon: FileText,
+  },
+  {
+    title: "Relatório de Descontos",
+    url: "/admin/discounts-report",
+    icon: Receipt,
   },
 ];
 
