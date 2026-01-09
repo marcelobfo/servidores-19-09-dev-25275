@@ -21,6 +21,9 @@ interface Certificate {
   status: string;
   verification_url: string;
   created_at: string;
+  // Additional fields for correct date calculation
+  enrollment_date?: string;
+  duration_days?: number;
 }
 
 const sortOptions = [
@@ -45,27 +48,79 @@ export function CertificatesPage() {
 
   const fetchCertificates = async () => {
     try {
-      const { data, error } = await supabase
+      // First get the user's pre-enrollment IDs
+      const { data: preEnrollments } = await supabase
+        .from("pre_enrollments")
+        .select("id")
+        .eq("user_id", user?.id);
+      
+      const preEnrollmentIds = preEnrollments?.map(pe => pe.id) || [];
+      
+      if (preEnrollmentIds.length === 0) {
+        setCertificates([]);
+        setLoading(false);
+        return;
+      }
+
+      // Get certificates
+      const { data: certificatesData, error } = await supabase
         .from("certificates")
         .select("*")
-        .in("enrollment_id", 
-          await supabase
-            .from("pre_enrollments")
-            .select("id")
-            .eq("user_id", user?.id)
-            .then(res => res.data?.map(pe => pe.id) || [])
-        )
+        .in("enrollment_id", preEnrollmentIds)
         .eq("status", "active")
         .order("issue_date", { ascending: false });
 
       if (error) throw error;
-      setCertificates(data || []);
+
+      // Fetch enrollment data to get correct dates
+      const { data: enrollmentsData } = await supabase
+        .from("enrollments")
+        .select("pre_enrollment_id, enrollment_date")
+        .in("pre_enrollment_id", preEnrollmentIds);
+
+      // Fetch course data for duration_days
+      const { data: preEnrollmentsWithCourses } = await supabase
+        .from("pre_enrollments")
+        .select("id, courses(duration_days)")
+        .in("id", preEnrollmentIds);
+
+      // Combine data
+      const enrichedCertificates = (certificatesData || []).map(cert => {
+        const enrollment = enrollmentsData?.find(e => e.pre_enrollment_id === cert.enrollment_id);
+        const preEnrollment = preEnrollmentsWithCourses?.find(pe => pe.id === cert.enrollment_id);
+        
+        return {
+          ...cert,
+          enrollment_date: enrollment?.enrollment_date,
+          duration_days: preEnrollment?.courses?.duration_days
+        };
+      });
+
+      setCertificates(enrichedCertificates);
     } catch (error) {
       console.error("Error fetching certificates:", error);
       toast.error("Erro ao carregar certificados");
     } finally {
       setLoading(false);
     }
+  };
+
+  // Calculate correct completion date based on enrollment_date + duration_days
+  const getCompletionDate = (certificate: Certificate): Date => {
+    if (certificate.enrollment_date && certificate.duration_days) {
+      const enrollmentDate = new Date(certificate.enrollment_date);
+      const completionDate = new Date(enrollmentDate);
+      completionDate.setDate(completionDate.getDate() + certificate.duration_days);
+      return completionDate;
+    }
+    // Fallback to stored completion_date
+    const storedDate = new Date(certificate.completion_date);
+    // Check if date is valid (not 1969/1970)
+    if (storedDate.getFullYear() > 1970) {
+      return storedDate;
+    }
+    // Last resort: use issue_date
+    return new Date(certificate.issue_date);
   };
 
   const handleDownloadCertificate = async (certificate: Certificate) => {
@@ -90,13 +145,16 @@ export function CertificatesPage() {
         .eq('name', certificate.course_name)
         .single();
 
+      // Calculate correct completion date
+      const completionDate = getCompletionDate(certificate);
+
       const pdfBlob = await generateCertificateWithFullData({
         id: certificate.id,
         studentName: certificate.student_name,
         courseName: certificate.course_name,
         courseModules: courseData?.modules || 'Módulos do curso conforme programa.',
         issueDate: new Date(certificate.issue_date),
-        completionDate: new Date(certificate.completion_date),
+        completionDate: completionDate,
         certificateCode: certificate.certificate_code,
         verificationUrl: certificate.verification_url,
         courseHours: courseData?.duration_hours || 390
@@ -216,7 +274,7 @@ export function CertificatesPage() {
                     </div>
                     <div>
                       <strong>Data de Conclusão:</strong>{" "}
-                      {new Date(certificate.completion_date).toLocaleDateString("pt-BR")}
+                      {getCompletionDate(certificate).toLocaleDateString("pt-BR")}
                     </div>
                     <div>
                       <strong>Data de Emissão:</strong>{" "}

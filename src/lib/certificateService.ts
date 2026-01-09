@@ -137,7 +137,7 @@ export const getCertificateByCode = async (code: string) => {
 };
 
 export const generateCertificateForEnrollment = async (enrollmentId: string) => {
-  // Get enrollment details
+  // Get pre-enrollment details
   const { data: enrollment, error: enrollmentError } = await supabase
     .from('pre_enrollments')
     .select(`
@@ -146,7 +146,7 @@ export const generateCertificateForEnrollment = async (enrollmentId: string) => 
         name,
         modules,
         duration_hours,
-        end_date
+        duration_days
       )
     `)
     .eq('id', enrollmentId)
@@ -155,6 +155,13 @@ export const generateCertificateForEnrollment = async (enrollmentId: string) => 
   if (enrollmentError || !enrollment) {
     throw new Error('Enrollment not found');
   }
+
+  // Get enrollment record to get enrollment_date
+  const { data: enrollmentRecord } = await supabase
+    .from('enrollments')
+    .select('enrollment_date')
+    .eq('pre_enrollment_id', enrollmentId)
+    .maybeSingle();
 
   // Check if certificate already exists
   const { data: existingCert } = await supabase
@@ -167,13 +174,24 @@ export const generateCertificateForEnrollment = async (enrollmentId: string) => 
     throw new Error('Certificate already exists for this enrollment');
   }
 
+  // Calculate completion date: enrollment_date + duration_days
+  let completionDate: Date;
+  if (enrollmentRecord?.enrollment_date && enrollment.courses.duration_days) {
+    const enrollmentDate = new Date(enrollmentRecord.enrollment_date);
+    completionDate = new Date(enrollmentDate);
+    completionDate.setDate(completionDate.getDate() + enrollment.courses.duration_days);
+  } else {
+    // Fallback to current date if no enrollment data
+    completionDate = new Date();
+  }
+
   // Create certificate
   return await createCertificate({
     enrollmentId,
     studentName: enrollment.full_name,
     courseName: enrollment.courses.name,
     courseModules: enrollment.courses.modules || 'Módulos do curso conforme programa.',
-    completionDate: new Date(enrollment.courses.end_date),
+    completionDate,
     courseHours: enrollment.courses.duration_hours || 390
   });
 };
