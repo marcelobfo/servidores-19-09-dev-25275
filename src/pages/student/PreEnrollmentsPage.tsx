@@ -67,6 +67,7 @@ export function PreEnrollmentsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("created_at_desc");
+  const [preEnrollmentPayments, setPreEnrollmentPayments] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (user) {
@@ -97,6 +98,23 @@ export function PreEnrollmentsPage() {
 
       if (error) throw error;
       setPreEnrollments(data || []);
+      
+      // Buscar pagamentos confirmados de pré-matrícula para calcular descontos
+      if (data && data.length > 0) {
+        const preEnrollmentIds = data.map(p => p.id);
+        const { data: payments } = await supabase
+          .from('payments')
+          .select('pre_enrollment_id, amount')
+          .eq('kind', 'pre_enrollment')
+          .in('status', ['confirmed', 'received'])
+          .in('pre_enrollment_id', preEnrollmentIds);
+        
+        const paymentMap: Record<string, number> = {};
+        payments?.forEach(p => {
+          paymentMap[p.pre_enrollment_id] = p.amount;
+        });
+        setPreEnrollmentPayments(paymentMap);
+      }
     } catch (error) {
       console.error("Error fetching pre-enrollments:", error);
       toast.error("Erro ao carregar pré-matrículas");
@@ -714,6 +732,30 @@ export function PreEnrollmentsPage() {
                       <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
                         Órgão aprovado! Agora você pode realizar sua matrícula no curso.
                       </p>
+                      
+                      {/* Exibir informação do desconto se houver pagamento de pré-matrícula */}
+                      {preEnrollmentPayments[preEnrollment.id] && preEnrollment.courses.enrollment_fee && (
+                        <div className="mb-3 p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg">
+                          <div className="flex items-center gap-2 text-green-800 dark:text-green-200 text-sm font-medium mb-1">
+                            <DollarSign className="h-4 w-4" />
+                            Desconto aplicado!
+                          </div>
+                          <div className="text-sm text-green-700 dark:text-green-300">
+                            <span className="line-through text-muted-foreground">
+                              Valor original: R$ {preEnrollment.courses.enrollment_fee?.toFixed(2)}
+                            </span>
+                            <br />
+                            <span>
+                              Desconto (pré-matrícula): - R$ {preEnrollmentPayments[preEnrollment.id]?.toFixed(2)}
+                            </span>
+                            <br />
+                            <strong className="text-green-800 dark:text-green-100">
+                              Valor final: R$ {Math.max((preEnrollment.courses.enrollment_fee || 0) - preEnrollmentPayments[preEnrollment.id], 5).toFixed(2)}
+                            </strong>
+                          </div>
+                        </div>
+                      )}
+                      
                       <Button
                         onClick={() => handleEnrollment(preEnrollment)}
                         size="lg"
@@ -721,6 +763,11 @@ export function PreEnrollmentsPage() {
                       >
                         <CheckCircle className="h-4 w-4" />
                         Realizar Matrícula
+                        {preEnrollmentPayments[preEnrollment.id] && preEnrollment.courses.enrollment_fee && (
+                          <span className="ml-1">
+                            - R$ {Math.max((preEnrollment.courses.enrollment_fee || 0) - preEnrollmentPayments[preEnrollment.id], 5).toFixed(2)}
+                          </span>
+                        )}
                       </Button>
                     </div>
                   )}
