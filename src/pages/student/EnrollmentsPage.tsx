@@ -7,8 +7,14 @@ import { Button } from "@/components/ui/button";
 import { StatusFilter } from "@/components/student/filters/StatusFilter";
 import { SearchFilter } from "@/components/student/filters/SearchFilter";
 import { SortOptions } from "@/components/student/filters/SortOptions";
-import { Clock, CheckCircle, DollarSign, FileText, Calendar, Download, Award } from "lucide-react";
+import { Clock, CheckCircle, DollarSign, FileText, Calendar, Download, Award, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+
+interface DiscountInfo {
+  preEnrollmentPaid: number;
+  originalFee: number;
+  finalAmount: number;
+}
 
 interface Enrollment {
   id: string;
@@ -68,12 +74,51 @@ export function EnrollmentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("created_at_desc");
   const [generatingPayment, setGeneratingPayment] = useState(false);
+  const [discountInfoMap, setDiscountInfoMap] = useState<Record<string, DiscountInfo>>({});
 
   useEffect(() => {
     if (user) {
       fetchEnrollments();
     }
   }, [user]);
+
+  // Buscar informações de desconto para matrículas pendentes
+  const fetchDiscountInfo = async (enrollmentsList: Enrollment[]) => {
+    const pendingEnrollments = enrollmentsList.filter(
+      e => (e.status === 'pending_payment' || e.status === 'awaiting_payment') && e.pre_enrollments?.id
+    );
+    
+    if (pendingEnrollments.length === 0) return;
+    
+    const preEnrollmentIds = pendingEnrollments.map(e => e.pre_enrollments!.id);
+    
+    const { data: payments } = await supabase
+      .from('payments')
+      .select('pre_enrollment_id, amount')
+      .eq('kind', 'pre_enrollment')
+      .in('status', ['confirmed', 'received'])
+      .in('pre_enrollment_id', preEnrollmentIds);
+    
+    if (!payments) return;
+    
+    const newDiscountMap: Record<string, DiscountInfo> = {};
+    
+    pendingEnrollments.forEach(enrollment => {
+      const payment = payments.find(p => p.pre_enrollment_id === enrollment.pre_enrollments?.id);
+      if (payment?.amount) {
+        const originalFee = enrollment.courses.enrollment_fee || 0;
+        const finalAmount = Math.max(originalFee - payment.amount, 5);
+        
+        newDiscountMap[enrollment.id] = {
+          preEnrollmentPaid: payment.amount,
+          originalFee,
+          finalAmount
+        };
+      }
+    });
+    
+    setDiscountInfoMap(newDiscountMap);
+  };
 
   const fetchEnrollments = async () => {
     try {
@@ -98,6 +143,11 @@ export function EnrollmentsPage() {
 
       if (error) throw error;
       setEnrollments(data || []);
+      
+      // Buscar informações de desconto para matrículas pendentes
+      if (data) {
+        await fetchDiscountInfo(data);
+      }
     } catch (error) {
       console.error("Error fetching enrollments:", error);
       toast.error("Erro ao carregar matrículas");
@@ -374,16 +424,45 @@ export function EnrollmentsPage() {
                   {(enrollment.status === "awaiting_payment" || enrollment.status === "pending_payment") && enrollment.payment_status === "pending" && (
                     <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
                       <p className="text-sm text-orange-800 dark:text-orange-200 mb-3">
-                        Pagamento da matrícula pendente. Clique para gerar um novo QR Code PIX.
+                        Pagamento da matrícula pendente. Clique para recalcular e gerar novo checkout com desconto aplicado.
                       </p>
+                      
+                      {/* Exibir informação do desconto se houver */}
+                      {discountInfoMap[enrollment.id] && (
+                        <div className="mb-3 p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg">
+                          <div className="flex items-center gap-2 text-green-800 dark:text-green-200 text-sm font-medium mb-1">
+                            <RefreshCw className="h-4 w-4" />
+                            Desconto de pré-matrícula disponível!
+                          </div>
+                          <div className="text-sm text-green-700 dark:text-green-300">
+                            <span className="line-through text-muted-foreground">
+                              Valor original: R$ {discountInfoMap[enrollment.id].originalFee.toFixed(2)}
+                            </span>
+                            <br />
+                            <span>
+                              Desconto: - R$ {discountInfoMap[enrollment.id].preEnrollmentPaid.toFixed(2)}
+                            </span>
+                            <br />
+                            <strong className="text-green-800 dark:text-green-100">
+                              Valor final: R$ {discountInfoMap[enrollment.id].finalAmount.toFixed(2)}
+                            </strong>
+                          </div>
+                        </div>
+                      )}
+                      
                       <Button
                         onClick={() => handleGenerateEnrollmentPayment(enrollment)}
                         size="sm"
                         className="flex items-center gap-2"
                         disabled={generatingPayment}
                       >
-                        <DollarSign className="h-4 w-4" />
-                        {generatingPayment ? "Gerando..." : `Pagar Matrícula - R$ ${enrollment.courses.enrollment_fee}`}
+                        <RefreshCw className="h-4 w-4" />
+                        {generatingPayment 
+                          ? "Gerando..." 
+                          : discountInfoMap[enrollment.id]
+                            ? `Recalcular e Pagar - R$ ${discountInfoMap[enrollment.id].finalAmount.toFixed(2)}`
+                            : `Pagar Matrícula - R$ ${enrollment.courses.enrollment_fee}`
+                        }
                       </Button>
                     </div>
                   )}
