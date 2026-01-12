@@ -8,6 +8,7 @@ interface CreateCertificateData {
   courseModules: string;
   completionDate: Date;
   courseHours: number;
+  effectiveHours?: number; // Carga horária efetiva para órgãos federais
 }
 
 export const generateCertificateCode = (): string => {
@@ -69,7 +70,8 @@ export const createCertificate = async (data: CreateCertificateData) => {
     completionDate: data.completionDate,
     certificateCode: certificateCode,
     verificationUrl: verificationUrl,
-    courseHours: data.courseHours
+    courseHours: data.courseHours,
+    effectiveHours: data.effectiveHours
   }, settings);
 
   // Upload PDF to storage
@@ -137,7 +139,7 @@ export const getCertificateByCode = async (code: string) => {
 };
 
 export const generateCertificateForEnrollment = async (enrollmentId: string) => {
-  // Get pre-enrollment details
+  // Get pre-enrollment details including organ type
   const { data: enrollment, error: enrollmentError } = await supabase
     .from('pre_enrollments')
     .select(`
@@ -154,6 +156,21 @@ export const generateCertificateForEnrollment = async (enrollmentId: string) => 
 
   if (enrollmentError || !enrollment) {
     throw new Error('Enrollment not found');
+  }
+
+  // Get organ type multiplier if set
+  let hoursMultiplier = 1;
+  const enrollmentData = enrollment as any;
+  if (enrollmentData.organ_type_id) {
+    const { data: organType } = await supabase
+      .from('organ_types' as any)
+      .select('hours_multiplier')
+      .eq('id', enrollmentData.organ_type_id)
+      .single();
+    
+    if (organType) {
+      hoursMultiplier = (organType as any).hours_multiplier || 1;
+    }
   }
 
   // Get enrollment record to get enrollment_date
@@ -185,6 +202,10 @@ export const generateCertificateForEnrollment = async (enrollmentId: string) => 
     completionDate = new Date();
   }
 
+  // Calculate effective hours based on organ type
+  const courseHours = enrollment.courses.duration_hours || 390;
+  const effectiveHours = enrollmentData.custom_hours || Math.round(courseHours * hoursMultiplier);
+
   // Create certificate
   return await createCertificate({
     enrollmentId,
@@ -192,6 +213,7 @@ export const generateCertificateForEnrollment = async (enrollmentId: string) => 
     courseName: enrollment.courses.name,
     courseModules: enrollment.courses.modules || 'Módulos do curso conforme programa.',
     completionDate,
-    courseHours: enrollment.courses.duration_hours || 390
+    courseHours,
+    effectiveHours
   });
 };

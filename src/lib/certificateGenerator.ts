@@ -11,6 +11,7 @@ interface CertificateData {
   certificateCode: string;
   verificationUrl: string;
   courseHours: number;
+  effectiveHours?: number; // Carga horária efetiva para órgãos federais
 }
 
 interface SystemSettings {
@@ -229,11 +230,12 @@ try {
   const courseTextWidth = pdf.getTextWidth(courseText);
   pdf.text(courseText, (pageWidth - courseTextWidth) / 2, 136);
 
-  // Hours information
+  // Hours information - use effectiveHours if available (for federal agencies)
+  const displayHours = certificateData.effectiveHours || certificateData.courseHours;
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(0, 0, 0);
-  const hoursText = `com carga horária de ${certificateData.courseHours} (${numberToWords(certificateData.courseHours)}) horas,`;
+  const hoursText = `com carga horária de ${displayHours} (${numberToWords(displayHours)}) horas,`;
   const hoursTextWidth = pdf.getTextWidth(hoursText);
   pdf.text(hoursText, (pageWidth - hoursTextWidth) / 2, 148);
 
