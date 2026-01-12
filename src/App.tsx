@@ -36,6 +36,7 @@ import CertificatesPage from "./pages/admin/CertificatesPage";
 import EnrollmentsManagementPage from "./pages/admin/EnrollmentsManagementPage";
 import UsersManagementPage from "./pages/admin/UsersManagementPage";
 import DiscountsReportPage from "./pages/admin/DiscountsReportPage";
+import OrganTypesPage from "./pages/admin/OrganTypesPage";
 
 const queryClient = new QueryClient();
 
@@ -231,8 +232,16 @@ const App = () => (
                   </AuthGuard>
                 } 
               />
-
-              {/* 404 route */}
+              <Route 
+                path="/admin/organ-types" 
+                element={
+                  <AuthGuard adminOnly>
+                    <AdminLayout>
+                      <OrganTypesPage />
+                    </AdminLayout>
+                  </AuthGuard>
+                } 
+              />
               <Route path="*" element={
                 <div className="min-h-screen bg-background flex flex-col">
                   <Header />

@@ -24,7 +24,8 @@ import {
   UserCheck,
   LogOut,
   UsersRound,
-  Receipt
+  Receipt,
+  Building2
 } from "lucide-react";
 
 const adminMenuItems = [
@@ -80,6 +81,11 @@ const settingsItems = [
     title: "Pagamentos",
     url: "/admin/payment-settings",
     icon: DollarSign,
+  },
+  {
+    title: "Tipos de Órgãos",
+    url: "/admin/organ-types",
+    icon: Building2,
   },
 ];
 

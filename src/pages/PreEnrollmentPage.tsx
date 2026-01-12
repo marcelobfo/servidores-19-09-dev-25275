@@ -16,6 +16,7 @@ import { Shield, User, Calendar, GraduationCap, DollarSign, FileText, Clock, Awa
 import { triggerEnrollmentWebhook } from "@/lib/webhookService";
 import { DateOfBirthPicker } from "@/components/ui/date-of-birth-picker";
 import { Badge } from "@/components/ui/badge";
+import { Building2 } from "lucide-react";
 
 interface Course {
   id: string;
@@ -30,6 +31,13 @@ interface CourseDetails extends Course {
   areas?: {
     name: string;
   };
+}
+
+interface OrganType {
+  id: string;
+  name: string;
+  hours_multiplier: number;
+  is_federal: boolean;
 }
 
 const PreEnrollmentPage = () => {
@@ -48,6 +56,8 @@ const PreEnrollmentPage = () => {
   const [selectedCourseName, setSelectedCourseName] = useState<string>("");
   const [selectedCourseDetails, setSelectedCourseDetails] = useState<CourseDetails | null>(null);
   const [importing, setImporting] = useState(false);
+  const [organTypes, setOrganTypes] = useState<OrganType[]>([]);
+  const [selectedOrganType, setSelectedOrganType] = useState<OrganType | null>(null);
 
   const [formData, setFormData] = useState({
     course_id: searchParams.get("course") || "",
@@ -66,13 +76,15 @@ const PreEnrollmentPage = () => {
     license_start_date: "",
     license_end_date: "",
     license_duration: "",
-    additional_info: ""
+    additional_info: "",
+    organ_type_id: ""
   });
 
   const [filteredCourses, setFilteredCourses] = useState<Course[]>([]);
 
   useEffect(() => {
     fetchCourses();
+    fetchOrganTypes();
   }, []);
 
   // Fetch full course details when course_id comes from URL
@@ -150,6 +162,40 @@ const PreEnrollmentPage = () => {
     }
   };
 
+  const fetchOrganTypes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("organ_types" as any)
+        .select("*")
+        .order("is_federal", { ascending: true })
+        .order("name");
+
+      if (error) throw error;
+      const types = (data as unknown as OrganType[]) || [];
+      setOrganTypes(types);
+      
+      // Set default to "Normal" type
+      const normalType = types.find(t => t.name === "Normal");
+      if (normalType) {
+        setSelectedOrganType(normalType);
+        setFormData(prev => ({ ...prev, organ_type_id: normalType.id }));
+      }
+    } catch (error) {
+      console.error("Error fetching organ types:", error);
+    }
+  };
+
+  const handleOrganTypeChange = (organTypeId: string) => {
+    const organType = organTypes.find(t => t.id === organTypeId);
+    setSelectedOrganType(organType || null);
+    setFormData(prev => ({ ...prev, organ_type_id: organTypeId }));
+  };
+
+  // Calculate effective hours based on organ type multiplier
+  const getEffectiveHours = (baseHours: number): number => {
+    if (!selectedOrganType) return baseHours;
+    return Math.round(baseHours * selectedOrganType.hours_multiplier);
+  };
   // Calculate end date based on start date and duration
   const calculateEndDate = (startDate: string, duration: string) => {
     if (!startDate || !duration) return "";
@@ -355,6 +401,10 @@ const PreEnrollmentPage = () => {
         license_start_date: formData.license_start_date,
         license_end_date: formData.license_end_date,
         additional_info: formData.additional_info,
+        organ_type_id: formData.organ_type_id || null,
+        custom_hours: selectedOrganType && selectedCourseDetails 
+          ? getEffectiveHours(selectedCourseDetails.duration_hours)
+          : null
       };
 
       // Inserir via Edge Function
@@ -457,13 +507,30 @@ const PreEnrollmentPage = () => {
                         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                           <div className="flex items-center gap-1">
                             <Clock className="h-4 w-4" />
-                            <span>{selectedCourseDetails.duration_hours}h de carga horária</span>
+                            <span>
+                              {selectedOrganType && selectedOrganType.hours_multiplier !== 1 ? (
+                                <>
+                                  <span className="line-through text-muted-foreground/50">{selectedCourseDetails.duration_hours}h</span>
+                                  {" → "}
+                                  <span className="font-semibold text-primary">{getEffectiveHours(selectedCourseDetails.duration_hours)}h</span>
+                                  <span className="ml-1 text-xs">({Math.round(selectedOrganType.hours_multiplier * 100)}%)</span>
+                                </>
+                              ) : (
+                                <>{selectedCourseDetails.duration_hours}h de carga horária</>
+                              )}
+                            </span>
                           </div>
                           {selectedCourseDetails.duration_days && (
                             <div className="flex items-center gap-1">
                               <Calendar className="h-4 w-4" />
                               <span>{selectedCourseDetails.duration_days} dias</span>
                             </div>
+                          )}
+                          {selectedOrganType && selectedOrganType.is_federal && (
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                              <Building2 className="h-3 w-3 mr-1" />
+                              {selectedOrganType.name}
+                            </Badge>
                           )}
                           {selectedCourseDetails.pre_enrollment_fee && selectedCourseDetails.pre_enrollment_fee > 0 && (
                             <div className="flex items-center gap-1">
@@ -815,12 +882,57 @@ const PreEnrollmentPage = () => {
               </CardContent>
             </Card>
 
-            {/* SEÇÃO 4 - PAGAMENTO */}
+            {/* SEÇÃO 4 - TIPO DE ÓRGÃO */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />
+                  🏛️ SEÇÃO 4 – TIPO DE ÓRGÃO
+                </CardTitle>
+                <CardDescription>
+                  Selecione o tipo de órgão onde você trabalha. Órgãos federais possuem carga horária diferenciada.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="organ_type_id">Tipo de Órgão *</Label>
+                  <Select 
+                    value={formData.organ_type_id} 
+                    onValueChange={handleOrganTypeChange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o tipo de órgão" />
+                    </SelectTrigger>
+                    <SelectContent className="z-50">
+                      {organTypes.map((organType) => (
+                        <SelectItem key={organType.id} value={organType.id}>
+                          {organType.name} {organType.is_federal && `(${Math.round(organType.hours_multiplier * 100)}% da carga horária)`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedOrganType && selectedOrganType.is_federal && selectedCourseDetails && (
+                  <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                    <Building2 className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-800 dark:text-blue-200">
+                      <strong>Carga horária ajustada para órgão federal:</strong><br />
+                      {selectedCourseDetails.duration_hours}h × {Math.round(selectedOrganType.hours_multiplier * 100)}% = 
+                      <strong className="ml-1">{getEffectiveHours(selectedCourseDetails.duration_hours)}h</strong><br />
+                      <span className="text-sm">Esta carga horária será exibida em todos os documentos (certificado, declaração, plano de estudos).</span>
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* SEÇÃO 5 - PAGAMENTO */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <DollarSign className="h-5 w-5" />
-                  💵 SEÇÃO 4 – PAGAMENTO
+                  💵 SEÇÃO 5 – PAGAMENTO
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -833,12 +945,12 @@ const PreEnrollmentPage = () => {
               </CardContent>
             </Card>
 
-            {/* SEÇÃO 5 - ORIENTAÇÕES FINAIS */}
+            {/* SEÇÃO 6 - ORIENTAÇÕES FINAIS */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5" />
-                  📄 SEÇÃO 5 – ORIENTAÇÕES FINAIS
+                  📄 SEÇÃO 6 – ORIENTAÇÕES FINAIS
                 </CardTitle>
               </CardHeader>
               <CardContent>
