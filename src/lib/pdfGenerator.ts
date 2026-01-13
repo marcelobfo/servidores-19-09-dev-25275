@@ -12,16 +12,20 @@ interface SystemSettings {
   director_title: string;
   logo_url?: string;
   director_signature_url?: string;
+  pix_key?: string;
+  pix_holder_name?: string;
 }
 
 interface Course {
   name: string;
   duration_hours: number;
-  effective_hours?: number;  // Carga horária efetiva (após multiplicador do tipo de órgão)
-  start_date: string;
-  end_date: string;
+  effective_hours?: number;
+  start_date?: string;
+  end_date?: string;
   modules?: string;
   description?: string;
+  pre_enrollment_fee?: number;
+  enrollment_fee?: number;
 }
 
 interface PreEnrollment {
@@ -47,26 +51,54 @@ const loadImage = (url: string): Promise<HTMLImageElement> => {
 // Helper function to format CPF
 const formatCPF = (cpf: string): string => {
   if (!cpf) return 'não informado';
-  
-  // Remove tudo que não é dígito
   const cleaned = cpf.replace(/\D/g, '');
-  
-  // Formata como XXX.XXX.XXX-XX
   if (cleaned.length === 11) {
     return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6, 9)}-${cleaned.slice(9, 11)}`;
   }
-  
-  return cpf; // Retorna original se não tiver 11 dígitos
+  return cpf;
 };
 
-export const generateStudyPlan = async (
-  enrollment: PreEnrollment,
-  settings: SystemSettings
-): Promise<Blob> => {
-  const pdf = new jsPDF();
-  
-  let yPosition = 20;
+// Helper function to format date
+const formatDate = (dateStr?: string): string => {
+  if (!dateStr) return 'a definir';
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('pt-BR');
+  } catch {
+    return dateStr;
+  }
+};
 
+// Helper function to format currency
+const formatCurrency = (value: number): string => {
+  return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+// Helper to add document footer
+const addDocumentFooter = (pdf: jsPDF, settings: SystemSettings): void => {
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const footerY = pageHeight - 15;
+  
+  pdf.setFontSize(7);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(100, 100, 100);
+  
+  const year = new Date().getFullYear();
+  const footerLine1 = `E-commerce por ${settings.institution_name} © ${year}. ${settings.pix_holder_name || 'JMR Empreendimentos digitais'}/CNPJ: ${settings.institution_cnpj}. Whatsapp: ${settings.institution_phone} ou e-mail: ${settings.institution_email}`;
+  const footerLine2 = settings.institution_website || '';
+  
+  pdf.text(footerLine1, 105, footerY, { align: 'center' });
+  if (footerLine2) {
+    pdf.text(footerLine2, 105, footerY + 4, { align: 'center' });
+  }
+  
+  pdf.setTextColor(0, 0, 0);
+};
+
+// Helper to add header with logo
+const addHeader = async (pdf: jsPDF, settings: SystemSettings, startY: number = 15): Promise<number> => {
+  let yPosition = startY;
+  
   // Add logo if available
   if (settings.logo_url) {
     try {
@@ -77,446 +109,23 @@ export const generateStudyPlan = async (
       canvas.height = logo.height;
       ctx?.drawImage(logo, 0, 0);
       const logoData = canvas.toDataURL('image/jpeg');
-      pdf.addImage(logoData, 'JPEG', 15, yPosition, 30, 20);
+      pdf.addImage(logoData, 'JPEG', 15, yPosition, 25, 18);
     } catch (error) {
       console.error('Error loading logo:', error);
     }
   }
 
-  // Header information
+  // Header information (right side of logo)
+  pdf.setFontSize(9);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text(settings.institution_name, 45, yPosition + 6);
+  pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(8);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text(settings.institution_name, 50, yPosition + 5);
-  pdf.text(settings.institution_address, 50, yPosition + 9);
-  pdf.text(`CEP: ${settings.institution_cep} - CNPJ: ${settings.institution_cnpj}`, 50, yPosition + 13);
-  pdf.text(`Tel: ${settings.institution_phone} - Email: ${settings.institution_email}`, 50, yPosition + 17);
+  pdf.text('Cursos Online e Presenciais', 45, yPosition + 11);
+  pdf.text(settings.institution_address, 45, yPosition + 15);
+  pdf.text(`CEP: ${settings.institution_cep}`, 45, yPosition + 19);
 
-  yPosition += 35;
-
-  // Title
-  pdf.setFontSize(18);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('PLANO DE ESTUDOS', 105, yPosition, { align: 'center' });
-
-  yPosition += 15;
-
-  // Course Info
-  pdf.setFontSize(11);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('DADOS DO CURSO', 20, yPosition);
-  
-  yPosition += 7;
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(10);
-  pdf.text(`Curso: ${enrollment.course.name}`, 20, yPosition);
-  yPosition += 5;
-  const effectiveHours = enrollment.course.effective_hours || enrollment.course.duration_hours;
-  pdf.text(`Carga Horária Total: ${effectiveHours} horas`, 20, yPosition);
-  yPosition += 5;
-  
-  // Calculate duration in days
-  let durationDays = 0;
-  if (enrollment.course.start_date && enrollment.course.end_date) {
-    const start = new Date(enrollment.course.start_date);
-    const end = new Date(enrollment.course.end_date);
-    durationDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-  }
-  
-  if (durationDays > 0) {
-    pdf.text(`Duração: ${durationDays} dias`, 20, yPosition);
-  }
-  yPosition += 5;
-  pdf.text(`Modalidade: Ensino à Distância (EAD)`, 20, yPosition);
-
-  yPosition += 12;
-
-  // Student Info Box
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
-  pdf.text('DADOS DO ESTUDANTE', 20, yPosition);
-  
-  yPosition += 7;
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(10);
-  pdf.text(`Nome: ${enrollment.full_name}`, 20, yPosition);
-  if (enrollment.cpf) {
-    yPosition += 5;
-    pdf.text(`CPF: ${formatCPF(enrollment.cpf)}`, 20, yPosition);
-  }
-  if (enrollment.organization) {
-    yPosition += 5;
-    pdf.text(`Instituição: ${enrollment.organization}`, 20, yPosition);
-  }
-
-  yPosition += 12;
-
-  // Parse modules first to use in description
-  let modules: Array<{ name: string; hours: number; description?: string }> = [];
-  if (enrollment.course.modules) {
-    try {
-      const parsedModules = JSON.parse(enrollment.course.modules);
-      
-      if (Array.isArray(parsedModules)) {
-        modules = parsedModules.map((m: any) => {
-          if (typeof m === 'string') {
-            return { name: m, hours: 0 };
-          }
-          return {
-            name: m.name || m.nome || m.title || 'Módulo',
-            hours: m.hours || m.carga_horaria || 0,
-            description: m.description || m.descricao || ''
-          };
-        });
-      }
-    } catch (e) {
-      console.error('Error parsing modules:', e);
-    }
-  }
-
-  // Calculate missing hours proportionally using effective hours
-  const effectiveHoursTotal = enrollment.course.effective_hours || enrollment.course.duration_hours;
-  if (modules.length > 0) {
-    const totalHours = modules.reduce((sum, m) => sum + m.hours, 0);
-    if (totalHours === 0) {
-      const hoursPerModule = Math.floor(effectiveHoursTotal / modules.length);
-      modules = modules.map((m, i) => ({
-        ...m,
-        hours: i === modules.length - 1 
-          ? effectiveHoursTotal - (hoursPerModule * (modules.length - 1))
-          : hoursPerModule
-      }));
-    } else if (enrollment.course.effective_hours && enrollment.course.effective_hours !== enrollment.course.duration_hours) {
-      // Recalcular proporcionalmente se há effective_hours diferente
-      const ratio = effectiveHoursTotal / enrollment.course.duration_hours;
-      modules = modules.map((m, i) => ({
-        ...m,
-        hours: i === modules.length - 1 
-          ? effectiveHoursTotal - modules.slice(0, -1).reduce((sum, mod) => sum + Math.round(mod.hours * ratio), 0)
-          : Math.round(m.hours * ratio)
-      }));
-    }
-  }
-
-  // Description of course (if modules have descriptions)
-  const hasDescriptions = modules.some(m => m.description && m.description.trim());
-  if (hasDescriptions) {
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(11);
-    pdf.text('DESCRIÇÃO DO CURSO', 20, yPosition);
-    yPosition += 7;
-    
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(9);
-    
-    modules.forEach((module, index) => {
-      if (module.description && module.description.trim()) {
-        // Check if we need a new page
-        if (yPosition > 250) {
-          pdf.addPage();
-          yPosition = 20;
-        }
-        
-        pdf.setFont('helvetica', 'bold');
-        pdf.text(`MÓDULO ${index + 1} - ${module.name.toUpperCase()}`, 20, yPosition);
-        yPosition += 5;
-        
-        pdf.setFont('helvetica', 'normal');
-        const descLines = pdf.splitTextToSize(module.description, 170);
-        descLines.forEach((line: string) => {
-          if (yPosition > 270) {
-            pdf.addPage();
-            yPosition = 20;
-          }
-          pdf.text(line, 20, yPosition);
-          yPosition += 4;
-        });
-        yPosition += 3;
-      }
-    });
-    
-    yPosition += 7;
-  }
-
-  // Course Content
-  if (yPosition > 230) {
-    pdf.addPage();
-    yPosition = 20;
-  }
-  
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
-  pdf.text('CONTEÚDO PROGRAMÁTICO', 20, yPosition);
-
-  yPosition += 8;
-
-  // Table header - SEM FUNDO CINZA
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(9);
-  pdf.text('MÓDULO', 25, yPosition);
-  pdf.text('CARGA HORÁRIA', 155, yPosition);
-
-  yPosition += 3;
-
-  // Linha horizontal abaixo do header
-  pdf.setDrawColor(100, 100, 100);
-  pdf.setLineWidth(0.5);
-  pdf.line(20, yPosition, 190, yPosition);
-
-  yPosition += 5;
-
-  // Helper function to check page break needs
-  const addPageBreakIfNeeded = (currentY: number, requiredSpace: number = 60): number => {
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const marginBottom = 50;
-    
-    if (currentY + requiredSpace > pageHeight - marginBottom) {
-      pdf.addPage();
-      return 20;
-    }
-    return currentY;
-  };
-
-  // Module table with actual module names
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  
-  modules.forEach((module, index) => {
-    yPosition = addPageBreakIfNeeded(yPosition, 10);
-    
-    const moduleName = module.name || `Módulo ${index + 1}`;
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(`${index + 1}. ${moduleName}`, 25, yPosition);
-    pdf.text(`${module.hours}h`, 160, yPosition);
-    
-    yPosition += 7;
-  });
-
-  // Linha final da tabela
-  pdf.setDrawColor(100, 100, 100);
-  pdf.setLineWidth(0.5);
-  pdf.line(20, yPosition, 190, yPosition);
-
-  // Total
-  yPosition += 3;
-  pdf.setFont('helvetica', 'bold');
-  pdf.setDrawColor(100, 100, 100);
-  pdf.setLineWidth(0.5);
-  pdf.line(20, yPosition, 190, yPosition);
-  yPosition += 5;
-  // Usar effective_hours se disponível, senão calcular do total dos módulos
-  const displayTotal = enrollment.course.effective_hours || modules.reduce((sum, module) => sum + module.hours, 0);
-  pdf.text('TOTAL:', 25, yPosition);
-  pdf.text(`${displayTotal}h`, 160, yPosition);
-
-  yPosition += 12;
-  yPosition = addPageBreakIfNeeded(yPosition, 70);
-
-  // Methodology
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
-  pdf.text('METODOLOGIA', 20, yPosition);
-  yPosition += 7;
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  const methodologyText = 'O curso será desenvolvido na modalidade de Ensino a Distância (EAD), com aulas online, materiais didáticos digitais e acompanhamento tutorial. As atividades incluem videoaulas, exercícios práticos, fóruns de discussão e avaliações online.';
-  const splitMethodology = pdf.splitTextToSize(methodologyText, 170);
-  pdf.text(splitMethodology, 20, yPosition);
-  yPosition += splitMethodology.length * 4 + 8;
-
-  // Schedule
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
-  pdf.text('CRONOGRAMA DE ESTUDOS', 20, yPosition);
-  yPosition += 7;
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  pdf.text('Carga horária semanal recomendada: 20 horas', 20, yPosition);
-  yPosition += 5;
-  pdf.text('Horário de atendimento: Segunda a Sexta, 8h às 18h', 20, yPosition);
-  yPosition += 5;
-  pdf.text(`Plataforma: Sistema EAD ${settings.institution_name}`, 20, yPosition);
-
-  // Forçar nova página para assinatura
-  pdf.addPage();
-  yPosition = 50;
-
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(10);
-
-  // Extrair cidade do endereço
-  const addressParts = settings.institution_address.split('-');
-  const city = addressParts.length > 1 ? addressParts[addressParts.length - 2].trim() : 'São Paulo';
-
-  pdf.text(`${city}, ${new Date().toLocaleDateString('pt-BR')}`, 20, yPosition);
-
-  yPosition += 20;
-
-  // Assinatura do diretor
-  if (settings.director_signature_url) {
-    try {
-      const signature = await loadImage(settings.director_signature_url);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = signature.width;
-      canvas.height = signature.height;
-      ctx?.drawImage(signature, 0, 0);
-      const signatureData = canvas.toDataURL('image/png');
-      pdf.addImage(signatureData, 'PNG', 20, yPosition, 40, 15);
-      yPosition += 20;
-    } catch (error) {
-      console.error('Error loading signature:', error);
-      yPosition += 15;
-    }
-  }
-
-  pdf.setLineWidth(0.5);
-  pdf.line(20, yPosition, 80, yPosition);
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(10);
-  pdf.text(settings.director_name, 20, yPosition + 5);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  pdf.text(settings.director_title, 20, yPosition + 10);
-
-  return pdf.output('blob');
-};
-
-export const generateDocument = async (
-  content: string,
-  filename: string
-): Promise<void> => {
-  const pdf = new jsPDF();
-  
-  // Simple text document generation
-  pdf.setFontSize(12);
-  pdf.setFont('helvetica', 'normal');
-  
-  const lines = pdf.splitTextToSize(content, 170);
-  let yPosition = 20;
-  
-  lines.forEach((line: string) => {
-    if (yPosition > 280) {
-      pdf.addPage();
-      yPosition = 20;
-    }
-    pdf.text(line, 20, yPosition);
-    yPosition += 6;
-  });
-  
-  pdf.save(filename);
-};
-
-export const generateEnrollmentDeclaration = async (
-  enrollment: PreEnrollment,
-  settings: SystemSettings
-): Promise<Blob> => {
-  const pdf = new jsPDF();
-  
-  let yPosition = 20;
-
-  // Add logo if available
-  if (settings.logo_url) {
-    try {
-      const logo = await loadImage(settings.logo_url);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = logo.width;
-      canvas.height = logo.height;
-      ctx?.drawImage(logo, 0, 0);
-      const logoData = canvas.toDataURL('image/jpeg');
-      pdf.addImage(logoData, 'JPEG', 15, yPosition, 30, 20);
-    } catch (error) {
-      console.error('Error loading logo:', error);
-    }
-  }
-
-  // Header information
-  pdf.setFontSize(9);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text(settings.institution_name, 50, yPosition + 5);
-  pdf.text(settings.institution_address, 50, yPosition + 10);
-  pdf.text(`CEP: ${settings.institution_cep} - CNPJ: ${settings.institution_cnpj}`, 50, yPosition + 15);
-  pdf.text(`Tel: ${settings.institution_phone} - Email: ${settings.institution_email}`, 50, yPosition + 20);
-
-  yPosition += 45;
-
-  // Title - centered and bold
-  pdf.setFontSize(18);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('DECLARAÇÃO DE MATRÍCULA', 105, yPosition, { align: 'center' });
-
-  yPosition += 20;
-
-  // Declaration content
-  pdf.setFontSize(11);
-  pdf.setFont('helvetica', 'normal');
-
-  const orgText = enrollment.organization ? ` ${enrollment.organization}` : '';
-  const effectiveHours = enrollment.course.effective_hours || enrollment.course.duration_hours || 390;
-  const declarationText = `Declaramos para os devidos fins que ${enrollment.full_name.toUpperCase()}, portador(a) do CPF nº ${formatCPF(enrollment.cpf || '')},${orgText} encontra-se regularmente matriculado(a) no curso de "${enrollment.course.name.toUpperCase()}".
-
-O referido curso possui carga horária de ${effectiveHours} (${numberToWords(effectiveHours)}) horas, sendo realizado na modalidade de Ensino a Distância (EAD), com datas a serem definidas.
-
-O curso está devidamente registrado em nossa instituição e atende aos requisitos necessários para fins de capacitação profissional e licença para capacitação.
-
-Declaramos ainda que o estudante terá acompanhamento pedagógico especializado durante todo o período do curso, com acesso a materiais didáticos atualizados e suporte técnico-pedagógico.
-
-Esta declaração é válida para todos os fins de direito.`;
-
-  const splitText = pdf.splitTextToSize(declarationText, 170);
-  pdf.text(splitText, 20, yPosition);
-
-  yPosition += splitText.length * 5.5 + 15;
-
-  // Date and location
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(10);
-  
-  // Extrair cidade do endereço
-  const addressParts = settings.institution_address.split('-');
-  const city = addressParts.length > 1 ? addressParts[addressParts.length - 2].trim() : 'São Paulo';
-  
-  pdf.text(`${city}, ${new Date().toLocaleDateString('pt-BR')}.`, 20, yPosition);
-
-  // Ensure we have enough space for signature area
-  if (yPosition > 220) {
-    pdf.addPage();
-    yPosition = 50;
-  } else {
-    yPosition += 30;
-  }
-
-  // Signature area
-  if (settings.director_signature_url) {
-    try {
-      const signature = await loadImage(settings.director_signature_url);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = signature.width;
-      canvas.height = signature.height;
-      ctx?.drawImage(signature, 0, 0);
-      const signatureData = canvas.toDataURL('image/png');
-      pdf.addImage(signatureData, 'PNG', 20, yPosition - 8, 40, 15);
-    } catch (error) {
-      console.error('Error loading signature:', error);
-    }
-  }
-
-  pdf.setLineWidth(0.5);
-  pdf.line(20, yPosition + 8, 90, yPosition + 8);
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(10);
-  pdf.text(settings.director_name, 20, yPosition + 13);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  pdf.text(settings.director_title, 20, yPosition + 18);
-
-  // Stamp area indication
-  pdf.setFontSize(8);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text('(CARIMBO E ASSINATURA)', 95, yPosition + 13);
-
-  return pdf.output('blob');
+  return yPosition + 30;
 };
 
 // Helper function to convert numbers to words (simplified version)
@@ -550,4 +159,560 @@ const numberToWords = (num: number): string => {
   }
 
   return result.trim();
+};
+
+// ============================================
+// DECLARAÇÃO DE MATRÍCULA
+// ============================================
+export const generateEnrollmentDeclaration = async (
+  enrollment: PreEnrollment,
+  settings: SystemSettings
+): Promise<Blob> => {
+  const pdf = new jsPDF();
+  
+  let yPosition = await addHeader(pdf, settings);
+  
+  // Title - centered and bold
+  yPosition += 15;
+  pdf.setFontSize(16);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('DECLARAÇÃO DE MATRÍCULA', 105, yPosition, { align: 'center' });
+
+  yPosition += 20;
+
+  // Declaration content - simplified text matching the template
+  pdf.setFontSize(11);
+  pdf.setFont('helvetica', 'normal');
+
+  const effectiveHours = enrollment.course.effective_hours || enrollment.course.duration_hours || 390;
+  const startDate = formatDate(enrollment.course.start_date);
+  const endDate = formatDate(enrollment.course.end_date);
+  const orgText = enrollment.organization ? `, ${enrollment.organization}` : '';
+  
+  const declarationText = `Declaramos que ${enrollment.full_name.toUpperCase()}, CPF: ${formatCPF(enrollment.cpf || '')}${orgText}, está matriculada no curso de ${enrollment.course.name}. O curso será iniciado em ${startDate} com término previsto para ${endDate} e será realizado de forma não presencial, on-line com carga Horária de ${effectiveHours} horas e estará sob a supervisão de um tutor qualificado.`;
+
+  const splitText = pdf.splitTextToSize(declarationText, 170);
+  pdf.text(splitText, 20, yPosition);
+
+  yPosition += splitText.length * 6 + 20;
+
+  // Date and location
+  const addressParts = settings.institution_address.split('-');
+  const city = addressParts.length > 1 ? addressParts[addressParts.length - 2].trim() : 'São Paulo';
+  
+  const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const today = new Date();
+  const formattedDate = `${city}, ${today.getDate().toString().padStart(2, '0')} de ${months[today.getMonth()]} de ${today.getFullYear()}.`;
+  
+  pdf.text(formattedDate, 20, yPosition);
+
+  yPosition += 25;
+
+  // Signature area
+  if (settings.director_signature_url) {
+    try {
+      const signature = await loadImage(settings.director_signature_url);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = signature.width;
+      canvas.height = signature.height;
+      ctx?.drawImage(signature, 0, 0);
+      const signatureData = canvas.toDataURL('image/png');
+      pdf.addImage(signatureData, 'PNG', 20, yPosition - 5, 40, 15);
+      yPosition += 12;
+    } catch (error) {
+      console.error('Error loading signature:', error);
+    }
+  }
+
+  pdf.setLineWidth(0.5);
+  pdf.line(20, yPosition + 5, 90, yPosition + 5);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  pdf.text(settings.director_name, 20, yPosition + 10);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  pdf.text(`${settings.director_title} ${settings.institution_name}`, 20, yPosition + 15);
+
+  // Footer
+  addDocumentFooter(pdf, settings);
+
+  return pdf.output('blob');
+};
+
+// ============================================
+// PLANO DE ESTUDOS
+// ============================================
+export const generateStudyPlan = async (
+  enrollment: PreEnrollment,
+  settings: SystemSettings
+): Promise<Blob> => {
+  const pdf = new jsPDF();
+  
+  let yPosition = await addHeader(pdf, settings);
+
+  // Title
+  yPosition += 10;
+  pdf.setFontSize(16);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('PLANO DE ESTUDOS', 105, yPosition, { align: 'center' });
+
+  yPosition += 15;
+
+  // Course Info Block
+  pdf.setFontSize(10);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Curso: ', 20, yPosition);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(enrollment.course.name, 36, yPosition);
+  
+  yPosition += 6;
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Instituição: ', 20, yPosition);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(enrollment.organization || 'Não informada', 44, yPosition);
+  
+  yPosition += 6;
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Servidor: ', 20, yPosition);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(enrollment.full_name.toUpperCase(), 40, yPosition);
+  
+  yPosition += 6;
+  const effectiveHours = enrollment.course.effective_hours || enrollment.course.duration_hours;
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Carga Horária: ', 20, yPosition);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(`${effectiveHours} horas`, 51, yPosition);
+  
+  yPosition += 6;
+  const startDate = formatDate(enrollment.course.start_date);
+  const endDate = formatDate(enrollment.course.end_date);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Período: ', 20, yPosition);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(`${startDate} a ${endDate}`, 40, yPosition);
+
+  yPosition += 12;
+
+  // Parse modules
+  let modules: Array<{ name: string; hours: number; description?: string }> = [];
+  if (enrollment.course.modules) {
+    try {
+      const parsedModules = JSON.parse(enrollment.course.modules);
+      
+      if (Array.isArray(parsedModules)) {
+        modules = parsedModules.map((m: any) => {
+          if (typeof m === 'string') {
+            return { name: m, hours: 0 };
+          }
+          return {
+            name: m.name || m.nome || m.title || 'Módulo',
+            hours: m.hours || m.carga_horaria || 0,
+            description: m.description || m.descricao || ''
+          };
+        });
+      }
+    } catch (e) {
+      console.error('Error parsing modules:', e);
+    }
+  }
+
+  // Calculate module hours proportionally
+  const effectiveHoursTotal = enrollment.course.effective_hours || enrollment.course.duration_hours;
+  if (modules.length > 0) {
+    const totalHours = modules.reduce((sum, m) => sum + m.hours, 0);
+    if (totalHours === 0) {
+      const hoursPerModule = Math.floor(effectiveHoursTotal / modules.length);
+      modules = modules.map((m, i) => ({
+        ...m,
+        hours: i === modules.length - 1 
+          ? effectiveHoursTotal - (hoursPerModule * (modules.length - 1))
+          : hoursPerModule
+      }));
+    } else if (enrollment.course.effective_hours && enrollment.course.effective_hours !== enrollment.course.duration_hours) {
+      const ratio = effectiveHoursTotal / enrollment.course.duration_hours;
+      modules = modules.map((m, i) => ({
+        ...m,
+        hours: i === modules.length - 1 
+          ? effectiveHoursTotal - modules.slice(0, -1).reduce((sum, mod) => sum + Math.round(mod.hours * ratio), 0)
+          : Math.round(m.hours * ratio)
+      }));
+    }
+  }
+
+  // Module table
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  
+  // Table header with borders
+  pdf.setDrawColor(0, 0, 0);
+  pdf.setLineWidth(0.3);
+  pdf.rect(20, yPosition - 4, 130, 8);
+  pdf.rect(150, yPosition - 4, 40, 8);
+  pdf.text('Módulos', 25, yPosition + 1);
+  pdf.text('Carga Horária (horas)', 152, yPosition + 1);
+  
+  yPosition += 6;
+  pdf.setFont('helvetica', 'normal');
+  
+  modules.forEach((module) => {
+    if (yPosition > 250) {
+      addDocumentFooter(pdf, settings);
+      pdf.addPage();
+      yPosition = 20;
+    }
+    
+    pdf.rect(20, yPosition - 4, 130, 8);
+    pdf.rect(150, yPosition - 4, 40, 8);
+    
+    const moduleName = module.name.length > 55 ? module.name.substring(0, 52) + '...' : module.name;
+    pdf.text(moduleName, 25, yPosition + 1);
+    pdf.text(`${module.hours}`, 168, yPosition + 1, { align: 'center' });
+    
+    yPosition += 6;
+  });
+  
+  // Total row
+  pdf.setFont('helvetica', 'bold');
+  pdf.rect(20, yPosition - 4, 130, 8);
+  pdf.rect(150, yPosition - 4, 40, 8);
+  pdf.text('TOTAL', 25, yPosition + 1);
+  pdf.text(`${effectiveHoursTotal}`, 168, yPosition + 1, { align: 'center' });
+  
+  yPosition += 15;
+
+  // Cronograma section
+  if (yPosition > 200) {
+    addDocumentFooter(pdf, settings);
+    pdf.addPage();
+    yPosition = 20;
+  }
+  
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Cronograma', 20, yPosition);
+  
+  yPosition += 8;
+  pdf.setFontSize(8);
+  
+  // Cronograma table header
+  const colWidths = [35, 25, 25, 65, 40];
+  const headers = ['Data', 'Horário', 'CH Semanal', 'Atividade/Conteúdo', 'Local'];
+  let xPos = 20;
+  
+  pdf.setFont('helvetica', 'bold');
+  headers.forEach((header, i) => {
+    pdf.rect(xPos, yPosition - 4, colWidths[i], 8);
+    pdf.text(header, xPos + 2, yPosition + 1);
+    xPos += colWidths[i];
+  });
+  
+  yPosition += 6;
+  pdf.setFont('helvetica', 'normal');
+  
+  // Generate cronograma rows based on modules and dates
+  if (enrollment.course.start_date && enrollment.course.end_date && modules.length > 0) {
+    const startDateObj = new Date(enrollment.course.start_date);
+    const endDateObj = new Date(enrollment.course.end_date);
+    const totalDays = Math.ceil((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24));
+    const daysPerModule = Math.floor(totalDays / modules.length);
+    
+    modules.forEach((module, index) => {
+      if (yPosition > 250) {
+        addDocumentFooter(pdf, settings);
+        pdf.addPage();
+        yPosition = 20;
+      }
+      
+      const moduleStartDate = new Date(startDateObj);
+      moduleStartDate.setDate(startDateObj.getDate() + (index * daysPerModule));
+      const moduleEndDate = new Date(moduleStartDate);
+      moduleEndDate.setDate(moduleStartDate.getDate() + daysPerModule - 1);
+      
+      if (index === modules.length - 1) {
+        moduleEndDate.setTime(endDateObj.getTime());
+      }
+      
+      const dateRange = `${moduleStartDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })} a ${moduleEndDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}`;
+      const weeklyHours = Math.round(module.hours / Math.ceil(daysPerModule / 7)) || 30;
+      
+      xPos = 20;
+      const rowData = [
+        dateRange,
+        '8:00 às 12:00',
+        weeklyHours.toString(),
+        module.name.substring(0, 35),
+        `Plataforma ${settings.institution_name.split(' ')[0]}`
+      ];
+      
+      rowData.forEach((text, i) => {
+        pdf.rect(xPos, yPosition - 4, colWidths[i], 8);
+        pdf.text(text, xPos + 2, yPosition + 1);
+        xPos += colWidths[i];
+      });
+      
+      yPosition += 6;
+    });
+  }
+
+  yPosition += 10;
+
+  // Conteúdo Programático
+  if (yPosition > 200) {
+    addDocumentFooter(pdf, settings);
+    pdf.addPage();
+    yPosition = 20;
+  }
+  
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('CONTEÚDO PROGRAMÁTICO DO CURSO', 20, yPosition);
+  
+  yPosition += 10;
+  pdf.setFontSize(9);
+  
+  modules.forEach((module, index) => {
+    if (yPosition > 250) {
+      addDocumentFooter(pdf, settings);
+      pdf.addPage();
+      yPosition = 20;
+    }
+    
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`Módulo ${index + 1} – ${module.name}`, 20, yPosition);
+    yPosition += 6;
+    
+    if (module.description) {
+      pdf.setFont('helvetica', 'normal');
+      const descLines = module.description.split('\n').filter(line => line.trim());
+      descLines.forEach((line, lineIndex) => {
+        if (yPosition > 270) {
+          addDocumentFooter(pdf, settings);
+          pdf.addPage();
+          yPosition = 20;
+        }
+        pdf.text(`${lineIndex + 1}. ${line.trim().replace(/^\d+\.\s*/, '')}`, 25, yPosition);
+        yPosition += 5;
+      });
+    }
+    
+    yPosition += 5;
+  });
+
+  // Footer on last page
+  addDocumentFooter(pdf, settings);
+
+  return pdf.output('blob');
+};
+
+// ============================================
+// ORÇAMENTO (QUOTE)
+// ============================================
+export const generateQuote = async (
+  enrollment: PreEnrollment,
+  settings: SystemSettings,
+  preEnrollmentPaid: boolean = false,
+  preEnrollmentAmount: number = 0
+): Promise<Blob> => {
+  const pdf = new jsPDF();
+  
+  let yPosition = await addHeader(pdf, settings);
+
+  // Title
+  yPosition += 10;
+  pdf.setFontSize(16);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('ORÇAMENTO', 105, yPosition, { align: 'center' });
+
+  yPosition += 15;
+
+  // Course Info Block
+  pdf.setFontSize(10);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Curso: ', 20, yPosition);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(enrollment.course.name, 36, yPosition);
+  
+  yPosition += 6;
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Instituição: ', 20, yPosition);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(enrollment.organization || 'Não informada', 44, yPosition);
+  
+  yPosition += 6;
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Servidor: ', 20, yPosition);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(enrollment.full_name.toUpperCase(), 40, yPosition);
+  
+  yPosition += 6;
+  const effectiveHours = enrollment.course.effective_hours || enrollment.course.duration_hours;
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Carga Horária: ', 20, yPosition);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(`${effectiveHours} horas`, 51, yPosition);
+  
+  yPosition += 6;
+  const startDate = formatDate(enrollment.course.start_date);
+  const endDate = formatDate(enrollment.course.end_date);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Período: ', 20, yPosition);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(`${startDate} a ${endDate}`, 40, yPosition);
+
+  yPosition += 15;
+
+  // Value table
+  const totalFee = enrollment.course.enrollment_fee || 0;
+  const preEnrollmentFee = enrollment.course.pre_enrollment_fee || 0;
+  const paidAmount = preEnrollmentPaid ? (preEnrollmentAmount || preEnrollmentFee) : 0;
+  const remainingAmount = Math.max(totalFee - paidAmount, 0);
+
+  pdf.setDrawColor(0, 0, 0);
+  pdf.setLineWidth(0.3);
+  
+  // Table header
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  pdf.rect(20, yPosition - 4, 120, 8);
+  pdf.rect(140, yPosition - 4, 50, 8);
+  pdf.text('Módulos', 25, yPosition + 1);
+  pdf.text('Valor (Reais)', 145, yPosition + 1);
+  
+  yPosition += 6;
+  pdf.setFont('helvetica', 'normal');
+  
+  // Row 1: Total course value
+  pdf.rect(20, yPosition - 4, 120, 8);
+  pdf.rect(140, yPosition - 4, 50, 8);
+  pdf.text(`Licença capacitação – ${effectiveHours} horas`, 25, yPosition + 1);
+  pdf.text(formatCurrency(totalFee), 145, yPosition + 1);
+  
+  yPosition += 6;
+  
+  // Row 2: Pre-enrollment fee
+  pdf.rect(20, yPosition - 4, 120, 8);
+  pdf.rect(140, yPosition - 4, 50, 8);
+  const preEnrollmentText = preEnrollmentPaid ? 'Taxa de antecipação de matrícula (Paga)' : 'Taxa de antecipação de matrícula';
+  pdf.text(preEnrollmentText, 25, yPosition + 1);
+  pdf.text(formatCurrency(paidAmount), 145, yPosition + 1);
+  
+  yPosition += 6;
+  
+  // Row 3: Remaining value
+  pdf.setFont('helvetica', 'bold');
+  pdf.rect(20, yPosition - 4, 120, 8);
+  pdf.rect(140, yPosition - 4, 50, 8);
+  pdf.text('Valor restante', 25, yPosition + 1);
+  pdf.text(formatCurrency(remainingAmount), 145, yPosition + 1);
+  
+  yPosition += 15;
+
+  // Info text
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(10);
+  
+  const infoText1 = 'Nossa equipe elabora a declaração de matrícula e plano de ensino e enviará imediatamente.';
+  pdf.text(infoText1, 20, yPosition);
+  
+  yPosition += 8;
+  
+  const pixKey = settings.pix_key || settings.institution_cnpj;
+  const pixHolder = settings.pix_holder_name || 'Ricardo Jaco de Oliveira e Cia LTDA';
+  const infoText2 = `O valor restante deverá ser realizado pelo PIX (CNPJ: ${pixKey} – ${pixHolder}).`;
+  const splitText2 = pdf.splitTextToSize(infoText2, 170);
+  pdf.text(splitText2, 20, yPosition);
+  
+  yPosition += splitText2.length * 5 + 5;
+  
+  const infoText3 = `O valor restante de R$ ${formatCurrency(remainingAmount)} reais deverá ser pago quando a licença for aprovada e poderá ser dividido em até 12 parcelas no cartão de crédito (Juros da operadora).`;
+  const splitText3 = pdf.splitTextToSize(infoText3, 170);
+  pdf.text(splitText3, 20, yPosition);
+  
+  yPosition += splitText3.length * 5 + 12;
+
+  // O que está incluso?
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('O que está incluso?', 20, yPosition);
+  
+  yPosition += 8;
+  pdf.setFontSize(10);
+  pdf.setFont('helvetica', 'normal');
+  
+  const inclusions = [
+    'Carta de aceite no curso para apresentação ao órgão de lotação.',
+    'Plano de estudos.',
+    'Vídeo aulas.',
+    'Livros em PDF para acompanhamento das disciplinas.',
+    'Certificado.',
+    'Toda a documentação facilitadora de aceite no órgão de origem.',
+    'Suporte.'
+  ];
+  
+  inclusions.forEach((item, index) => {
+    pdf.text(`${index + 1}. ${item}`, 20, yPosition);
+    yPosition += 6;
+  });
+
+  yPosition += 10;
+
+  // Signature area
+  if (settings.director_signature_url) {
+    try {
+      const signature = await loadImage(settings.director_signature_url);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = signature.width;
+      canvas.height = signature.height;
+      ctx?.drawImage(signature, 0, 0);
+      const signatureData = canvas.toDataURL('image/png');
+      pdf.addImage(signatureData, 'PNG', 20, yPosition - 5, 40, 15);
+      yPosition += 12;
+    } catch (error) {
+      console.error('Error loading signature:', error);
+    }
+  }
+
+  pdf.setLineWidth(0.5);
+  pdf.line(20, yPosition + 5, 90, yPosition + 5);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  pdf.text(settings.director_name, 20, yPosition + 10);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  pdf.text(`${settings.director_title} ${settings.institution_name}`, 20, yPosition + 15);
+
+  // Footer
+  addDocumentFooter(pdf, settings);
+
+  return pdf.output('blob');
+};
+
+// ============================================
+// GENERIC DOCUMENT
+// ============================================
+export const generateDocument = async (
+  content: string,
+  filename: string
+): Promise<void> => {
+  const pdf = new jsPDF();
+  
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'normal');
+  
+  const lines = pdf.splitTextToSize(content, 170);
+  let yPosition = 20;
+  
+  lines.forEach((line: string) => {
+    if (yPosition > 280) {
+      pdf.addPage();
+      yPosition = 20;
+    }
+    pdf.text(line, 20, yPosition);
+    yPosition += 6;
+  });
+  
+  pdf.save(filename);
 };
