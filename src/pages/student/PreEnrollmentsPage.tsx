@@ -404,13 +404,23 @@ export function PreEnrollmentsPage() {
     }
   };
 
+  // Função para calcular o valor final da matrícula com desconto da pré-matrícula
+  const getEnrollmentFinalAmount = (preEnrollment: PreEnrollment): { enrollmentFee: number; discount: number; finalAmount: number } => {
+    const enrollmentFee = preEnrollment.courses.enrollment_fee || 0;
+    const preEnrollmentPaid = preEnrollmentPayments[preEnrollment.id] || 0;
+    const finalAmount = Math.max(enrollmentFee - preEnrollmentPaid, 5); // Mínimo R$ 5,00 (Asaas)
+    return { enrollmentFee, discount: preEnrollmentPaid, finalAmount };
+  };
+
   const handleEnrollment = async (preEnrollment: PreEnrollment) => {
     try {
-      const enrollmentFee = preEnrollment.courses.enrollment_fee || 0;
+      const { enrollmentFee, discount, finalAmount } = getEnrollmentFinalAmount(preEnrollment);
       
       console.log('🎓 [ENROLLMENT] Iniciando processo de matrícula');
       console.log('📋 Pré-matrícula ID:', preEnrollment.id);
-      console.log('💰 Taxa de matrícula:', enrollmentFee);
+      console.log('💰 Taxa de matrícula original:', enrollmentFee);
+      console.log('💸 Desconto (pré-matrícula paga):', discount);
+      console.log('💵 Valor final:', finalAmount);
       
       // Se há taxa de matrícula, redirecionar para checkout Asaas
       if (enrollmentFee > 0) {
@@ -443,7 +453,7 @@ export function PreEnrollmentsPage() {
           enrollmentId = existingEnrollment.id;
           console.log('♻️ [ENROLLMENT] Reutilizando matrícula existente');
         } else {
-          // Criar nova matrícula com status pending_payment
+          // Criar nova matrícula com status pending_payment e valor COM DESCONTO
           const { data: newEnrollment, error: enrollmentError } = await supabase
             .from("enrollments")
             .insert({
@@ -452,7 +462,7 @@ export function PreEnrollmentsPage() {
               pre_enrollment_id: preEnrollment.id,
               status: "pending_payment",
               payment_status: "pending",
-              enrollment_amount: preEnrollment.courses.pre_enrollment_fee || 0
+              enrollment_amount: finalAmount // CORRIGIDO: usar valor com desconto
             })
             .select()
             .single();
