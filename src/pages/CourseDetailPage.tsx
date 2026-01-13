@@ -45,6 +45,7 @@ const CourseDetailPage = () => {
   const [modules, setModules] = useState<any[]>([]);
   const [preEnrollment, setPreEnrollment] = useState<PreEnrollment | null>(null);
   const [loadingAction, setLoadingAction] = useState(false);
+  const [preEnrollmentPaid, setPreEnrollmentPaid] = useState(0);
 
   useEffect(() => {
     if (slug) {
@@ -79,9 +80,29 @@ const CourseDetailPage = () => {
 
       if (error) throw error;
       setPreEnrollment(data);
+      
+      // Buscar pagamento confirmado da pré-matrícula para calcular desconto
+      if (data) {
+        const { data: payment } = await supabase
+          .from('payments')
+          .select('amount')
+          .eq('pre_enrollment_id', data.id)
+          .eq('kind', 'pre_enrollment')
+          .in('status', ['confirmed', 'received'])
+          .maybeSingle();
+        
+        setPreEnrollmentPaid(payment?.amount || 0);
+      }
     } catch (error) {
       console.error("Error fetching pre-enrollment:", error);
     }
+  };
+  
+  // Calcular valor final da matrícula com desconto
+  const getEnrollmentFinalAmount = (): { enrollmentFee: number; discount: number; finalAmount: number } => {
+    const enrollmentFee = preEnrollment?.courses?.enrollment_fee || 0;
+    const finalAmount = Math.max(enrollmentFee - preEnrollmentPaid, 5); // Mínimo R$ 5,00 (Asaas)
+    return { enrollmentFee, discount: preEnrollmentPaid, finalAmount };
   };
 
   const handleOrganApproval = async () => {
@@ -514,27 +535,46 @@ const CourseDetailPage = () => {
                         </Button>
                       )}
 
-                      {preEnrollment.organ_approval_status === 'approved' && !preEnrollment.organ_approval_confirmed && (
-                        <Button 
-                          onClick={handleEnrollmentPayment}
-                          size="lg"
-                          className="w-full h-12 font-semibold transition-all hover:scale-105"
-                          disabled={loadingAction}
-                          style={{ background: 'var(--gradient-primary)' }}
-                        >
-                          {loadingAction ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                              Processando...
-                            </>
-                          ) : (
-                            <>
-                              <CreditCard className="mr-2 h-5 w-5" />
-                              Fazer Matrícula (R$ {preEnrollment.courses.enrollment_fee?.toFixed(2).replace('.', ',') || '0,00'})
-                            </>
-                          )}
-                        </Button>
-                      )}
+                      {preEnrollment.organ_approval_status === 'approved' && !preEnrollment.organ_approval_confirmed && (() => {
+                        const { enrollmentFee, discount, finalAmount } = getEnrollmentFinalAmount();
+                        return (
+                          <div className="space-y-3">
+                            {discount > 0 && (
+                              <div className="p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-lg text-sm">
+                                <div className="text-green-800 dark:text-green-200 font-medium mb-1">
+                                  ✓ Desconto aplicado!
+                                </div>
+                                <div className="text-green-700 dark:text-green-300">
+                                  <span className="line-through text-muted-foreground">
+                                    Original: R$ {enrollmentFee.toFixed(2).replace('.', ',')}
+                                  </span>
+                                  <br />
+                                  <span>Desconto: - R$ {discount.toFixed(2).replace('.', ',')}</span>
+                                </div>
+                              </div>
+                            )}
+                            <Button 
+                              onClick={handleEnrollmentPayment}
+                              size="lg"
+                              className="w-full h-12 font-semibold transition-all hover:scale-105"
+                              disabled={loadingAction}
+                              style={{ background: 'var(--gradient-primary)' }}
+                            >
+                              {loadingAction ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                  Processando...
+                                </>
+                              ) : (
+                                <>
+                                  <CreditCard className="mr-2 h-5 w-5" />
+                                  Fazer Matrícula (R$ {finalAmount.toFixed(2).replace('.', ',')})
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        );
+                      })()}
 
                       {preEnrollment.organ_approval_status === 'approved' && preEnrollment.organ_approval_confirmed && (
                         <Link to="/student" className="block">

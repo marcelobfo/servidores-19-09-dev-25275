@@ -45,6 +45,7 @@ export default function StudentDashboard() {
   const [generating, setGenerating] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedEnrollmentForPayment, setSelectedEnrollmentForPayment] = useState<PreEnrollment | null>(null);
+  const [preEnrollmentPayments, setPreEnrollmentPayments] = useState<Record<string, number>>({});
   const { toast } = useToast();
 
   useEffect(() => {
@@ -88,11 +89,36 @@ export default function StudentDashboard() {
 
       if (error) throw error;
       setEnrollments(data || []);
+      
+      // Buscar pagamentos confirmados de pré-matrícula para calcular descontos
+      if (data && data.length > 0) {
+        const preEnrollmentIds = data.map(p => p.id);
+        const { data: payments } = await supabase
+          .from('payments')
+          .select('pre_enrollment_id, amount')
+          .eq('kind', 'pre_enrollment')
+          .in('status', ['confirmed', 'received'])
+          .in('pre_enrollment_id', preEnrollmentIds);
+        
+        const paymentMap: Record<string, number> = {};
+        payments?.forEach(p => {
+          paymentMap[p.pre_enrollment_id] = p.amount;
+        });
+        setPreEnrollmentPayments(paymentMap);
+      }
     } catch (error) {
       console.error("Error fetching enrollments:", error);
     } finally {
       setLoading(false);
     }
+  };
+  
+  // Função para calcular o valor final da matrícula com desconto
+  const getEnrollmentFinalAmount = (enrollment: PreEnrollment): { enrollmentFee: number; discount: number; finalAmount: number } => {
+    const enrollmentFee = enrollment.courses.enrollment_fee || 0;
+    const preEnrollmentPaid = preEnrollmentPayments[enrollment.id] || 0;
+    const finalAmount = Math.max(enrollmentFee - preEnrollmentPaid, 5); // Mínimo R$ 5,00 (Asaas)
+    return { enrollmentFee, discount: preEnrollmentPaid, finalAmount };
   };
 
   const handleEnrollmentPayment = async (enrollment: PreEnrollment) => {
@@ -522,24 +548,44 @@ export default function StudentDashboard() {
                     </div>
                   )}
 
-                   {enrollment.organ_approval_status === 'approved' && !enrollment.organ_approval_confirmed && (
-                     <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
-                       <div className="flex items-center gap-2 mb-2">
-                         <CheckCircle className="h-5 w-5 text-green-600" />
-                         <p className="font-medium text-green-800">Pré-matrícula Aprovada pelo Órgão!</p>
+                   {enrollment.organ_approval_status === 'approved' && !enrollment.organ_approval_confirmed && (() => {
+                     const { enrollmentFee, discount, finalAmount } = getEnrollmentFinalAmount(enrollment);
+                     return (
+                       <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                         <div className="flex items-center gap-2 mb-2">
+                           <CheckCircle className="h-5 w-5 text-green-600" />
+                           <p className="font-medium text-green-800">Pré-matrícula Aprovada pelo Órgão!</p>
+                         </div>
+                         <p className="text-sm text-green-700 mb-3">
+                           Sua pré-matrícula foi aprovada! Agora você pode efetivar sua matrícula.
+                         </p>
+                         
+                         {/* Exibir informação do desconto se houver */}
+                         {discount > 0 && (
+                           <div className="mb-3 p-3 bg-green-100 border border-green-300 rounded-lg text-sm">
+                             <div className="font-medium text-green-800 mb-1">
+                               ✓ Desconto aplicado!
+                             </div>
+                             <div className="text-green-700">
+                               <span className="line-through text-muted-foreground">
+                                 Original: R$ {enrollmentFee.toFixed(2)}
+                               </span>
+                               <br />
+                               <span>Desconto (pré-matrícula): - R$ {discount.toFixed(2)}</span>
+                             </div>
+                           </div>
+                         )}
+                         
+                         <Button 
+                           onClick={() => handleEnrollmentCheckout(enrollment)}
+                           className="bg-green-600 hover:bg-green-700"
+                         >
+                           <CreditCard className="mr-2 h-4 w-4" />
+                           Efetivar Matrícula (R$ {finalAmount.toFixed(2)})
+                         </Button>
                        </div>
-                       <p className="text-sm text-green-700 mb-3">
-                         Sua pré-matrícula foi aprovada! Agora você pode efetivar sua matrícula.
-                       </p>
-                       <Button 
-                         onClick={() => handleEnrollmentCheckout(enrollment)}
-                         className="bg-green-600 hover:bg-green-700"
-                       >
-                         <CreditCard className="mr-2 h-4 w-4" />
-                         Efetivar Matrícula (R$ {enrollment.courses.enrollment_fee?.toFixed(2) || '0,00'})
-                       </Button>
-                     </div>
-                   )}
+                     );
+                   })()}
 
                   {enrollment.organ_approval_status === 'rejected' && (
                     <div className="mt-4 p-4 bg-red-50 rounded-lg border border-red-200">
