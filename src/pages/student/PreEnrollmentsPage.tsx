@@ -10,6 +10,13 @@ import { SortOptions } from "@/components/student/filters/SortOptions";
 import { Clock, CheckCircle, XCircle, DollarSign, FileText, Calendar, Download, Mail } from "lucide-react";
 import { toast } from "sonner";
 
+interface OrganType {
+  id: string;
+  name: string;
+  hours_multiplier: number;
+  is_federal: boolean;
+}
+
 interface PreEnrollment {
   id: string;
   full_name: string;
@@ -22,6 +29,9 @@ interface PreEnrollment {
   updated_at: string;
   organ_approval_confirmed: boolean;
   organ_approval_date?: string;
+  custom_hours?: number;
+  organ_type_id?: string;
+  organ_types?: OrganType;
   courses: {
     id: string;
     name: string;
@@ -97,7 +107,23 @@ export function PreEnrollmentsPage() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setPreEnrollments(data || []);
+      
+      // Buscar tipos de órgãos para as pré-matrículas que têm organ_type_id
+      const preEnrollmentsWithOrganTypes = await Promise.all(
+        (data || []).map(async (pe: any) => {
+          if (pe.organ_type_id) {
+            const { data: organType } = await (supabase
+              .from('organ_types' as any)
+              .select('id, name, hours_multiplier, is_federal')
+              .eq('id', pe.organ_type_id)
+              .single() as any);
+            return { ...pe, organ_types: organType || undefined };
+          }
+          return pe;
+        })
+      );
+      
+      setPreEnrollments(preEnrollmentsWithOrganTypes as PreEnrollment[]);
       
       // Buscar pagamentos confirmados de pré-matrícula para calcular descontos
       if (data && data.length > 0) {
@@ -175,6 +201,11 @@ export function PreEnrollmentsPage() {
         return;
       }
       
+      // Calcular carga horária efetiva baseada no tipo de órgão
+      const durationHours = preEnrollment.courses.duration_hours || 390;
+      const hoursMultiplier = preEnrollment.organ_types?.hours_multiplier || 1;
+      const effectiveHours = preEnrollment.custom_hours || Math.round(durationHours * hoursMultiplier);
+      
       // Gerar PDF usando pdfGenerator.ts
       const { generateEnrollmentDeclaration } = await import('@/lib/pdfGenerator');
       const pdfBlob = await generateEnrollmentDeclaration(
@@ -186,7 +217,8 @@ export function PreEnrollmentsPage() {
           email: preEnrollment.email,
           course: {
             name: preEnrollment.courses.name,
-            duration_hours: preEnrollment.courses.duration_hours,
+            duration_hours: durationHours,
+            effective_hours: effectiveHours,
             start_date: preEnrollment.courses.start_date,
             end_date: preEnrollment.courses.end_date
           }
@@ -250,6 +282,11 @@ export function PreEnrollmentsPage() {
         return;
       }
       
+      // Calcular carga horária efetiva baseada no tipo de órgão
+      const durationHours = preEnrollment.courses.duration_hours || 390;
+      const hoursMultiplier = preEnrollment.organ_types?.hours_multiplier || 1;
+      const effectiveHours = preEnrollment.custom_hours || Math.round(durationHours * hoursMultiplier);
+      
       // Gerar PDF usando pdfGenerator.ts
       const { generateStudyPlan } = await import('@/lib/pdfGenerator');
       const pdfBlob = await generateStudyPlan(
@@ -261,7 +298,8 @@ export function PreEnrollmentsPage() {
           email: preEnrollment.email,
           course: {
             name: preEnrollment.courses.name,
-            duration_hours: preEnrollment.courses.duration_hours,
+            duration_hours: durationHours,
+            effective_hours: effectiveHours,
             start_date: preEnrollment.courses.start_date,
             end_date: preEnrollment.courses.end_date,
             modules: preEnrollment.courses.modules,
