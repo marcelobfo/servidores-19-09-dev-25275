@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StatusFilter } from "@/components/student/filters/StatusFilter";
 import { SearchFilter } from "@/components/student/filters/SearchFilter";
 import { SortOptions } from "@/components/student/filters/SortOptions";
-import { Clock, CheckCircle, XCircle, DollarSign, FileText, Calendar, Download, Mail } from "lucide-react";
+import { Clock, CheckCircle, XCircle, DollarSign, FileText, Calendar, Download, Mail, Receipt } from "lucide-react";
 import { toast } from "sonner";
 
 interface OrganType {
@@ -171,6 +171,7 @@ export function PreEnrollmentsPage() {
 
   const [downloadingDeclarations, setDownloadingDeclarations] = useState<Set<string>>(new Set());
   const [downloadingStudyPlans, setDownloadingStudyPlans] = useState<Set<string>>(new Set());
+  const [downloadingQuotes, setDownloadingQuotes] = useState<Set<string>>(new Set());
 
   const handleDownloadDeclaration = async (preEnrollment: PreEnrollment) => {
     try {
@@ -324,6 +325,78 @@ export function PreEnrollmentsPage() {
       toast.error("Erro ao baixar plano de estudos. Verifique se todos os dados estão completos.");
     } finally {
       setDownloadingStudyPlans(prev => {
+        const next = new Set(prev);
+        next.delete(preEnrollment.id);
+        return next;
+      });
+    }
+  };
+
+  const handleDownloadQuote = async (preEnrollment: PreEnrollment) => {
+    try {
+      setDownloadingQuotes(prev => new Set(prev).add(preEnrollment.id));
+      
+      // Buscar configurações do sistema
+      const { data: settings, error: settingsError } = await supabase
+        .from('system_settings')
+        .select('*')
+        .maybeSingle();
+      
+      if (settingsError) throw settingsError;
+      
+      if (!settings) {
+        toast.error("Configurações do sistema não encontradas. Entre em contato com o suporte.");
+        return;
+      }
+      
+      // Verificar se há pagamento de pré-matrícula confirmado
+      const preEnrollmentPaid = preEnrollmentPayments[preEnrollment.id] !== undefined;
+      const preEnrollmentAmount = preEnrollmentPayments[preEnrollment.id] || 0;
+      
+      // Calcular carga horária efetiva baseada no tipo de órgão
+      const durationHours = preEnrollment.courses.duration_hours || 390;
+      const hoursMultiplier = preEnrollment.organ_types?.hours_multiplier || 1;
+      const effectiveHours = preEnrollment.custom_hours || Math.round(durationHours * hoursMultiplier);
+      
+      // Gerar PDF usando pdfGenerator.ts
+      const { generateQuote } = await import('@/lib/pdfGenerator');
+      const pdfBlob = await generateQuote(
+        {
+          full_name: preEnrollment.full_name,
+          cpf: preEnrollment.cpf,
+          organization: preEnrollment.organization,
+          phone: preEnrollment.phone,
+          email: preEnrollment.email,
+          course: {
+            name: preEnrollment.courses.name,
+            duration_hours: durationHours,
+            effective_hours: effectiveHours,
+            start_date: preEnrollment.courses.start_date,
+            end_date: preEnrollment.courses.end_date,
+            pre_enrollment_fee: preEnrollment.courses.pre_enrollment_fee,
+            enrollment_fee: preEnrollment.courses.enrollment_fee
+          }
+        },
+        settings,
+        preEnrollmentPaid,
+        preEnrollmentAmount
+      );
+      
+      // Download do PDF
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      const fileName = `orcamento-${preEnrollment.full_name.replace(/\s+/g, '-')}.pdf`;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success("Orçamento baixado com sucesso!");
+    } catch (error) {
+      console.error("Error downloading quote:", error);
+      toast.error("Erro ao baixar orçamento. Verifique se todos os dados estão completos.");
+    } finally {
+      setDownloadingQuotes(prev => {
         const next = new Set(prev);
         next.delete(preEnrollment.id);
         return next;
@@ -678,6 +751,22 @@ export function PreEnrollmentsPage() {
                       <strong>Última atualização:</strong>{" "}
                       {new Date(preEnrollment.updated_at).toLocaleDateString("pt-BR")}
                     </div>
+                  </div>
+
+                  {/* Botão de Orçamento - sempre disponível */}
+                  <div className="bg-muted/50 border border-border rounded-lg p-4">
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Baixe o orçamento detalhado do curso:
+                    </p>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleDownloadQuote(preEnrollment)}
+                      size="sm"
+                      disabled={downloadingQuotes.has(preEnrollment.id)}
+                    >
+                      <Receipt className="h-4 w-4 mr-2" />
+                      {downloadingQuotes.has(preEnrollment.id) ? 'Baixando...' : 'Baixar Orçamento'}
+                    </Button>
                   </div>
 
                   {(preEnrollment.status === "payment_confirmed" || preEnrollment.status === "approved") && !preEnrollment.organ_approval_confirmed && (
