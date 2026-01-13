@@ -17,6 +17,7 @@ interface SystemSettings {
 interface Course {
   name: string;
   duration_hours: number;
+  effective_hours?: number;  // Carga horária efetiva (após multiplicador do tipo de órgão)
   start_date: string;
   end_date: string;
   modules?: string;
@@ -109,7 +110,8 @@ export const generateStudyPlan = async (
   pdf.setFontSize(10);
   pdf.text(`Curso: ${enrollment.course.name}`, 20, yPosition);
   yPosition += 5;
-  pdf.text(`Carga Horária Total: ${enrollment.course.duration_hours} horas`, 20, yPosition);
+  const effectiveHours = enrollment.course.effective_hours || enrollment.course.duration_hours;
+  pdf.text(`Carga Horária Total: ${effectiveHours} horas`, 20, yPosition);
   yPosition += 5;
   
   // Calculate duration in days
@@ -171,16 +173,26 @@ export const generateStudyPlan = async (
     }
   }
 
-  // Calculate missing hours proportionally
+  // Calculate missing hours proportionally using effective hours
+  const effectiveHoursTotal = enrollment.course.effective_hours || enrollment.course.duration_hours;
   if (modules.length > 0) {
     const totalHours = modules.reduce((sum, m) => sum + m.hours, 0);
     if (totalHours === 0) {
-      const hoursPerModule = Math.floor(enrollment.course.duration_hours / modules.length);
+      const hoursPerModule = Math.floor(effectiveHoursTotal / modules.length);
       modules = modules.map((m, i) => ({
         ...m,
         hours: i === modules.length - 1 
-          ? enrollment.course.duration_hours - (hoursPerModule * (modules.length - 1))
+          ? effectiveHoursTotal - (hoursPerModule * (modules.length - 1))
           : hoursPerModule
+      }));
+    } else if (enrollment.course.effective_hours && enrollment.course.effective_hours !== enrollment.course.duration_hours) {
+      // Recalcular proporcionalmente se há effective_hours diferente
+      const ratio = effectiveHoursTotal / enrollment.course.duration_hours;
+      modules = modules.map((m, i) => ({
+        ...m,
+        hours: i === modules.length - 1 
+          ? effectiveHoursTotal - modules.slice(0, -1).reduce((sum, mod) => sum + Math.round(mod.hours * ratio), 0)
+          : Math.round(m.hours * ratio)
       }));
     }
   }
@@ -291,9 +303,10 @@ export const generateStudyPlan = async (
   pdf.setLineWidth(0.5);
   pdf.line(20, yPosition, 190, yPosition);
   yPosition += 5;
-  const total = modules.reduce((sum, module) => sum + module.hours, 0);
+  // Usar effective_hours se disponível, senão calcular do total dos módulos
+  const displayTotal = enrollment.course.effective_hours || modules.reduce((sum, module) => sum + module.hours, 0);
   pdf.text('TOTAL:', 25, yPosition);
-  pdf.text(`${total}h`, 160, yPosition);
+  pdf.text(`${displayTotal}h`, 160, yPosition);
 
   yPosition += 12;
   yPosition = addPageBreakIfNeeded(yPosition, 70);
@@ -439,9 +452,10 @@ export const generateEnrollmentDeclaration = async (
   pdf.setFont('helvetica', 'normal');
 
   const orgText = enrollment.organization ? ` ${enrollment.organization}` : '';
+  const effectiveHours = enrollment.course.effective_hours || enrollment.course.duration_hours || 390;
   const declarationText = `Declaramos para os devidos fins que ${enrollment.full_name.toUpperCase()}, portador(a) do CPF nº ${formatCPF(enrollment.cpf || '')},${orgText} encontra-se regularmente matriculado(a) no curso de "${enrollment.course.name.toUpperCase()}".
 
-O referido curso possui carga horária de ${enrollment.course.duration_hours || 390} (${numberToWords(enrollment.course.duration_hours || 390)}) horas, sendo realizado na modalidade de Ensino a Distância (EAD), com datas a serem definidas.
+O referido curso possui carga horária de ${effectiveHours} (${numberToWords(effectiveHours)}) horas, sendo realizado na modalidade de Ensino a Distância (EAD), com datas a serem definidas.
 
 O curso está devidamente registrado em nossa instituição e atende aos requisitos necessários para fins de capacitação profissional e licença para capacitação.
 
