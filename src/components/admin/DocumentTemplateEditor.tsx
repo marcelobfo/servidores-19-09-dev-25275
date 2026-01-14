@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -139,9 +140,9 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
       case 'spacer':
         return { marginTop: 20 };
       case 'header':
-        return { imageField: 'logo' as const };
+        return { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true };
       case 'footer':
-        return {};
+        return { footerAlign: 'center' as const };
       case 'signature':
         return { imageField: 'signature' as const, marginTop: 20 };
       case 'modules_table':
@@ -419,6 +420,58 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
                       {isExpanded && (
                         <CardContent className="pt-0 pb-3 px-3">
                           <div className="space-y-3">
+                            {/* Header settings */}
+                            {block.type === 'header' && (
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-xs">Exibir Logo</Label>
+                                  <Switch
+                                    checked={block.config.showLogo !== false}
+                                    onCheckedChange={(checked) => updateBlock(block.id, { showLogo: checked })}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-xs">Exibir Informações da Instituição</Label>
+                                  <Switch
+                                    checked={block.config.showInstitutionInfo !== false}
+                                    onCheckedChange={(checked) => updateBlock(block.id, { showInstitutionInfo: checked })}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Footer settings */}
+                            {block.type === 'footer' && (
+                              <div className="space-y-3">
+                                <div>
+                                  <Label className="text-xs">Alinhamento do Rodapé</Label>
+                                  <Select
+                                    value={block.config.footerAlign || 'center'}
+                                    onValueChange={(v) => updateBlock(block.id, { footerAlign: v as 'left' | 'center' | 'right' })}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="left">Esquerda</SelectItem>
+                                      <SelectItem value="center">Centro</SelectItem>
+                                      <SelectItem value="right">Direita</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Texto do Rodapé (deixe vazio para usar o padrão)</Label>
+                                  <Textarea
+                                    value={block.config.footerText || ''}
+                                    onChange={(e) => updateBlock(block.id, { footerText: e.target.value })}
+                                    rows={2}
+                                    className="text-sm"
+                                    placeholder="Use variáveis: {{institution_name}}, {{institution_cnpj}}, {{institution_phone}}, {{institution_email}}, {{year}}"
+                                  />
+                                </div>
+                              </div>
+                            )}
+
                             {/* Text content for title and paragraph */}
                             {(block.type === 'title' || block.type === 'paragraph') && (
                               <div>

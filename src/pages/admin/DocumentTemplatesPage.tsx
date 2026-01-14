@@ -19,6 +19,7 @@ import {
   Star,
   Eye,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -42,7 +43,8 @@ import { DocumentPreview } from "@/components/admin/DocumentPreview";
 import { 
   DocumentTemplate, 
   DocumentTemplateType, 
-  DEFAULT_CONTENT_BLOCKS 
+  DEFAULT_CONTENT_BLOCKS,
+  CERTIFICATE_PRESETS,
 } from "@/types/document-templates";
 
 const DOCUMENT_TYPE_CONFIG: Record<DocumentTemplateType, { label: string; icon: typeof FileText; description: string }> = {
@@ -74,6 +76,7 @@ export default function DocumentTemplatesPage() {
   const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<DocumentTemplate | null>(null);
   const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
+  const [showPresetDialog, setShowPresetDialog] = useState(false);
 
   // Fetch templates
   const { data: templates, isLoading } = useQuery({
@@ -148,6 +151,59 @@ export default function DocumentTemplatesPage() {
     onError: (error) => {
       console.error('Error creating template:', error);
       toast.error('Erro ao criar template');
+    },
+  });
+
+  // Create template from preset mutation
+  const createFromPresetMutation = useMutation({
+    mutationFn: async (presetId: string) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const preset = CERTIFICATE_PRESETS.find(p => p.id === presetId);
+      
+      if (!preset) throw new Error('Preset not found');
+      
+      const newTemplate = {
+        name: preset.name,
+        type: 'certificate' as DocumentTemplateType,
+        is_default: false,
+        is_active: true,
+        page_orientation: 'portrait',
+        page_format: 'a4',
+        margins: { top: 20, right: 20, bottom: 20, left: 20 },
+        content_blocks: preset.content_blocks,
+        styles: { primaryColor: '#1E40AF', fontFamily: 'helvetica' },
+        created_by: user?.id,
+      };
+
+      const { data, error } = await (supabase as any)
+        .from('document_templates')
+        .insert(newTemplate)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['document-templates'] });
+      toast.success('Template criado a partir do preset!');
+      setShowPresetDialog(false);
+      setEditingTemplate({
+        ...data,
+        content_blocks: typeof data.content_blocks === 'string' 
+          ? JSON.parse(data.content_blocks) 
+          : data.content_blocks,
+        margins: typeof data.margins === 'string' 
+          ? JSON.parse(data.margins) 
+          : data.margins,
+        styles: typeof data.styles === 'string' 
+          ? JSON.parse(data.styles) 
+          : data.styles,
+      });
+    },
+    onError: (error) => {
+      console.error('Error creating from preset:', error);
+      toast.error('Erro ao criar template do preset');
     },
   });
 
@@ -300,17 +356,28 @@ export default function DocumentTemplatesPage() {
                 <h2 className="text-lg font-semibold">{label}</h2>
                 <p className="text-sm text-muted-foreground">{description}</p>
               </div>
-              <Button 
-                onClick={() => createTemplateMutation.mutate(key as DocumentTemplateType)}
-                disabled={createTemplateMutation.isPending}
-              >
-                {createTemplateMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4 mr-2" />
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => createTemplateMutation.mutate(key as DocumentTemplateType)}
+                  disabled={createTemplateMutation.isPending}
+                >
+                  {createTemplateMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4 mr-2" />
+                  )}
+                  Novo Template
+                </Button>
+                {key === 'certificate' && (
+                  <Button 
+                    variant="outline"
+                    onClick={() => setShowPresetDialog(true)}
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Criar do Preset
+                  </Button>
                 )}
-                Novo Template
-              </Button>
+              </div>
             </div>
 
             {isLoading ? (
@@ -456,6 +523,37 @@ export default function DocumentTemplatesPage() {
           {previewTemplate && (
             <DocumentPreview template={previewTemplate} />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Preset Selection Dialog */}
+      <Dialog open={showPresetDialog} onOpenChange={setShowPresetDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Escolher Preset de Certificado</DialogTitle>
+            <DialogDescription>
+              Selecione um modelo pré-configurado para começar
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-3">
+            {CERTIFICATE_PRESETS.map((preset) => (
+              <Card 
+                key={preset.id} 
+                className="cursor-pointer hover:border-primary transition-colors"
+                onClick={() => createFromPresetMutation.mutate(preset.id)}
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">{preset.name}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">{preset.description}</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {preset.content_blocks.length} blocos
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

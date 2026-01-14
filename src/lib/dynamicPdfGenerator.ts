@@ -105,7 +105,7 @@ const renderBlock = async (
 
   switch (block.type) {
     case 'header':
-      yPosition = await renderHeader(pdf, settings, yPosition, margins.left);
+      yPosition = await renderHeader(pdf, block, settings, yPosition, margins.left);
       break;
 
     case 'title':
@@ -118,7 +118,7 @@ const renderBlock = async (
       break;
 
     case 'footer':
-      renderFooter(pdf, settings);
+      renderFooter(pdf, block, data, settings);
       break;
 
     case 'modules_table':
@@ -153,13 +153,17 @@ const renderBlock = async (
 // Render header
 const renderHeader = async (
   pdf: jsPDF,
+  block: ContentBlock,
   settings: SystemSettings,
   yPosition: number,
   marginLeft: number
 ): Promise<number> => {
+  const showLogo = block.config.showLogo !== false; // Default true
+  const showInstitutionInfo = block.config.showInstitutionInfo !== false; // Default true
+  
   let logoLoaded = false;
 
-  if (settings.logo_url) {
+  if (showLogo && settings.logo_url) {
     try {
       const logo = await loadImage(settings.logo_url);
       const canvas = document.createElement('canvas');
@@ -177,18 +181,22 @@ const renderHeader = async (
     }
   }
 
-  const textStartX = logoLoaded ? marginLeft + 30 : marginLeft;
+  if (showInstitutionInfo) {
+    const textStartX = logoLoaded ? marginLeft + 30 : marginLeft;
 
-  pdf.setFontSize(9);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text(settings.institution_name, textStartX, yPosition + 6);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(8);
-  pdf.text('Cursos Online e Presenciais', textStartX, yPosition + 11);
-  pdf.text(settings.institution_address, textStartX, yPosition + 15);
-  pdf.text(`CEP: ${settings.institution_cep}`, textStartX, yPosition + 19);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(settings.institution_name, textStartX, yPosition + 6);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    pdf.text('Cursos Online e Presenciais', textStartX, yPosition + 11);
+    pdf.text(settings.institution_address, textStartX, yPosition + 15);
+    pdf.text(`CEP: ${settings.institution_cep}`, textStartX, yPosition + 19);
 
-  return yPosition + 30;
+    return yPosition + 30;
+  }
+
+  return yPosition + (logoLoaded ? 22 : 0);
 };
 
 // Render text (title or paragraph)
@@ -266,20 +274,48 @@ const renderSignature = async (
 };
 
 // Render footer
-const renderFooter = (pdf: jsPDF, settings: SystemSettings): void => {
+const renderFooter = (pdf: jsPDF, block: ContentBlock, data: PreviewData, settings: SystemSettings): void => {
   const pageHeight = pdf.internal.pageSize.getHeight();
+  const pageWidth = pdf.internal.pageSize.getWidth();
   const footerY = pageHeight - 15;
+  const footerAlign = block.config.footerAlign || 'center';
 
   pdf.setFontSize(7);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(100, 100, 100);
 
   const year = new Date().getFullYear();
-  const footerLine1 = `E-commerce por ${settings.institution_name} © ${year}. ${settings.pix_holder_name || 'JMR Empreendimentos digitais'}/CNPJ: ${settings.institution_cnpj}. Whatsapp: ${settings.institution_phone} ou e-mail: ${settings.institution_email}`;
+  
+  // Use custom footer text if provided, otherwise use default
+  let footerText = block.config.footerText;
+  if (footerText) {
+    // Replace variables in custom footer text
+    footerText = footerText
+      .replace(/\{\{institution_name\}\}/g, settings.institution_name || '')
+      .replace(/\{\{institution_cnpj\}\}/g, settings.institution_cnpj || '')
+      .replace(/\{\{institution_phone\}\}/g, settings.institution_phone || '')
+      .replace(/\{\{institution_email\}\}/g, settings.institution_email || '')
+      .replace(/\{\{institution_website\}\}/g, settings.institution_website || '')
+      .replace(/\{\{pix_holder_name\}\}/g, settings.pix_holder_name || '')
+      .replace(/\{\{year\}\}/g, String(year));
+  } else {
+    footerText = `E-commerce por ${settings.institution_name} © ${year}. ${settings.pix_holder_name || 'JMR Empreendimentos digitais'}/CNPJ: ${settings.institution_cnpj}. Whatsapp: ${settings.institution_phone} ou e-mail: ${settings.institution_email}`;
+  }
 
-  pdf.text(footerLine1, 105, footerY, { align: 'center' });
-  if (settings.institution_website) {
-    pdf.text(settings.institution_website, 105, footerY + 4, { align: 'center' });
+  // Calculate x position based on alignment
+  let xPosition: number;
+  if (footerAlign === 'left') {
+    xPosition = 20;
+  } else if (footerAlign === 'right') {
+    xPosition = pageWidth - 20;
+  } else {
+    xPosition = pageWidth / 2;
+  }
+
+  pdf.text(footerText, xPosition, footerY, { align: footerAlign as any });
+  
+  if (settings.institution_website && !block.config.footerText) {
+    pdf.text(settings.institution_website, xPosition, footerY + 4, { align: footerAlign as any });
   }
 
   pdf.setTextColor(0, 0, 0);
@@ -417,7 +453,7 @@ export const generatePdfFromTemplate = async (
       // Add footer before page break
       const footerBlock = sortedBlocks.find(b => b.type === 'footer');
       if (footerBlock) {
-        renderFooter(pdf, settings);
+        renderFooter(pdf, footerBlock, data, settings);
       }
       
       pdf.addPage();

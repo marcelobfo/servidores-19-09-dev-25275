@@ -40,6 +40,14 @@ export interface ContentBlockConfig {
   // Line/separator
   lineWidth?: number;
   lineColor?: string;
+  
+  // Header settings
+  showLogo?: boolean;
+  showInstitutionInfo?: boolean;
+  
+  // Footer settings
+  footerText?: string;
+  footerAlign?: 'left' | 'center' | 'right';
 }
 
 export interface ContentBlock {
@@ -135,7 +143,7 @@ export const TEMPLATE_VARIABLES: Record<DocumentTemplateType, Array<{ key: strin
 // Default content blocks for each document type
 export const DEFAULT_CONTENT_BLOCKS: Record<DocumentTemplateType, ContentBlock[]> = {
   declaration: [
-    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const } },
+    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true } },
     { id: '2', type: 'title', order: 2, config: { text: 'DECLARAÇÃO DE MATRÍCULA', fontSize: 16, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 15 } },
     { id: '3', type: 'paragraph', order: 3, config: { 
       text: 'Declaramos que {{student_name}}, CPF: {{student_cpf}}, {{organization}}, está matriculada no curso de {{course_name}}. O curso será iniciado em {{start_date}} com término previsto para {{end_date}} e será realizado de forma não presencial, on-line com carga Horária de {{effective_hours}} horas e estará sob a supervisão de um tutor qualificado.',
@@ -145,10 +153,10 @@ export const DEFAULT_CONTENT_BLOCKS: Record<DocumentTemplateType, ContentBlock[]
     }},
     { id: '4', type: 'paragraph', order: 4, config: { text: '{{current_date}}', fontSize: 11, align: 'left' as const, marginTop: 20 } },
     { id: '5', type: 'signature', order: 5, config: { imageField: 'signature' as const, marginTop: 25 } },
-    { id: '6', type: 'footer', order: 6, config: {} },
+    { id: '6', type: 'footer', order: 6, config: { footerAlign: 'center' as const, footerText: 'E-commerce por {{institution_name}} © {{year}}. {{pix_holder_name}}/CNPJ: {{institution_cnpj}}. Whatsapp: {{institution_phone}} ou e-mail: {{institution_email}}' } },
   ],
   study_plan: [
-    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const } },
+    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true } },
     { id: '2', type: 'title', order: 2, config: { text: 'PLANO DE ESTUDOS', fontSize: 16, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 10 } },
     { id: '3', type: 'paragraph', order: 3, config: { text: 'Curso: {{course_name}}', fontSize: 10, marginTop: 15 } },
     { id: '4', type: 'paragraph', order: 4, config: { text: 'Instituição: {{organization}}', fontSize: 10, marginTop: 6 } },
@@ -158,10 +166,10 @@ export const DEFAULT_CONTENT_BLOCKS: Record<DocumentTemplateType, ContentBlock[]
     { id: '8', type: 'modules_table', order: 8, config: { marginTop: 12 } },
     { id: '9', type: 'title', order: 9, config: { text: 'Cronograma', fontSize: 12, fontWeight: 'bold' as const, align: 'left' as const, marginTop: 15 } },
     { id: '10', type: 'cronograma_table', order: 10, config: { marginTop: 8 } },
-    { id: '11', type: 'footer', order: 11, config: {} },
+    { id: '11', type: 'footer', order: 11, config: { footerAlign: 'center' as const } },
   ],
   quote: [
-    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const } },
+    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true } },
     { id: '2', type: 'title', order: 2, config: { text: 'ORÇAMENTO', fontSize: 16, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 15 } },
     { id: '3', type: 'paragraph', order: 3, config: { text: 'Prezado(a) {{student_name}},', fontSize: 11, marginTop: 20 } },
     { id: '4', type: 'paragraph', order: 4, config: { 
@@ -177,10 +185,10 @@ export const DEFAULT_CONTENT_BLOCKS: Record<DocumentTemplateType, ContentBlock[]
       fontSize: 10,
       marginTop: 20
     }},
-    { id: '9', type: 'footer', order: 9, config: {} },
+    { id: '9', type: 'footer', order: 9, config: { footerAlign: 'center' as const } },
   ],
   certificate: [
-    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const } },
+    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true } },
     { id: '2', type: 'title', order: 2, config: { text: 'CERTIFICADO DE CONCLUSÃO', fontSize: 18, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 20 } },
     { id: '3', type: 'paragraph', order: 3, config: { 
       text: 'Certificamos que {{student_name}}, CPF: {{student_cpf}}, concluiu com êxito o curso de {{course_name}}, com carga horária de {{effective_hours}} horas.',
@@ -192,9 +200,88 @@ export const DEFAULT_CONTENT_BLOCKS: Record<DocumentTemplateType, ContentBlock[]
     { id: '5', type: 'qrcode', order: 5, config: { marginTop: 30, width: 60, height: 60 } },
     { id: '6', type: 'paragraph', order: 6, config: { text: 'Código: {{certificate_code}}', fontSize: 9, align: 'center' as const, marginTop: 10 } },
     { id: '7', type: 'signature', order: 7, config: { imageField: 'signature' as const, marginTop: 25 } },
-    { id: '8', type: 'footer', order: 8, config: {} },
+    { id: '8', type: 'footer', order: 8, config: { footerAlign: 'center' as const } },
   ],
 };
+
+// Certificate presets for quick template creation
+export interface CertificatePreset {
+  id: string;
+  name: string;
+  description: string;
+  content_blocks: ContentBlock[];
+}
+
+export const CERTIFICATE_PRESETS: CertificatePreset[] = [
+  {
+    id: 'classic',
+    name: 'Certificado Clássico',
+    description: 'Layout tradicional com bordas e design formal',
+    content_blocks: [
+      { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true } },
+      { id: '2', type: 'spacer', order: 2, config: { marginTop: 20 } },
+      { id: '3', type: 'title', order: 3, config: { text: 'CERTIFICADO', fontSize: 24, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 10 } },
+      { id: '4', type: 'paragraph', order: 4, config: { text: 'A {{institution_name}} certifica que', fontSize: 11, align: 'center' as const, marginTop: 25 } },
+      { id: '5', type: 'title', order: 5, config: { text: '{{student_name}}', fontSize: 18, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 10 } },
+      { id: '6', type: 'paragraph', order: 6, config: { text: 'CPF: {{student_cpf}}', fontSize: 10, align: 'center' as const, marginTop: 5 } },
+      { id: '7', type: 'paragraph', order: 7, config: { 
+        text: 'concluiu com êxito o curso de {{course_name}}, com carga horária de {{effective_hours}} horas, na modalidade online.',
+        fontSize: 12,
+        align: 'center' as const,
+        marginTop: 20
+      }},
+      { id: '8', type: 'paragraph', order: 8, config: { text: '{{current_date}}', fontSize: 11, align: 'center' as const, marginTop: 30 } },
+      { id: '9', type: 'signature', order: 9, config: { imageField: 'signature' as const, marginTop: 25 } },
+      { id: '10', type: 'spacer', order: 10, config: { marginTop: 15 } },
+      { id: '11', type: 'qrcode', order: 11, config: { marginTop: 10, width: 50, height: 50 } },
+      { id: '12', type: 'paragraph', order: 12, config: { text: 'Código: {{certificate_code}}', fontSize: 8, align: 'center' as const, marginTop: 5 } },
+      { id: '13', type: 'footer', order: 13, config: { footerAlign: 'center' as const } },
+    ],
+  },
+  {
+    id: 'modern',
+    name: 'Certificado Moderno',
+    description: 'Design clean e contemporâneo com foco no conteúdo',
+    content_blocks: [
+      { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: false } },
+      { id: '2', type: 'title', order: 2, config: { text: 'CERTIFICADO DE CONCLUSÃO', fontSize: 20, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 30 } },
+      { id: '3', type: 'spacer', order: 3, config: { marginTop: 25 } },
+      { id: '4', type: 'paragraph', order: 4, config: { 
+        text: 'Certificamos que {{student_name}} concluiu com sucesso o curso:',
+        fontSize: 11,
+        align: 'center' as const,
+        marginTop: 10
+      }},
+      { id: '5', type: 'title', order: 5, config: { text: '{{course_name}}', fontSize: 16, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 15 } },
+      { id: '6', type: 'paragraph', order: 6, config: { text: 'Carga Horária: {{effective_hours}} horas | CPF: {{student_cpf}}', fontSize: 10, align: 'center' as const, marginTop: 15 } },
+      { id: '7', type: 'paragraph', order: 7, config: { text: 'Data de Conclusão: {{completion_date}}', fontSize: 10, align: 'center' as const, marginTop: 10 } },
+      { id: '8', type: 'signature', order: 8, config: { imageField: 'signature' as const, marginTop: 40 } },
+      { id: '9', type: 'qrcode', order: 9, config: { marginTop: 20, width: 45, height: 45 } },
+      { id: '10', type: 'paragraph', order: 10, config: { text: '{{certificate_code}}', fontSize: 8, align: 'center' as const, marginTop: 3 } },
+      { id: '11', type: 'footer', order: 11, config: { footerAlign: 'center' as const } },
+    ],
+  },
+  {
+    id: 'minimal',
+    name: 'Certificado Minimalista',
+    description: 'Layout simples e elegante com menos elementos visuais',
+    content_blocks: [
+      { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: false } },
+      { id: '2', type: 'spacer', order: 2, config: { marginTop: 40 } },
+      { id: '3', type: 'title', order: 3, config: { text: 'Certificado', fontSize: 22, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 10 } },
+      { id: '4', type: 'spacer', order: 4, config: { marginTop: 30 } },
+      { id: '5', type: 'paragraph', order: 5, config: { 
+        text: '{{student_name}} completou o curso {{course_name}} com {{effective_hours}} horas de carga horária.',
+        fontSize: 12,
+        align: 'center' as const,
+        marginTop: 10
+      }},
+      { id: '6', type: 'paragraph', order: 6, config: { text: '{{completion_date}}', fontSize: 11, align: 'center' as const, marginTop: 40 } },
+      { id: '7', type: 'signature', order: 7, config: { imageField: 'signature' as const, marginTop: 30 } },
+      { id: '8', type: 'paragraph', order: 8, config: { text: '{{certificate_code}}', fontSize: 9, align: 'center' as const, marginTop: 30 } },
+    ],
+  },
+];
 
 // Mock data for preview
 export const MOCK_PREVIEW_DATA = {
