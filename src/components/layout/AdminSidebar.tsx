@@ -87,6 +87,11 @@ const settingsItems = [
     url: "/admin/organ-types",
     icon: Building2,
   },
+  {
+    title: "Modelos de Documentos",
+    url: "/admin/document-templates",
+    icon: FileText,
+  },
 ];
 
 export function AdminSidebar() {

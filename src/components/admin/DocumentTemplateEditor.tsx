@@ -53,6 +53,7 @@ import {
   DocumentTemplate,
   ContentBlock,
   ContentBlockType,
+  ContentBlockConfig,
   TEMPLATE_VARIABLES,
 } from "@/types/document-templates";
 
@@ -84,7 +85,7 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
   // Save mutation
   const saveMutation = useMutation({
     mutationFn: async (templateData: DocumentTemplate) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('document_templates')
         .update({
           name: templateData.name,
@@ -129,7 +130,7 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
     setExpandedBlocks(prev => [...prev, newBlock.id]);
   };
 
-  const getDefaultConfigForType = (type: ContentBlockType) => {
+  const getDefaultConfigForType = (type: ContentBlockType): ContentBlockConfig => {
     switch (type) {
       case 'title':
         return { text: 'Título', fontSize: 16, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 10 };
@@ -138,11 +139,11 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
       case 'spacer':
         return { marginTop: 20 };
       case 'header':
-        return { imageField: 'logo' };
+        return { imageField: 'logo' as const };
       case 'footer':
         return {};
       case 'signature':
-        return { imageField: 'signature', marginTop: 20 };
+        return { imageField: 'signature' as const, marginTop: 20 };
       case 'modules_table':
       case 'cronograma_table':
         return { marginTop: 10 };

@@ -135,43 +135,43 @@ export const TEMPLATE_VARIABLES: Record<DocumentTemplateType, Array<{ key: strin
 // Default content blocks for each document type
 export const DEFAULT_CONTENT_BLOCKS: Record<DocumentTemplateType, ContentBlock[]> = {
   declaration: [
-    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' } },
-    { id: '2', type: 'title', order: 2, config: { text: 'DECLARAÇÃO DE MATRÍCULA', fontSize: 16, fontWeight: 'bold', align: 'center', marginTop: 15 } },
+    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const } },
+    { id: '2', type: 'title', order: 2, config: { text: 'DECLARAÇÃO DE MATRÍCULA', fontSize: 16, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 15 } },
     { id: '3', type: 'paragraph', order: 3, config: { 
       text: 'Declaramos que {{student_name}}, CPF: {{student_cpf}}, {{organization}}, está matriculada no curso de {{course_name}}. O curso será iniciado em {{start_date}} com término previsto para {{end_date}} e será realizado de forma não presencial, on-line com carga Horária de {{effective_hours}} horas e estará sob a supervisão de um tutor qualificado.',
       fontSize: 11,
-      align: 'justify',
+      align: 'justify' as const,
       marginTop: 20
     }},
-    { id: '4', type: 'paragraph', order: 4, config: { text: '{{current_date}}', fontSize: 11, align: 'left', marginTop: 20 } },
-    { id: '5', type: 'signature', order: 5, config: { imageField: 'signature', marginTop: 25 } },
+    { id: '4', type: 'paragraph', order: 4, config: { text: '{{current_date}}', fontSize: 11, align: 'left' as const, marginTop: 20 } },
+    { id: '5', type: 'signature', order: 5, config: { imageField: 'signature' as const, marginTop: 25 } },
     { id: '6', type: 'footer', order: 6, config: {} },
   ],
   study_plan: [
-    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' } },
-    { id: '2', type: 'title', order: 2, config: { text: 'PLANO DE ESTUDOS', fontSize: 16, fontWeight: 'bold', align: 'center', marginTop: 10 } },
+    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const } },
+    { id: '2', type: 'title', order: 2, config: { text: 'PLANO DE ESTUDOS', fontSize: 16, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 10 } },
     { id: '3', type: 'paragraph', order: 3, config: { text: 'Curso: {{course_name}}', fontSize: 10, marginTop: 15 } },
     { id: '4', type: 'paragraph', order: 4, config: { text: 'Instituição: {{organization}}', fontSize: 10, marginTop: 6 } },
     { id: '5', type: 'paragraph', order: 5, config: { text: 'Servidor: {{student_name}}', fontSize: 10, marginTop: 6 } },
     { id: '6', type: 'paragraph', order: 6, config: { text: 'Carga Horária: {{effective_hours}} horas', fontSize: 10, marginTop: 6 } },
     { id: '7', type: 'paragraph', order: 7, config: { text: 'Período: {{start_date}} a {{end_date}}', fontSize: 10, marginTop: 6 } },
     { id: '8', type: 'modules_table', order: 8, config: { marginTop: 12 } },
-    { id: '9', type: 'title', order: 9, config: { text: 'Cronograma', fontSize: 12, fontWeight: 'bold', align: 'left', marginTop: 15 } },
+    { id: '9', type: 'title', order: 9, config: { text: 'Cronograma', fontSize: 12, fontWeight: 'bold' as const, align: 'left' as const, marginTop: 15 } },
     { id: '10', type: 'cronograma_table', order: 10, config: { marginTop: 8 } },
     { id: '11', type: 'footer', order: 11, config: {} },
   ],
   quote: [
-    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' } },
-    { id: '2', type: 'title', order: 2, config: { text: 'ORÇAMENTO', fontSize: 16, fontWeight: 'bold', align: 'center', marginTop: 15 } },
+    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const } },
+    { id: '2', type: 'title', order: 2, config: { text: 'ORÇAMENTO', fontSize: 16, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 15 } },
     { id: '3', type: 'paragraph', order: 3, config: { text: 'Prezado(a) {{student_name}},', fontSize: 11, marginTop: 20 } },
     { id: '4', type: 'paragraph', order: 4, config: { 
       text: 'Segue orçamento para o curso {{course_name}} com carga horária de {{course_hours}} horas.',
       fontSize: 11,
       marginTop: 10
     }},
-    { id: '5', type: 'paragraph', order: 5, config: { text: 'Licença capacitação: R$ {{enrollment_fee}}', fontSize: 11, fontWeight: 'bold', marginTop: 15 } },
+    { id: '5', type: 'paragraph', order: 5, config: { text: 'Licença capacitação: R$ {{enrollment_fee}}', fontSize: 11, fontWeight: 'bold' as const, marginTop: 15 } },
     { id: '6', type: 'paragraph', order: 6, config: { text: 'Crédito de pré-matrícula: - R$ {{pre_enrollment_credit}}', fontSize: 11, marginTop: 6 } },
-    { id: '7', type: 'paragraph', order: 7, config: { text: 'Valor a pagar: R$ {{final_amount}}', fontSize: 11, fontWeight: 'bold', marginTop: 6 } },
+    { id: '7', type: 'paragraph', order: 7, config: { text: 'Valor a pagar: R$ {{final_amount}}', fontSize: 11, fontWeight: 'bold' as const, marginTop: 6 } },
     { id: '8', type: 'paragraph', order: 8, config: { 
       text: 'Pagamento via PIX: {{pix_key}} ({{pix_holder_name}})',
       fontSize: 10,
@@ -180,18 +180,18 @@ export const DEFAULT_CONTENT_BLOCKS: Record<DocumentTemplateType, ContentBlock[]
     { id: '9', type: 'footer', order: 9, config: {} },
   ],
   certificate: [
-    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' } },
-    { id: '2', type: 'title', order: 2, config: { text: 'CERTIFICADO DE CONCLUSÃO', fontSize: 18, fontWeight: 'bold', align: 'center', marginTop: 20 } },
+    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const } },
+    { id: '2', type: 'title', order: 2, config: { text: 'CERTIFICADO DE CONCLUSÃO', fontSize: 18, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 20 } },
     { id: '3', type: 'paragraph', order: 3, config: { 
       text: 'Certificamos que {{student_name}}, CPF: {{student_cpf}}, concluiu com êxito o curso de {{course_name}}, com carga horária de {{effective_hours}} horas.',
       fontSize: 12,
-      align: 'center',
+      align: 'center' as const,
       marginTop: 30
     }},
-    { id: '4', type: 'paragraph', order: 4, config: { text: 'Data de conclusão: {{completion_date}}', fontSize: 11, align: 'center', marginTop: 20 } },
+    { id: '4', type: 'paragraph', order: 4, config: { text: 'Data de conclusão: {{completion_date}}', fontSize: 11, align: 'center' as const, marginTop: 20 } },
     { id: '5', type: 'qrcode', order: 5, config: { marginTop: 30, width: 60, height: 60 } },
-    { id: '6', type: 'paragraph', order: 6, config: { text: 'Código: {{certificate_code}}', fontSize: 9, align: 'center', marginTop: 10 } },
-    { id: '7', type: 'signature', order: 7, config: { imageField: 'signature', marginTop: 25 } },
+    { id: '6', type: 'paragraph', order: 6, config: { text: 'Código: {{certificate_code}}', fontSize: 9, align: 'center' as const, marginTop: 10 } },
+    { id: '7', type: 'signature', order: 7, config: { imageField: 'signature' as const, marginTop: 25 } },
     { id: '8', type: 'footer', order: 8, config: {} },
   ],
 };

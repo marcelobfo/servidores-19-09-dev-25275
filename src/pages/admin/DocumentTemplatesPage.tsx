@@ -79,7 +79,7 @@ export default function DocumentTemplatesPage() {
   const { data: templates, isLoading } = useQuery({
     queryKey: ['document-templates'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('document_templates')
         .select('*')
         .order('is_default', { ascending: false })
@@ -120,7 +120,7 @@ export default function DocumentTemplatesPage() {
         created_by: user?.id,
       };
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('document_templates')
         .insert(newTemplate)
         .select()
@@ -169,7 +169,7 @@ export default function DocumentTemplatesPage() {
         created_by: user?.id,
       };
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('document_templates')
         .insert(newTemplate)
         .select()
@@ -192,13 +192,13 @@ export default function DocumentTemplatesPage() {
   const setDefaultMutation = useMutation({
     mutationFn: async ({ templateId, type }: { templateId: string; type: DocumentTemplateType }) => {
       // Remove default from all templates of this type
-      await supabase
+      await (supabase as any)
         .from('document_templates')
         .update({ is_default: false })
         .eq('type', type);
 
       // Set this template as default
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('document_templates')
         .update({ is_default: true })
         .eq('id', templateId);
@@ -218,7 +218,7 @@ export default function DocumentTemplatesPage() {
   // Toggle active mutation
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ templateId, isActive }: { templateId: string; isActive: boolean }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('document_templates')
         .update({ is_active: isActive })
         .eq('id', templateId);
@@ -237,7 +237,7 @@ export default function DocumentTemplatesPage() {
   // Delete mutation
   const deleteTemplateMutation = useMutation({
     mutationFn: async (templateId: string) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('document_templates')
         .delete()
         .eq('id', templateId);

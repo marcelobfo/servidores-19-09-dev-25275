@@ -437,54 +437,60 @@ export const generatePdfFromTemplate = async (
   return pdf.output('blob');
 };
 
+// Helper function to parse template data from database
+const parseTemplateData = (data: any): DocumentTemplate => ({
+  ...data,
+  content_blocks: typeof data.content_blocks === 'string' 
+    ? JSON.parse(data.content_blocks) 
+    : data.content_blocks || [],
+  margins: typeof data.margins === 'string' 
+    ? JSON.parse(data.margins) 
+    : data.margins || { top: 20, right: 20, bottom: 20, left: 20 },
+  styles: typeof data.styles === 'string' 
+    ? JSON.parse(data.styles) 
+    : data.styles || {},
+});
+
 // Export function to get active template
 export const getActiveTemplate = async (type: string): Promise<DocumentTemplate | null> => {
   const { supabase } = await import('@/integrations/supabase/client');
   
-  const { data, error } = await supabase
-    .from('document_templates')
-    .select('*')
-    .eq('type', type)
-    .eq('is_active', true)
-    .eq('is_default', true)
-    .single();
+  try {
+    const { data, error } = await (supabase as any)
+      .from('document_templates')
+      .select('*')
+      .eq('type', type)
+      .eq('is_active', true)
+      .eq('is_default', true)
+      .maybeSingle();
 
-  if (error || !data) {
-    // Try to get any active template
-    const { data: anyTemplate } = await supabase
+    if (error) {
+      console.error('Error fetching default template:', error);
+    }
+
+    if (data) {
+      return parseTemplateData(data);
+    }
+
+    // Try to get any active template if no default found
+    const { data: anyTemplate, error: anyError } = await (supabase as any)
       .from('document_templates')
       .select('*')
       .eq('type', type)
       .eq('is_active', true)
       .limit(1)
-      .single();
+      .maybeSingle();
+
+    if (anyError) {
+      console.error('Error fetching any template:', anyError);
+      return null;
+    }
 
     if (!anyTemplate) return null;
     
-    return {
-      ...anyTemplate,
-      content_blocks: typeof anyTemplate.content_blocks === 'string' 
-        ? JSON.parse(anyTemplate.content_blocks) 
-        : anyTemplate.content_blocks,
-      margins: typeof anyTemplate.margins === 'string' 
-        ? JSON.parse(anyTemplate.margins) 
-        : anyTemplate.margins,
-      styles: typeof anyTemplate.styles === 'string' 
-        ? JSON.parse(anyTemplate.styles) 
-        : anyTemplate.styles,
-    } as DocumentTemplate;
+    return parseTemplateData(anyTemplate);
+  } catch (error) {
+    console.error('Error in getActiveTemplate:', error);
+    return null;
   }
-
-  return {
-    ...data,
-    content_blocks: typeof data.content_blocks === 'string' 
-      ? JSON.parse(data.content_blocks) 
-      : data.content_blocks,
-    margins: typeof data.margins === 'string' 
-      ? JSON.parse(data.margins) 
-      : data.margins,
-    styles: typeof data.styles === 'string' 
-      ? JSON.parse(data.styles) 
-      : data.styles,
-  } as DocumentTemplate;
 };

@@ -37,6 +37,7 @@ import EnrollmentsManagementPage from "./pages/admin/EnrollmentsManagementPage";
 import UsersManagementPage from "./pages/admin/UsersManagementPage";
 import DiscountsReportPage from "./pages/admin/DiscountsReportPage";
 import OrganTypesPage from "./pages/admin/OrganTypesPage";
+import DocumentTemplatesPage from "./pages/admin/DocumentTemplatesPage";
 
 const queryClient = new QueryClient();
 
@@ -238,6 +239,16 @@ const App = () => (
                   <AuthGuard adminOnly>
                     <AdminLayout>
                       <OrganTypesPage />
+                    </AdminLayout>
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/admin/document-templates" 
+                element={
+                  <AuthGuard adminOnly>
+                    <AdminLayout>
+                      <DocumentTemplatesPage />
                     </AdminLayout>
                   </AuthGuard>
                 } 
