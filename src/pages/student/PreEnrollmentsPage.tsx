@@ -32,6 +32,8 @@ interface PreEnrollment {
   custom_hours?: number;
   organ_type_id?: string;
   organ_types?: OrganType;
+  license_start_date?: string;
+  license_end_date?: string;
   courses: {
     id: string;
     name: string;
@@ -91,6 +93,8 @@ export function PreEnrollmentsPage() {
         .from("pre_enrollments")
         .select(`
           *,
+          license_start_date,
+          license_end_date,
           courses (
             id,
             name,
@@ -220,8 +224,8 @@ export function PreEnrollmentsPage() {
             name: preEnrollment.courses.name,
             duration_hours: durationHours,
             effective_hours: effectiveHours,
-            start_date: preEnrollment.courses.start_date,
-            end_date: preEnrollment.courses.end_date
+            start_date: preEnrollment.license_start_date || preEnrollment.courses.start_date,
+            end_date: preEnrollment.license_end_date || preEnrollment.courses.end_date
           }
         },
         settings
@@ -301,8 +305,8 @@ export function PreEnrollmentsPage() {
             name: preEnrollment.courses.name,
             duration_hours: durationHours,
             effective_hours: effectiveHours,
-            start_date: preEnrollment.courses.start_date,
-            end_date: preEnrollment.courses.end_date,
+            start_date: preEnrollment.license_start_date || preEnrollment.courses.start_date,
+            end_date: preEnrollment.license_end_date || preEnrollment.courses.end_date,
             modules: preEnrollment.courses.modules,
             description: preEnrollment.courses.description
           }
@@ -371,8 +375,8 @@ export function PreEnrollmentsPage() {
             name: preEnrollment.courses.name,
             duration_hours: durationHours,
             effective_hours: effectiveHours,
-            start_date: preEnrollment.courses.start_date,
-            end_date: preEnrollment.courses.end_date,
+            start_date: preEnrollment.license_start_date || preEnrollment.courses.start_date,
+            end_date: preEnrollment.license_end_date || preEnrollment.courses.end_date,
             pre_enrollment_fee: preEnrollment.courses.pre_enrollment_fee,
             enrollment_fee: preEnrollment.courses.enrollment_fee
           }
