@@ -203,35 +203,39 @@ export function EnrollmentsPage() {
     }
   };
 
-  // New function for discounted checkout
+  // Função para checkout com desconto - usa create-enrollment-checkout que já aplica o desconto automaticamente
   const handleGenerateDiscountedCheckout = async (enrollment: Enrollment, finalAmount: number) => {
     try {
       setGeneratingDiscountedPayment(true);
       
-      console.log('💰 [DISCOUNTED-CHECKOUT] Gerando checkout com desconto');
+      console.log('💰 [DISCOUNTED-CHECKOUT] Gerando checkout com desconto via create-enrollment-checkout');
       console.log('📋 Enrollment ID:', enrollment.id);
-      console.log('💵 Valor final com desconto:', finalAmount);
+      console.log('📋 Pre-Enrollment ID:', enrollment.pre_enrollments?.id);
+      console.log('💵 Valor final esperado:', finalAmount);
 
-      const { data, error } = await supabase.functions.invoke('create-discounted-checkout', {
+      // Usa create-enrollment-checkout que já tem a lógica de desconto embutida
+      const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
         body: {
-          enrollment_id: enrollment.id,
-          force_amount: finalAmount
+          pre_enrollment_id: enrollment.pre_enrollments?.id,
+          enrollment_id: enrollment.id
         }
       });
 
       if (error) {
         console.error("❌ [DISCOUNTED-CHECKOUT] Erro:", error);
-        toast.error("Erro ao gerar checkout com desconto. Tente novamente.");
+        toast.error("Erro ao gerar checkout. Tente novamente.");
         throw error;
       }
 
       if (data?.checkout_url) {
-        console.log('✅ [DISCOUNTED-CHECKOUT] Checkout criado:', data);
-        console.log('   Original:', data.original_fee);
-        console.log('   Desconto:', data.discount);
-        console.log('   Final:', data.final_amount);
+        console.log('✅ [DISCOUNTED-CHECKOUT] Checkout criado:', data.checkout_url);
         
-        toast.success(`Checkout criado com R$ ${data.discount?.toFixed(2) || '0.00'} de desconto! Redirecionando...`);
+        const discountApplied = data.discount || (data.original_fee && data.final_amount ? data.original_fee - data.final_amount : 0);
+        if (discountApplied > 0) {
+          toast.success(`Checkout criado com R$ ${discountApplied.toFixed(2)} de desconto! Redirecionando...`);
+        } else {
+          toast.success("Checkout criado! Redirecionando para pagamento...");
+        }
         
         setTimeout(() => {
           window.location.href = data.checkout_url;
@@ -245,7 +249,7 @@ export function EnrollmentsPage() {
       }
     } catch (error) {
       console.error("Error generating discounted checkout:", error);
-      toast.error("Erro ao gerar checkout com desconto. Tente novamente.");
+      toast.error("Erro ao gerar checkout. Tente novamente.");
     } finally {
       setGeneratingDiscountedPayment(false);
     }
