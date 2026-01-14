@@ -11,6 +11,7 @@ import { StatusFilter } from "@/components/admin/filters/StatusFilter";
 import { CourseFilter } from "@/components/admin/filters/CourseFilter";
 import { DateRangeFilter } from "@/components/admin/filters/DateRangeFilter";
 import { DateRange } from "react-day-picker";
+import { triggerEnrollmentWebhook } from "@/lib/webhookService";
 
 interface Enrollment {
   id: string;
@@ -65,6 +66,17 @@ export default function EnrollmentsManagementPage() {
 
   const approveEnrollmentManually = async (enrollmentId: string) => {
     try {
+      // First, get the pre_enrollment_id and current status for webhook
+      const { data: enrollmentData, error: fetchError } = await supabase
+        .from('enrollments')
+        .select('pre_enrollment_id, status')
+        .eq('id', enrollmentId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const previousStatus = enrollmentData?.status;
+
       const { error } = await supabase
         .from('enrollments')
         .update({
@@ -75,6 +87,19 @@ export default function EnrollmentsManagementPage() {
         .eq('id', enrollmentId);
         
       if (error) throw error;
+
+      // Trigger webhook for enrollment approval
+      if (enrollmentData?.pre_enrollment_id) {
+        try {
+          await triggerEnrollmentWebhook(
+            enrollmentData.pre_enrollment_id, 
+            'enrollment_approved', 
+            previousStatus
+          );
+        } catch (webhookError) {
+          console.error('Webhook error (non-critical):', webhookError);
+        }
+      }
       
       toast({
         title: "Sucesso",
