@@ -421,51 +421,65 @@ export function EnrollmentsPage() {
                     )}
                   </div>
 
-                  {(enrollment.status === "awaiting_payment" || enrollment.status === "pending_payment") && enrollment.payment_status === "pending" && (
-                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-                      <p className="text-sm text-orange-800 dark:text-orange-200 mb-3">
-                        Pagamento da matrícula pendente. Clique para recalcular e gerar novo checkout com desconto aplicado.
-                      </p>
-                      
-                      {/* Exibir informação do desconto se houver */}
-                      {discountInfoMap[enrollment.id] && (
-                        <div className="mb-3 p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg">
-                          <div className="flex items-center gap-2 text-green-800 dark:text-green-200 text-sm font-medium mb-1">
-                            <RefreshCw className="h-4 w-4" />
-                            Desconto de pré-matrícula disponível!
+                  {(enrollment.status === "awaiting_payment" || enrollment.status === "pending_payment") && enrollment.payment_status === "pending" && (() => {
+                    // Calcular se há desconto baseado no enrollment_amount vs enrollment_fee
+                    const enrollmentFee = enrollment.courses.enrollment_fee || 0;
+                    const enrollmentAmount = enrollment.enrollment_amount || enrollmentFee;
+                    const hasDiscountFromDB = enrollmentAmount < enrollmentFee;
+                    const discountFromDB = enrollmentFee - enrollmentAmount;
+                    
+                    // Usar discountInfoMap se disponível, senão usar dados do banco
+                    const discountInfo = discountInfoMap[enrollment.id];
+                    const hasDiscount = discountInfo || hasDiscountFromDB;
+                    
+                    const displayOriginalFee = discountInfo?.originalFee || enrollmentFee;
+                    const displayDiscount = discountInfo?.preEnrollmentPaid || discountFromDB;
+                    const displayFinalAmount = discountInfo?.finalAmount || enrollmentAmount;
+                    
+                    return (
+                      <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+                        <p className="text-sm text-orange-800 dark:text-orange-200 mb-3">
+                          Pagamento da matrícula pendente. Clique para gerar o checkout de pagamento.
+                        </p>
+                        
+                        {/* Exibir informação do desconto se houver */}
+                        {hasDiscount && displayDiscount > 0 && (
+                          <div className="mb-3 p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg">
+                            <div className="flex items-center gap-2 text-green-800 dark:text-green-200 text-sm font-medium mb-1">
+                              <CheckCircle className="h-4 w-4" />
+                              Desconto de pré-matrícula aplicado!
+                            </div>
+                            <div className="text-sm text-green-700 dark:text-green-300 space-y-1">
+                              <div className="line-through text-muted-foreground">
+                                Valor original: R$ {displayOriginalFee.toFixed(2)}
+                              </div>
+                              <div className="text-green-600 dark:text-green-400">
+                                Desconto: - R$ {displayDiscount.toFixed(2)}
+                              </div>
+                              <div className="font-bold text-green-800 dark:text-green-100 text-base">
+                                Valor a pagar: R$ {displayFinalAmount.toFixed(2)}
+                              </div>
+                            </div>
                           </div>
-                          <div className="text-sm text-green-700 dark:text-green-300">
-                            <span className="line-through text-muted-foreground">
-                              Valor original: R$ {discountInfoMap[enrollment.id].originalFee.toFixed(2)}
-                            </span>
-                            <br />
-                            <span>
-                              Desconto: - R$ {discountInfoMap[enrollment.id].preEnrollmentPaid.toFixed(2)}
-                            </span>
-                            <br />
-                            <strong className="text-green-800 dark:text-green-100">
-                              Valor final: R$ {discountInfoMap[enrollment.id].finalAmount.toFixed(2)}
-                            </strong>
-                          </div>
-                        </div>
-                      )}
-                      
-                      <Button
-                        onClick={() => handleGenerateEnrollmentPayment(enrollment)}
-                        size="sm"
-                        className="flex items-center gap-2"
-                        disabled={generatingPayment}
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                        {generatingPayment 
-                          ? "Gerando..." 
-                          : discountInfoMap[enrollment.id]
-                            ? `Recalcular e Pagar - R$ ${discountInfoMap[enrollment.id].finalAmount.toFixed(2)}`
-                            : `Pagar Matrícula - R$ ${enrollment.courses.enrollment_fee}`
-                        }
-                      </Button>
-                    </div>
-                  )}
+                        )}
+                        
+                        <Button
+                          onClick={() => handleGenerateEnrollmentPayment(enrollment)}
+                          size="sm"
+                          className="flex items-center gap-2"
+                          disabled={generatingPayment}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          {generatingPayment 
+                            ? "Gerando..." 
+                            : hasDiscount && displayDiscount > 0
+                              ? `Pagar Matrícula - R$ ${displayFinalAmount.toFixed(2)}`
+                              : `Pagar Matrícula - R$ ${enrollmentFee.toFixed(2)}`
+                          }
+                        </Button>
+                      </div>
+                    );
+                  })()}
 
                   {enrollment.status === "active" && (
                     <>
