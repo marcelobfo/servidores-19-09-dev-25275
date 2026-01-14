@@ -27,12 +27,44 @@ interface SystemSettings {
   abed_seal_url?: string | null;
 }
 
-const loadImage = (url: string): Promise<HTMLImageElement> => {
+// Resilient image loading with CORS retry and timeout
+const loadImage = (url: string, timeout: number = 8000): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = reject;
+    
+    const timeoutId = setTimeout(() => {
+      console.warn('Image load timeout for:', url);
+      reject(new Error(`Image load timeout for: ${url}`));
+    }, timeout);
+    
+    img.onload = () => {
+      clearTimeout(timeoutId);
+      console.log('Image loaded successfully:', url.substring(0, 50));
+      resolve(img);
+    };
+    
+    img.onerror = () => {
+      // If failed without crossOrigin, retry with it
+      console.log('First load attempt failed, retrying with crossOrigin for:', url);
+      const img2 = new Image();
+      img2.crossOrigin = 'anonymous';
+      
+      img2.onload = () => {
+        clearTimeout(timeoutId);
+        console.log('Image loaded with crossOrigin:', url.substring(0, 50));
+        resolve(img2);
+      };
+      
+      img2.onerror = () => {
+        clearTimeout(timeoutId);
+        console.warn('Image load failed for:', url);
+        reject(new Error(`Image load failed for: ${url}`));
+      };
+      
+      img2.src = url;
+    };
+    
+    // First try without crossOrigin (works better for same-origin images)
     img.src = url;
   });
 };

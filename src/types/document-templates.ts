@@ -13,7 +13,29 @@ export type ContentBlockType =
   | 'qrcode'
   | 'spacer'
   | 'modules_table'
-  | 'cronograma_table';
+  | 'cronograma_table'
+  | 'frame';
+
+// Frame styles for certificates
+export type FrameStyle = 'none' | 'simple' | 'double' | 'classic' | 'elegant' | 'modern';
+
+export interface FramePreset {
+  id: string;
+  name: string;
+  description: string;
+  style: FrameStyle;
+  color: string;
+  width: number;
+}
+
+export const FRAME_PRESETS: FramePreset[] = [
+  { id: 'none', name: 'Sem Moldura', description: 'Certificado limpo sem bordas decorativas', style: 'none', color: '#000000', width: 0 },
+  { id: 'simple', name: 'Moldura Simples', description: 'Uma borda simples e elegante', style: 'simple', color: '#1E40AF', width: 2 },
+  { id: 'double', name: 'Moldura Dupla', description: 'Duas bordas paralelas', style: 'double', color: '#1E40AF', width: 3 },
+  { id: 'classic', name: 'Moldura Clássica', description: 'Estilo tradicional com cantos decorados', style: 'classic', color: '#1E40AF', width: 4 },
+  { id: 'elegant', name: 'Moldura Elegante', description: 'Design sofisticado com detalhes refinados', style: 'elegant', color: '#0F172A', width: 4 },
+  { id: 'modern', name: 'Moldura Moderna', description: 'Design contemporâneo e minimalista', style: 'modern', color: '#3B82F6', width: 2 },
+];
 
 export interface ContentBlockConfig {
   // Text settings
@@ -48,6 +70,11 @@ export interface ContentBlockConfig {
   // Footer settings
   footerText?: string;
   footerAlign?: 'left' | 'center' | 'right';
+  
+  // Frame settings
+  frameStyle?: FrameStyle;
+  frameColor?: string;
+  frameWidth?: number;
 }
 
 export interface ContentBlock {

@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
-import { DocumentTemplate, ContentBlock } from '@/types/document-templates';
+import QRCode from 'qrcode';
+import { DocumentTemplate, ContentBlock, FrameStyle } from '@/types/document-templates';
 
 interface SystemSettings {
   institution_name: string;
@@ -41,31 +42,33 @@ interface PreviewData {
   modules: Array<{ name: string; hours: number }>;
 }
 
-// Helper function to load image from URL with timeout and retry
+// Helper function to load image from URL with CORS support and retry
 const loadImage = (url: string, timeout: number = 8000): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
-    const img = new Image();
-    
     const timeoutId = setTimeout(() => {
       console.warn('Image load timeout for:', url);
       reject(new Error(`Image load timeout for: ${url}`));
     }, timeout);
     
+    // First try with crossOrigin (required for canvas export)
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
     img.onload = () => {
       clearTimeout(timeoutId);
-      console.log('Image loaded successfully:', url.substring(0, 50));
+      console.log('Image loaded with crossOrigin:', url.substring(0, 50));
       resolve(img);
     };
     
     img.onerror = () => {
-      // If failed without crossOrigin, retry with it
-      console.log('First load attempt failed, retrying with crossOrigin...');
+      console.log('First load attempt failed, retrying without crossOrigin for:', url);
+      
+      // Retry without crossOrigin (may work for same-origin but won't support canvas export)
       const img2 = new Image();
-      img2.crossOrigin = 'anonymous';
       
       img2.onload = () => {
         clearTimeout(timeoutId);
-        console.log('Image loaded with crossOrigin:', url.substring(0, 50));
+        console.log('Image loaded without crossOrigin:', url.substring(0, 50));
         resolve(img2);
       };
       
@@ -78,9 +81,25 @@ const loadImage = (url: string, timeout: number = 8000): Promise<HTMLImageElemen
       img2.src = url;
     };
     
-    // First try without crossOrigin (works better for same-origin images)
     img.src = url;
   });
+};
+
+// Helper to safely convert image to data URL (handles CORS issues)
+const imageToDataURL = (img: HTMLImageElement): string | null => {
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+    return canvas.toDataURL('image/png');
+  } catch (error) {
+    console.warn('Could not convert image to data URL (CORS issue):', error);
+    return null;
+  }
 };
 
 // Replace variables in text
@@ -154,13 +173,11 @@ const renderBlock = async (
       break;
 
     case 'qrcode':
-      // QR Code rendering would require a library like qrcode
-      // For now, just add a placeholder
-      pdf.setDrawColor(200, 200, 200);
-      pdf.rect(pageWidth / 2 - 30, yPosition, 60, 60);
-      pdf.setFontSize(8);
-      pdf.text('QR Code', pageWidth / 2, yPosition + 35, { align: 'center' });
-      yPosition += 65;
+      yPosition = await renderQRCode(pdf, data, block, yPosition, margins);
+      break;
+
+    case 'frame':
+      await renderFrame(pdf, block);
       break;
   }
 
@@ -168,6 +185,163 @@ const renderBlock = async (
   yPosition += block.config.marginBottom || 0;
 
   return yPosition;
+};
+
+// Render QR Code
+const renderQRCode = async (
+  pdf: jsPDF,
+  data: PreviewData,
+  block: ContentBlock,
+  yPosition: number,
+  margins: { left: number; right: number }
+): Promise<number> => {
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const qrSize = block.config.width || 60;
+  
+  try {
+    const verificationUrl = data.verification_url || `https://exemplo.com/verify/${data.certificate_code || 'CERT-XXXX'}`;
+    const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl, {
+      width: 200,
+      margin: 1
+    });
+    
+    pdf.addImage(qrCodeDataUrl, 'PNG', (pageWidth - qrSize) / 2, yPosition, qrSize, qrSize);
+    yPosition += qrSize + 5;
+    
+    // Add verification text
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text('Verificação Digital', pageWidth / 2, yPosition, { align: 'center' });
+    pdf.setTextColor(0, 0, 0);
+    yPosition += 5;
+  } catch (error) {
+    console.warn('Could not generate QR Code:', error);
+    // Fallback to placeholder
+    pdf.setDrawColor(200, 200, 200);
+    pdf.rect((pageWidth - qrSize) / 2, yPosition, qrSize, qrSize);
+    pdf.setFontSize(8);
+    pdf.text('QR Code', pageWidth / 2, yPosition + qrSize / 2, { align: 'center' });
+    yPosition += qrSize + 5;
+  }
+  
+  return yPosition;
+};
+
+// Render decorative frame/border
+const renderFrame = async (pdf: jsPDF, block: ContentBlock): Promise<void> => {
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const frameStyle = block.config.frameStyle || 'classic';
+  const frameColor = block.config.frameColor || '#1E40AF';
+  const frameWidth = block.config.frameWidth || 4;
+  
+  // Parse color from hex to RGB
+  const hexToRgb = (hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : { r: 30, g: 64, b: 175 };
+  };
+  
+  const color = hexToRgb(frameColor);
+  
+  switch (frameStyle) {
+    case 'none':
+      break;
+      
+    case 'simple':
+      pdf.setDrawColor(color.r, color.g, color.b);
+      pdf.setLineWidth(frameWidth);
+      pdf.rect(8, 8, pageWidth - 16, pageHeight - 16);
+      break;
+      
+    case 'double':
+      pdf.setDrawColor(color.r, color.g, color.b);
+      pdf.setLineWidth(frameWidth);
+      pdf.rect(6, 6, pageWidth - 12, pageHeight - 12);
+      pdf.setLineWidth(frameWidth / 2);
+      pdf.rect(12, 12, pageWidth - 24, pageHeight - 24);
+      break;
+      
+    case 'classic':
+      // Outer border
+      pdf.setDrawColor(color.r, color.g, color.b);
+      pdf.setLineWidth(frameWidth);
+      pdf.rect(8, 8, pageWidth - 16, pageHeight - 16);
+      
+      // Inner border (lighter)
+      pdf.setLineWidth(frameWidth / 2);
+      const lighterColor = { r: Math.min(color.r + 80, 255), g: Math.min(color.g + 80, 255), b: Math.min(color.b + 80, 255) };
+      pdf.setDrawColor(lighterColor.r, lighterColor.g, lighterColor.b);
+      pdf.rect(12, 12, pageWidth - 24, pageHeight - 24);
+      
+      // Corner decorations
+      pdf.setFillColor(color.r, color.g, color.b);
+      const cornerSize = 12;
+      const cornerThickness = 3;
+      
+      // Top corners
+      pdf.rect(18, 18, cornerSize, cornerThickness, 'F');
+      pdf.rect(18, 18, cornerThickness, cornerSize, 'F');
+      pdf.rect(pageWidth - 30, 18, cornerSize, cornerThickness, 'F');
+      pdf.rect(pageWidth - 21, 18, cornerThickness, cornerSize, 'F');
+      
+      // Bottom corners
+      pdf.rect(18, pageHeight - 21, cornerSize, cornerThickness, 'F');
+      pdf.rect(18, pageHeight - 30, cornerThickness, cornerSize, 'F');
+      pdf.rect(pageWidth - 30, pageHeight - 21, cornerSize, cornerThickness, 'F');
+      pdf.rect(pageWidth - 21, pageHeight - 30, cornerThickness, cornerSize, 'F');
+      break;
+      
+    case 'elegant':
+      // Triple border effect
+      pdf.setDrawColor(color.r, color.g, color.b);
+      pdf.setLineWidth(1);
+      pdf.rect(5, 5, pageWidth - 10, pageHeight - 10);
+      
+      pdf.setLineWidth(frameWidth);
+      pdf.rect(10, 10, pageWidth - 20, pageHeight - 20);
+      
+      pdf.setLineWidth(1);
+      pdf.rect(15, 15, pageWidth - 30, pageHeight - 30);
+      
+      // Elegant corner accents
+      const accentSize = 20;
+      pdf.setLineWidth(2);
+      
+      // Top-left corner
+      pdf.line(20, 20, 20 + accentSize, 20);
+      pdf.line(20, 20, 20, 20 + accentSize);
+      
+      // Top-right corner
+      pdf.line(pageWidth - 20, 20, pageWidth - 20 - accentSize, 20);
+      pdf.line(pageWidth - 20, 20, pageWidth - 20, 20 + accentSize);
+      
+      // Bottom-left corner
+      pdf.line(20, pageHeight - 20, 20 + accentSize, pageHeight - 20);
+      pdf.line(20, pageHeight - 20, 20, pageHeight - 20 - accentSize);
+      
+      // Bottom-right corner
+      pdf.line(pageWidth - 20, pageHeight - 20, pageWidth - 20 - accentSize, pageHeight - 20);
+      pdf.line(pageWidth - 20, pageHeight - 20, pageWidth - 20, pageHeight - 20 - accentSize);
+      break;
+      
+    case 'modern':
+      // Clean modern border with accent lines
+      pdf.setDrawColor(color.r, color.g, color.b);
+      pdf.setLineWidth(frameWidth);
+      pdf.rect(10, 10, pageWidth - 20, pageHeight - 20);
+      
+      // Top accent line
+      pdf.setFillColor(color.r, color.g, color.b);
+      pdf.rect(10, 10, pageWidth - 20, 3, 'F');
+      
+      // Bottom accent line
+      pdf.rect(10, pageHeight - 13, pageWidth - 20, 3, 'F');
+      break;
+  }
 };
 
 // Render header
@@ -194,16 +368,13 @@ const renderHeader = async (
     try {
       console.log('Attempting to load logo:', settings.logo_url);
       const logo = await loadImage(settings.logo_url);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        canvas.width = logo.width;
-        canvas.height = logo.height;
-        ctx.drawImage(logo, 0, 0);
-        const logoData = canvas.toDataURL('image/png');
+      const logoData = imageToDataURL(logo);
+      if (logoData) {
         pdf.addImage(logoData, 'PNG', marginLeft, yPosition, 25, 18);
         logoLoaded = true;
         console.log('Logo added to PDF successfully');
+      } else {
+        console.warn('Could not convert logo to data URL (CORS issue)');
       }
     } catch (error) {
       console.warn('Logo could not be loaded:', error, 'URL:', settings.logo_url);
@@ -279,14 +450,11 @@ const renderSignature = async (
   if (settings.director_signature_url) {
     try {
       const signature = await loadImage(settings.director_signature_url);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = signature.width;
-      canvas.height = signature.height;
-      ctx?.drawImage(signature, 0, 0);
-      const signatureData = canvas.toDataURL('image/png');
-      pdf.addImage(signatureData, 'PNG', marginLeft, yPosition - 5, 40, 15);
-      yPosition += 12;
+      const signatureData = imageToDataURL(signature);
+      if (signatureData) {
+        pdf.addImage(signatureData, 'PNG', marginLeft, yPosition - 5, 40, 15);
+        yPosition += 12;
+      }
     } catch (error) {
       console.warn('Signature could not be loaded:', error);
     }

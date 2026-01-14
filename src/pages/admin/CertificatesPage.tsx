@@ -119,6 +119,7 @@ export default function CertificatesPage() {
           courses (
             name,
             duration_hours,
+            duration_days,
             end_date
           )
         `)
@@ -135,11 +136,35 @@ export default function CertificatesPage() {
         existingCerts?.map(cert => cert.enrollment_id) || []
       );
 
-      const eligible = (enrollments || []).filter(
-        enrollment => !existingEnrollmentIds.has(enrollment.id)
+      // Para cada pré-matrícula, buscar dados de matrícula para calcular data de conclusão
+      const eligibleWithDates = await Promise.all(
+        (enrollments || [])
+          .filter(enrollment => !existingEnrollmentIds.has(enrollment.id))
+          .map(async (enrollment) => {
+            // Buscar enrollment_date
+            const { data: enrollmentRecord } = await supabase
+              .from('enrollments')
+              .select('enrollment_date')
+              .eq('pre_enrollment_id', enrollment.id)
+              .maybeSingle();
+
+            // Calcular data de conclusão
+            let completionDate = null;
+            if (enrollmentRecord?.enrollment_date && enrollment.courses?.duration_days) {
+              const startDate = new Date(enrollmentRecord.enrollment_date);
+              completionDate = new Date(startDate);
+              completionDate.setDate(completionDate.getDate() + enrollment.courses.duration_days);
+            }
+
+            return {
+              ...enrollment,
+              enrollment_date: enrollmentRecord?.enrollment_date,
+              calculated_completion_date: completionDate
+            };
+          })
       );
 
-      setAvailableEnrollments(eligible);
+      setAvailableEnrollments(eligibleWithDates);
     } catch (error: any) {
       toast({
         title: 'Erro',
@@ -388,17 +413,30 @@ export default function CertificatesPage() {
                     e => e.id === selectedEnrollmentId
                   );
                   if (!selected) return null;
+                  
+                  // Calcular data de conclusão: enrollment_date + duration_days
+                  let completionDateDisplay = 'Não definida';
+                  if (selected.calculated_completion_date) {
+                    completionDateDisplay = new Date(selected.calculated_completion_date).toLocaleDateString('pt-BR');
+                  } else if (selected.enrollment_date && selected.courses?.duration_days) {
+                    const startDate = new Date(selected.enrollment_date);
+                    startDate.setDate(startDate.getDate() + selected.courses.duration_days);
+                    completionDateDisplay = startDate.toLocaleDateString('pt-BR');
+                  }
+                  
                   return (
                     <div className="space-y-1 text-sm">
                       <p><strong>Aluno:</strong> {selected.full_name}</p>
                       <p><strong>Email:</strong> {selected.email}</p>
                       <p><strong>Curso:</strong> {selected.courses?.name}</p>
                       <p><strong>Carga Horária:</strong> {selected.courses?.duration_hours}h</p>
-                      <p><strong>Data de Conclusão:</strong> {
-                        selected.courses?.end_date 
-                          ? new Date(selected.courses.end_date).toLocaleDateString('pt-BR')
+                      <p><strong>Duração:</strong> {selected.courses?.duration_days || 'N/A'} dias</p>
+                      <p><strong>Data de Matrícula:</strong> {
+                        selected.enrollment_date 
+                          ? new Date(selected.enrollment_date).toLocaleDateString('pt-BR')
                           : 'Não definida'
                       }</p>
+                      <p><strong>Data de Conclusão:</strong> {completionDateDisplay}</p>
                     </div>
                   );
                 })()}
