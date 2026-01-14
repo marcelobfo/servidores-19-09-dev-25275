@@ -75,18 +75,20 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
 
     console.log('🎨 Generating image for course:', courseName);
 
-    // Chamar API do Google Imagen 3
-    const imagenUrl = 'https://generativelanguage.googleapis.com/v1beta/models/imagegeneration:generateImage';
+    // Chamar API do Gemini 2.5 Flash Image (Nano Banana)
+    const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent';
     
     const requestBody = {
-      prompt: {
-        text: prompt
-      }
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }]
     };
     
-    console.log('📤 Calling Google Imagen 3 API...');
+    console.log('📤 Calling Gemini 2.5 Flash Image API...');
 
-    const response = await fetch(imagenUrl, {
+    const response = await fetch(geminiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -135,7 +137,7 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
       
       if (response.status === 404) {
         return new Response(JSON.stringify({ 
-          error: 'Modelo de geração de imagens não encontrado. O modelo "imagegeneration" pode não estar disponível.',
+          error: 'Modelo gemini-2.5-flash-image não encontrado. Verifique se a API key tem permissões.',
           hint: 'Verifique se a API key tem permissões para geração de imagens'
         }), {
           status: 404,
@@ -144,10 +146,10 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
       }
 
       return new Response(JSON.stringify({ 
-        error: 'Erro ao gerar imagem com o Imagen 3.',
+        error: 'Erro ao gerar imagem com Gemini 2.5 Flash Image.',
         details: errorDetails?.error?.message || errorText || response.statusText,
         status: response.status,
-        model: 'imagegeneration'
+        model: 'gemini-2.5-flash-image'
       }), {
         status: response.status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -155,19 +157,31 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
     }
 
     const data = await response.json();
-    console.log('✅ Google Imagen 3 response received');
+    console.log('✅ Gemini 2.5 Flash Image response received');
 
-    // Extrair imagem do formato do Google Imagen 3
-    const imageBase64 = data?.images?.[0]?.data;
+    // Extrair imagem do formato do Gemini 2.5 Flash Image
+    const responseContent = data?.candidates?.[0]?.content?.parts || [];
+    let imageBase64 = null;
+    let mimeType = 'image/png';
+
+    for (const part of responseContent) {
+      if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
+        imageBase64 = part.inlineData.data;
+        mimeType = part.inlineData.mimeType;
+        break;
+      }
+    }
     
     console.log('📸 Image extraction result:', {
       hasImage: !!imageBase64,
-      dataLength: imageBase64 ? imageBase64.length : 0
+      mimeType,
+      dataLength: imageBase64 ? imageBase64.length : 0,
+      partsCount: responseContent.length
     });
 
     if (!imageBase64) {
       console.error('❌ Failed to extract image from response');
-      console.error('📍 Response keys:', Object.keys(data));
+      console.error('📍 Response structure:', JSON.stringify(data, null, 2).substring(0, 500));
       
       const errorMessage = data.error?.message;
       
@@ -180,15 +194,15 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
       );
     }
     
-    // Adicionar prefixo data:image/png;base64,
-    const imageUrl = `data:image/png;base64,${imageBase64}`;
+    // Adicionar prefixo data:image com mimeType correto
+    const imageUrl = `data:${mimeType};base64,${imageBase64}`;
     
-    console.log('✅ Image generated successfully with Google Imagen 3');
+    console.log('✅ Image generated successfully with Gemini 2.5 Flash Image');
 
     return new Response(
       JSON.stringify({ 
         imageUrl,
-        model_used: 'imagen-3.0-latest'
+        model_used: 'gemini-2.5-flash-image'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

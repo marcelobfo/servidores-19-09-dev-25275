@@ -41,19 +41,20 @@ serve(async (req) => {
       );
     }
 
-    // Test API key with a simple text generation request
+    // Test API key with image generation model (gemini-2.5-flash-image)
     const startTime = Date.now();
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
         },
         body: JSON.stringify({
           contents: [{
             parts: [{
-              text: "Responda apenas: OK"
+              text: "Create a simple blue square"
             }]
           }]
         })
@@ -101,12 +102,15 @@ serve(async (req) => {
 
     const data = await response.json();
 
-    // Check if we got a valid response
-    if (!data.candidates || !data.candidates[0]?.content) {
+    // Check if we got a valid response with image data
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    const hasImage = parts.some((part: any) => part.inlineData?.mimeType?.startsWith('image/'));
+    
+    if (!data.candidates || !hasImage) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Resposta inválida da API do Gemini" 
+          message: "Resposta inválida da API do Gemini - imagem não gerada" 
         }),
         { 
           status: 200,
@@ -118,9 +122,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `API Key válida! Tempo de resposta: ${responseTime}ms`,
+        message: `API Key válida! Modelo gemini-2.5-flash-image funcionando. Tempo: ${responseTime}ms`,
         details: {
-          model: 'gemini-2.0-flash-lite',
+          model: 'gemini-2.5-flash-image',
           responseTime
         }
       }),
