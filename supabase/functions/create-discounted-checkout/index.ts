@@ -1,19 +1,53 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
+console.log("🔧 create-discounted-checkout function loaded");
+
 serve(async (req) => {
+  const method = req.method;
+  console.log(`📨 Request received: ${method} ${req.url}`);
+
   // Handle CORS preflight requests - must be first, outside try/catch
-  if (req.method === "OPTIONS") {
+  if (method === "OPTIONS") {
+    console.log("✅ OPTIONS preflight - returning 200");
     return new Response(null, { 
-      status: 204,
+      status: 200,
       headers: corsHeaders 
     });
+  }
+
+  // Health check endpoint
+  if (method === "GET") {
+    console.log("✅ GET health check");
+    return new Response(
+      JSON.stringify({ 
+        ok: true, 
+        function: "create-discounted-checkout",
+        timestamp: new Date().toISOString()
+      }),
+      { 
+        status: 200, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      }
+    );
+  }
+
+  // Only POST allowed beyond this point
+  if (method !== "POST") {
+    console.log(`❌ Method not allowed: ${method}`);
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { 
+        status: 405, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      }
+    );
   }
 
   const supabaseClient = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_ANON_KEY") ?? "");
@@ -26,7 +60,20 @@ serve(async (req) => {
   try {
     console.log("🚀 Create Discounted Checkout - Started");
 
-    const body = await req.json();
+    // Safe JSON parsing
+    let body;
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      console.error("❌ Invalid JSON body:", parseError);
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body" }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
+    }
     const { enrollment_id, force_amount } = body;
 
     if (!enrollment_id) {
