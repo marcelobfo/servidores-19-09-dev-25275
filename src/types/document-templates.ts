@@ -37,6 +37,10 @@ export const FRAME_PRESETS: FramePreset[] = [
   { id: 'modern', name: 'Moldura Moderna', description: 'Design contemporâneo e minimalista', style: 'modern', color: '#3B82F6', width: 2 },
 ];
 
+export type BlockAlignment = 'left' | 'center' | 'right';
+export type HeaderLayout = 'logo-left' | 'logo-center' | 'logo-above' | 'logo-right';
+export type ImageSource = 'system-logo' | 'director-signature' | 'custom-url';
+
 export interface ContentBlockConfig {
   // Text settings
   text?: string;
@@ -52,6 +56,7 @@ export interface ContentBlockConfig {
   // Image settings
   imageField?: 'logo' | 'signature' | 'custom';
   imageUrl?: string;
+  imageSource?: ImageSource;
   width?: number;
   height?: number;
   
@@ -66,6 +71,18 @@ export interface ContentBlockConfig {
   // Header settings
   showLogo?: boolean;
   showInstitutionInfo?: boolean;
+  headerLayout?: HeaderLayout;
+  logoAlign?: BlockAlignment;
+  infoAlign?: BlockAlignment;
+  
+  // Signature settings
+  signatureAlign?: BlockAlignment;
+  
+  // QR Code settings
+  qrcodeAlign?: BlockAlignment;
+  
+  // Image block alignment
+  blockAlign?: BlockAlignment;
   
   // Footer settings
   footerText?: string;
