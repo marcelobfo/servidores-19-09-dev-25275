@@ -37,13 +37,24 @@ interface PreEnrollment {
   course: Course;
 }
 
-// Helper function to load image from URL
-const loadImage = (url: string): Promise<HTMLImageElement> => {
+// Helper function to load image from URL with timeout
+const loadImage = (url: string, timeout: number = 10000): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = reject;
+    
+    const timeoutId = setTimeout(() => {
+      reject(new Error('Image load timeout'));
+    }, timeout);
+    
+    img.onload = () => {
+      clearTimeout(timeoutId);
+      resolve(img);
+    };
+    img.onerror = (e) => {
+      clearTimeout(timeoutId);
+      reject(e);
+    };
     img.src = url;
   });
 };
@@ -98,32 +109,40 @@ const addDocumentFooter = (pdf: jsPDF, settings: SystemSettings): void => {
 // Helper to add header with logo
 const addHeader = async (pdf: jsPDF, settings: SystemSettings, startY: number = 15): Promise<number> => {
   let yPosition = startY;
+  let logoLoaded = false;
   
-  // Add logo if available
+  // Add logo if available - with robust error handling
   if (settings.logo_url) {
     try {
-      const logo = await loadImage(settings.logo_url);
+      // Try to load the logo with a timeout
+      const logo = await loadImage(settings.logo_url, 8000);
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      canvas.width = logo.width;
-      canvas.height = logo.height;
-      ctx?.drawImage(logo, 0, 0);
-      const logoData = canvas.toDataURL('image/jpeg');
-      pdf.addImage(logoData, 'JPEG', 15, yPosition, 25, 18);
+      if (ctx) {
+        canvas.width = logo.width;
+        canvas.height = logo.height;
+        ctx.drawImage(logo, 0, 0);
+        const logoData = canvas.toDataURL('image/png');
+        pdf.addImage(logoData, 'PNG', 15, yPosition, 25, 18);
+        logoLoaded = true;
+      }
     } catch (error) {
-      console.error('Error loading logo:', error);
+      console.warn('Logo could not be loaded, continuing without logo:', error);
+      // Continue without logo - don't block document generation
     }
   }
 
-  // Header information (right side of logo)
+  // Header information - position based on whether logo was loaded
+  const textStartX = logoLoaded ? 45 : 20;
+  
   pdf.setFontSize(9);
   pdf.setFont('helvetica', 'bold');
-  pdf.text(settings.institution_name, 45, yPosition + 6);
+  pdf.text(settings.institution_name, textStartX, yPosition + 6);
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(8);
-  pdf.text('Cursos Online e Presenciais', 45, yPosition + 11);
-  pdf.text(settings.institution_address, 45, yPosition + 15);
-  pdf.text(`CEP: ${settings.institution_cep}`, 45, yPosition + 19);
+  pdf.text('Cursos Online e Presenciais', textStartX, yPosition + 11);
+  pdf.text(settings.institution_address, textStartX, yPosition + 15);
+  pdf.text(`CEP: ${settings.institution_cep}`, textStartX, yPosition + 19);
 
   return yPosition + 30;
 };
@@ -472,33 +491,68 @@ export const generateStudyPlan = async (
   yPosition += 10;
   pdf.setFontSize(9);
   
-  modules.forEach((module, index) => {
-    if (yPosition > 250) {
-      addDocumentFooter(pdf, settings);
-      pdf.addPage();
-      yPosition = 20;
-    }
+  // Check if modules have descriptions
+  const hasModuleDescriptions = modules.some(m => m.description && m.description.trim());
+  
+  if (hasModuleDescriptions) {
+    // Show each module with its description
+    modules.forEach((module, index) => {
+      if (yPosition > 250) {
+        addDocumentFooter(pdf, settings);
+        pdf.addPage();
+        yPosition = 20;
+      }
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`Módulo ${index + 1} – ${module.name}`, 20, yPosition);
+      yPosition += 6;
+      
+      if (module.description) {
+        pdf.setFont('helvetica', 'normal');
+        const descLines = module.description.split('\n').filter(line => line.trim());
+        descLines.forEach((line, lineIndex) => {
+          if (yPosition > 270) {
+            addDocumentFooter(pdf, settings);
+            pdf.addPage();
+            yPosition = 20;
+          }
+          pdf.text(`${lineIndex + 1}. ${line.trim().replace(/^\d+\.\s*/, '')}`, 25, yPosition);
+          yPosition += 5;
+        });
+      }
+      
+      yPosition += 5;
+    });
+  } else if (enrollment.course.description) {
+    // Use the general course description if modules don't have descriptions
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
     
-    pdf.setFont('helvetica', 'bold');
-    pdf.text(`Módulo ${index + 1} – ${module.name}`, 20, yPosition);
-    yPosition += 6;
-    
-    if (module.description) {
-      pdf.setFont('helvetica', 'normal');
-      const descLines = module.description.split('\n').filter(line => line.trim());
-      descLines.forEach((line, lineIndex) => {
-        if (yPosition > 270) {
-          addDocumentFooter(pdf, settings);
-          pdf.addPage();
-          yPosition = 20;
-        }
-        pdf.text(`${lineIndex + 1}. ${line.trim().replace(/^\d+\.\s*/, '')}`, 25, yPosition);
-        yPosition += 5;
-      });
-    }
-    
+    const descriptionLines = pdf.splitTextToSize(enrollment.course.description, 170);
+    descriptionLines.forEach((line: string) => {
+      if (yPosition > 270) {
+        addDocumentFooter(pdf, settings);
+        pdf.addPage();
+        yPosition = 20;
+      }
+      pdf.text(line, 20, yPosition);
+      yPosition += 5;
+    });
     yPosition += 5;
-  });
+  } else {
+    // Fallback: just list module names
+    modules.forEach((module, index) => {
+      if (yPosition > 250) {
+        addDocumentFooter(pdf, settings);
+        pdf.addPage();
+        yPosition = 20;
+      }
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`Módulo ${index + 1} – ${module.name}`, 20, yPosition);
+      yPosition += 8;
+    });
+  }
 
   // Footer on last page
   addDocumentFooter(pdf, settings);
@@ -565,8 +619,7 @@ export const generateQuote = async (
 
   // Value table
   const totalFee = enrollment.course.enrollment_fee || 0;
-  const preEnrollmentFee = enrollment.course.pre_enrollment_fee || 0;
-  const paidAmount = preEnrollmentPaid ? (preEnrollmentAmount || preEnrollmentFee) : 0;
+  const paidAmount = preEnrollmentPaid ? preEnrollmentAmount : 0;
   const remainingAmount = Math.max(totalFee - paidAmount, 0);
 
   pdf.setDrawColor(0, 0, 0);
@@ -577,7 +630,7 @@ export const generateQuote = async (
   pdf.setFontSize(9);
   pdf.rect(20, yPosition - 4, 120, 8);
   pdf.rect(140, yPosition - 4, 50, 8);
-  pdf.text('Módulos', 25, yPosition + 1);
+  pdf.text('Descrição', 25, yPosition + 1);
   pdf.text('Valor (Reais)', 145, yPosition + 1);
   
   yPosition += 6;
@@ -591,20 +644,21 @@ export const generateQuote = async (
   
   yPosition += 6;
   
-  // Row 2: Pre-enrollment fee
-  pdf.rect(20, yPosition - 4, 120, 8);
-  pdf.rect(140, yPosition - 4, 50, 8);
-  const preEnrollmentText = preEnrollmentPaid ? 'Taxa de antecipação de matrícula (Paga)' : 'Taxa de antecipação de matrícula';
-  pdf.text(preEnrollmentText, 25, yPosition + 1);
-  pdf.text(formatCurrency(paidAmount), 145, yPosition + 1);
-  
-  yPosition += 6;
+  // Row 2: Discount (only show if there was a payment)
+  if (paidAmount > 0) {
+    pdf.rect(20, yPosition - 4, 120, 8);
+    pdf.rect(140, yPosition - 4, 50, 8);
+    pdf.text('Crédito de pré-matrícula (abatido)', 25, yPosition + 1);
+    pdf.text(`-${formatCurrency(paidAmount)}`, 145, yPosition + 1);
+    
+    yPosition += 6;
+  }
   
   // Row 3: Remaining value
   pdf.setFont('helvetica', 'bold');
   pdf.rect(20, yPosition - 4, 120, 8);
   pdf.rect(140, yPosition - 4, 50, 8);
-  pdf.text('Valor restante', 25, yPosition + 1);
+  pdf.text('Valor a pagar', 25, yPosition + 1);
   pdf.text(formatCurrency(remainingAmount), 145, yPosition + 1);
   
   yPosition += 15;
