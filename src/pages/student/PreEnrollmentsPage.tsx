@@ -874,6 +874,33 @@ export function PreEnrollmentsPage() {
                         Órgão aprovado! Agora você pode realizar sua matrícula no curso.
                       </p>
                       
+                      {/* Botões de download dos documentos */}
+                      <div className="mb-4">
+                        <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+                          Baixe novamente os documentos se necessário:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={() => handleDownloadDeclaration(preEnrollment)}
+                            size="sm"
+                            disabled={downloadingDeclarations.has(preEnrollment.id)}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            {downloadingDeclarations.has(preEnrollment.id) ? 'Baixando...' : 'Declaração de Matrícula'}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => handleDownloadStudyPlan(preEnrollment)}
+                            size="sm"
+                            disabled={downloadingStudyPlans.has(preEnrollment.id)}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            {downloadingStudyPlans.has(preEnrollment.id) ? 'Baixando...' : 'Plano de Estudos'}
+                          </Button>
+                        </div>
+                      </div>
+                      
                       {/* Exibir informação do desconto se houver pagamento de pré-matrícula */}
                       {preEnrollmentPayments[preEnrollment.id] && preEnrollment.courses.enrollment_fee && (
                         <div className="mb-3 p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg">
