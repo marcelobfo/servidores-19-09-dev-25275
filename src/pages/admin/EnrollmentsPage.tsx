@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CheckCircle, XCircle, FileText, Download } from "lucide-react";
+import { CheckCircle, XCircle, FileText, Download, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { triggerEnrollmentWebhook } from "@/lib/webhookService";
@@ -333,6 +333,57 @@ const EnrollmentsPage = () => {
     }
   };
 
+  const confirmPaymentManually = async (enrollmentId: string) => {
+    try {
+      // Get current enrollment status for webhook
+      const { data: currentEnrollment, error: fetchError } = await supabase
+        .from("pre_enrollments")
+        .select("status")
+        .eq("id", enrollmentId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const previousStatus = currentEnrollment?.status;
+
+      // Update status to payment_confirmed
+      const { error } = await supabase
+        .from("pre_enrollments")
+        .update({ 
+          status: 'payment_confirmed',
+          manual_approval: true 
+        })
+        .eq("id", enrollmentId);
+
+      if (error) throw error;
+
+      // Trigger webhook for payment confirmed
+      try {
+        await triggerEnrollmentWebhook(
+          enrollmentId, 
+          'payment_confirmed', 
+          previousStatus
+        );
+      } catch (webhookError) {
+        console.error('Webhook error (non-critical):', webhookError);
+      }
+
+      toast({
+        title: "Sucesso",
+        description: "Pagamento confirmado manualmente com sucesso!"
+      });
+
+      fetchEnrollments();
+      setSelectedEnrollment(null);
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Falha ao confirmar pagamento",
+        variant: "destructive"
+      });
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       pending: { label: "Pendente", variant: "secondary" as const },
@@ -592,10 +643,20 @@ const EnrollmentsPage = () => {
                           )}
                           
                           {selectedEnrollment.status !== 'pending' && selectedEnrollment.status !== 'approved' && (
-                            <div className="pt-2 border-t">
+                            <div className="pt-2 border-t space-y-2">
                               <p className="text-xs text-muted-foreground mb-2">
-                                Forçar aprovação manual desta matrícula:
+                                Ações manuais:
                               </p>
+                              {selectedEnrollment.status === 'pending_payment' && (
+                                <Button 
+                                  onClick={() => confirmPaymentManually(selectedEnrollment.id)}
+                                  className="w-full"
+                                  variant="outline"
+                                >
+                                  <DollarSign className="h-4 w-4 mr-2" />
+                                  💰 Confirmar Pagamento Manualmente
+                                </Button>
+                              )}
                               <Button 
                                 onClick={() => updateEnrollmentStatus(selectedEnrollment.id, 'approved', undefined, true)}
                                 className="w-full"
