@@ -228,7 +228,7 @@ serve(async (req) => {
     const checkoutKind = isEnrollmentCheckout ? "enrollment" : "pre_enrollment";
     let paymentQuery = serviceClient
       .from("payments")
-      .select("id, status, asaas_payment_id")
+      .select("id, status, asaas_payment_id, amount")
       .eq("pre_enrollment_id", pre_enrollment_id)
       .eq("kind", checkoutKind)
       .in("status", ["pending", "waiting"])
@@ -242,22 +242,82 @@ serve(async (req) => {
     const { data: existingPayment } = await paymentQuery.maybeSingle();
 
     if (existingPayment) {
-      console.log("Reusing existing payment:", existingPayment.id);
+      console.log("Found existing payment:", existingPayment.id);
 
-      // Construir URL do checkout existente
-      const checkoutUrl = `https://${environment === "production" ? "asaas.com" : "sandbox.asaas.com"}/checkoutSession/show?id=${existingPayment.asaas_payment_id}`;
+      // Para checkout de matrícula, verificar se há crédito de pré-matrícula que não foi aplicado
+      if (isEnrollmentCheckout) {
+        const { data: confirmedPrePayment } = await serviceClient
+          .from("payments")
+          .select("amount")
+          .eq("pre_enrollment_id", pre_enrollment_id)
+          .eq("kind", "pre_enrollment")
+          .in("status", ["confirmed", "received"])
+          .maybeSingle();
 
-      return new Response(
-        JSON.stringify({
-          checkout_url: checkoutUrl,
-          checkout_id: existingPayment.asaas_payment_id,
-          reused: true,
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        },
-      );
+        if (confirmedPrePayment?.amount) {
+          const prePaymentAmount = Number(confirmedPrePayment.amount);
+          const existingPaymentAmount = Number(existingPayment.amount);
+          const originalFee = preEnrollment.courses?.enrollment_fee || 0;
+          
+          // Se o checkout existente tem o valor cheio (sem desconto aplicado), cancelar e criar novo
+          if (existingPaymentAmount >= originalFee - 1) { // tolerância de R$ 1
+            console.log("⚠️ Checkout antigo encontrado com valor cheio, mas há crédito de pré-matrícula R$", prePaymentAmount);
+            console.log("📛 Cancelando checkout antigo e criando novo com desconto...");
+            
+            await serviceClient
+              .from("payments")
+              .update({ status: 'cancelled' })
+              .eq("id", existingPayment.id);
+            
+            // Não retornar - continuar para criar novo checkout com desconto
+          } else {
+            // Checkout já tem desconto aplicado, reutilizar
+            console.log("✅ Checkout existente já tem desconto aplicado, reutilizando...");
+            const checkoutUrl = `https://${environment === "production" ? "asaas.com" : "sandbox.asaas.com"}/checkoutSession/show?id=${existingPayment.asaas_payment_id}`;
+            return new Response(
+              JSON.stringify({
+                checkout_url: checkoutUrl,
+                checkout_id: existingPayment.asaas_payment_id,
+                reused: true,
+              }),
+              {
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+                status: 200,
+              },
+            );
+          }
+        } else {
+          // Sem crédito de pré-matrícula, reutilizar checkout existente
+          console.log("Reusing existing payment (no pre-enrollment credit):", existingPayment.id);
+          const checkoutUrl = `https://${environment === "production" ? "asaas.com" : "sandbox.asaas.com"}/checkoutSession/show?id=${existingPayment.asaas_payment_id}`;
+          return new Response(
+            JSON.stringify({
+              checkout_url: checkoutUrl,
+              checkout_id: existingPayment.asaas_payment_id,
+              reused: true,
+            }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 200,
+            },
+          );
+        }
+      } else {
+        // Checkout de pré-matrícula, reutilizar normalmente
+        console.log("Reusing existing pre-enrollment payment:", existingPayment.id);
+        const checkoutUrl = `https://${environment === "production" ? "asaas.com" : "sandbox.asaas.com"}/checkoutSession/show?id=${existingPayment.asaas_payment_id}`;
+        return new Response(
+          JSON.stringify({
+            checkout_url: checkoutUrl,
+            checkout_id: existingPayment.asaas_payment_id,
+            reused: true,
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
     }
 
     // ETAPA 2: Validar dados do curso
