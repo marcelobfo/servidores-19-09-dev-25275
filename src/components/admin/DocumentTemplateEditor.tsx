@@ -56,6 +56,8 @@ import {
   ContentBlockType,
   ContentBlockConfig,
   TEMPLATE_VARIABLES,
+  FRAME_PRESETS,
+  FrameStyle,
 } from "@/types/document-templates";
 
 interface DocumentTemplateEditorProps {
@@ -76,6 +78,7 @@ const BLOCK_TYPE_CONFIG: Record<ContentBlockType, { label: string; icon: typeof 
   image: { label: 'Imagem', icon: Image },
   qrcode: { label: 'QR Code', icon: QrCode },
   spacer: { label: 'Espaçador', icon: Minus },
+  frame: { label: 'Moldura', icon: LayoutGrid },
 };
 
 export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentTemplateEditorProps) {
@@ -150,6 +153,8 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
         return { marginTop: 10 };
       case 'qrcode':
         return { width: 60, height: 60, marginTop: 20 };
+      case 'frame':
+        return { frameStyle: 'classic', frameColor: '#1E40AF', frameWidth: 4 };
       default:
         return {};
     }
@@ -360,6 +365,77 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
 
               <Separator />
 
+              {/* Frame Presets for Certificates */}
+              {localTemplate.type === 'certificate' && (
+                <Collapsible defaultOpen>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between">
+                      <span className="flex items-center gap-2">
+                        <LayoutGrid className="h-4 w-4" />
+                        Moldura do Certificado
+                      </span>
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2 p-4 border rounded-lg">
+                    <div className="grid grid-cols-2 gap-3">
+                      {FRAME_PRESETS.map((preset) => {
+                        const currentFrame = localTemplate.content_blocks.find(b => b.type === 'frame');
+                        const isSelected = currentFrame?.config.frameStyle === preset.style;
+                        
+                        return (
+                          <div
+                            key={preset.id}
+                            className={`p-3 border rounded-lg cursor-pointer transition-all hover:border-primary ${
+                              isSelected ? 'border-primary bg-primary/5 ring-1 ring-primary' : ''
+                            }`}
+                            onClick={() => {
+                              // Remove existing frame block
+                              const blocksWithoutFrame = localTemplate.content_blocks.filter(b => b.type !== 'frame');
+                              
+                              if (preset.style === 'none') {
+                                setLocalTemplate(prev => ({
+                                  ...prev,
+                                  content_blocks: blocksWithoutFrame.map((b, i) => ({ ...b, order: i + 1 })),
+                                }));
+                              } else {
+                                // Add frame block at the beginning (order 0)
+                                const frameBlock: ContentBlock = {
+                                  id: crypto.randomUUID(),
+                                  type: 'frame',
+                                  order: 0,
+                                  config: {
+                                    frameStyle: preset.style,
+                                    frameColor: preset.color,
+                                    frameWidth: preset.width,
+                                  },
+                                };
+                                
+                                setLocalTemplate(prev => ({
+                                  ...prev,
+                                  content_blocks: [frameBlock, ...blocksWithoutFrame].map((b, i) => ({ ...b, order: i + 1 })),
+                                }));
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <div 
+                                className="w-4 h-4 rounded border-2" 
+                                style={{ borderColor: preset.color }}
+                              />
+                              <span className="text-sm font-medium">{preset.name}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{preset.description}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+
+              <Separator />
+
               {/* Content Blocks */}
               <div className="space-y-2">
                 <h3 className="font-semibold">Blocos de Conteúdo</h3>
@@ -436,6 +512,50 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
                                     checked={block.config.showInstitutionInfo !== false}
                                     onCheckedChange={(checked) => updateBlock(block.id, { showInstitutionInfo: checked })}
                                   />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Frame settings */}
+                            {block.type === 'frame' && (
+                              <div className="space-y-3">
+                                <div>
+                                  <Label className="text-xs">Estilo da Moldura</Label>
+                                  <Select
+                                    value={block.config.frameStyle || 'classic'}
+                                    onValueChange={(v) => updateBlock(block.id, { frameStyle: v as FrameStyle })}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">Sem Moldura</SelectItem>
+                                      <SelectItem value="simple">Simples</SelectItem>
+                                      <SelectItem value="double">Dupla</SelectItem>
+                                      <SelectItem value="classic">Clássica</SelectItem>
+                                      <SelectItem value="elegant">Elegante</SelectItem>
+                                      <SelectItem value="modern">Moderna</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <Label className="text-xs">Cor da Moldura</Label>
+                                    <Input
+                                      type="color"
+                                      value={block.config.frameColor || '#1E40AF'}
+                                      onChange={(e) => updateBlock(block.id, { frameColor: e.target.value })}
+                                      className="h-9 p-1"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Espessura (mm)</Label>
+                                    <Input
+                                      type="number"
+                                      value={block.config.frameWidth || 4}
+                                      onChange={(e) => updateBlock(block.id, { frameWidth: Number(e.target.value) })}
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             )}
