@@ -425,16 +425,44 @@ export function EnrollmentsPage() {
                     // Calcular se há desconto baseado no enrollment_amount vs enrollment_fee
                     const enrollmentFee = enrollment.courses.enrollment_fee || 0;
                     const enrollmentAmount = enrollment.enrollment_amount || enrollmentFee;
-                    const hasDiscountFromDB = enrollmentAmount < enrollmentFee;
-                    const discountFromDB = enrollmentFee - enrollmentAmount;
                     
-                    // Usar discountInfoMap se disponível, senão usar dados do banco
+                    // Usar discountInfoMap se disponível
                     const discountInfo = discountInfoMap[enrollment.id];
-                    const hasDiscount = discountInfo || hasDiscountFromDB;
                     
-                    const displayOriginalFee = discountInfo?.originalFee || enrollmentFee;
-                    const displayDiscount = discountInfo?.preEnrollmentPaid || discountFromDB;
-                    const displayFinalAmount = discountInfo?.finalAmount || enrollmentAmount;
+                    // Heurística: se enrollment_amount é muito pequeno (< 20% do fee e > 0),
+                    // provavelmente foi gravado como o valor do DESCONTO, não o valor final
+                    const likelyIsDiscountValue = enrollmentAmount < (enrollmentFee * 0.2) && enrollmentAmount > 0;
+                    
+                    let displayOriginalFee: number;
+                    let displayDiscount: number;
+                    let displayFinalAmount: number;
+                    let hasDiscount: boolean;
+                    
+                    if (discountInfo) {
+                      // Usar dados do discountInfoMap se disponível
+                      displayOriginalFee = discountInfo.originalFee;
+                      displayDiscount = discountInfo.preEnrollmentPaid;
+                      displayFinalAmount = discountInfo.finalAmount;
+                      hasDiscount = displayDiscount > 0;
+                    } else if (likelyIsDiscountValue) {
+                      // enrollment_amount foi gravado como o valor do desconto (ex: R$ 67)
+                      displayOriginalFee = enrollmentFee;
+                      displayDiscount = enrollmentAmount; // R$ 67 é o desconto
+                      displayFinalAmount = enrollmentFee - enrollmentAmount; // R$ 679 - R$ 67 = R$ 612
+                      hasDiscount = true;
+                    } else if (enrollmentAmount < enrollmentFee) {
+                      // enrollment_amount é o valor final (comportamento esperado)
+                      displayOriginalFee = enrollmentFee;
+                      displayDiscount = enrollmentFee - enrollmentAmount;
+                      displayFinalAmount = enrollmentAmount;
+                      hasDiscount = true;
+                    } else {
+                      // Sem desconto
+                      displayOriginalFee = enrollmentFee;
+                      displayDiscount = 0;
+                      displayFinalAmount = enrollmentFee;
+                      hasDiscount = false;
+                    }
                     
                     return (
                       <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
