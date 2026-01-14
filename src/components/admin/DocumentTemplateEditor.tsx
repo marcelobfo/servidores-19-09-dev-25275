@@ -58,6 +58,9 @@ import {
   TEMPLATE_VARIABLES,
   FRAME_PRESETS,
   FrameStyle,
+  BlockAlignment,
+  HeaderLayout,
+  ImageSource,
 } from "@/types/document-templates";
 
 interface DocumentTemplateEditorProps {
@@ -513,6 +516,59 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
                                     onCheckedChange={(checked) => updateBlock(block.id, { showInstitutionInfo: checked })}
                                   />
                                 </div>
+                                <div>
+                                  <Label className="text-xs">Layout do Cabeçalho</Label>
+                                  <Select
+                                    value={block.config.headerLayout || 'logo-left'}
+                                    onValueChange={(v) => updateBlock(block.id, { headerLayout: v as HeaderLayout })}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="logo-left">Logo à Esquerda</SelectItem>
+                                      <SelectItem value="logo-center">Logo no Centro</SelectItem>
+                                      <SelectItem value="logo-right">Logo à Direita</SelectItem>
+                                      <SelectItem value="logo-above">Logo Acima das Informações</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                {block.config.headerLayout === 'logo-above' && (
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <Label className="text-xs">Posição da Logo</Label>
+                                      <Select
+                                        value={block.config.logoAlign || 'center'}
+                                        onValueChange={(v) => updateBlock(block.id, { logoAlign: v as BlockAlignment })}
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="left">Esquerda</SelectItem>
+                                          <SelectItem value="center">Centro</SelectItem>
+                                          <SelectItem value="right">Direita</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs">Posição das Informações</Label>
+                                      <Select
+                                        value={block.config.infoAlign || 'center'}
+                                        onValueChange={(v) => updateBlock(block.id, { infoAlign: v as BlockAlignment })}
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="left">Esquerda</SelectItem>
+                                          <SelectItem value="center">Centro</SelectItem>
+                                          <SelectItem value="right">Direita</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )}
 
@@ -672,24 +728,128 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
                               </div>
                             </div>
 
-                            {/* QR Code size */}
+                            {/* QR Code settings */}
                             {block.type === 'qrcode' && (
-                              <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-3">
                                 <div>
-                                  <Label className="text-xs">Largura (mm)</Label>
-                                  <Input
-                                    type="number"
-                                    value={block.config.width || 60}
-                                    onChange={(e) => updateBlock(block.id, { width: Number(e.target.value) })}
-                                  />
+                                  <Label className="text-xs">Posição do QR Code</Label>
+                                  <Select
+                                    value={block.config.qrcodeAlign || 'center'}
+                                    onValueChange={(v) => updateBlock(block.id, { qrcodeAlign: v as BlockAlignment })}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="left">Esquerda</SelectItem>
+                                      <SelectItem value="center">Centro</SelectItem>
+                                      <SelectItem value="right">Direita</SelectItem>
+                                    </SelectContent>
+                                  </Select>
                                 </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <Label className="text-xs">Largura (mm)</Label>
+                                    <Input
+                                      type="number"
+                                      value={block.config.width || 60}
+                                      onChange={(e) => updateBlock(block.id, { width: Number(e.target.value) })}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Altura (mm)</Label>
+                                    <Input
+                                      type="number"
+                                      value={block.config.height || 60}
+                                      onChange={(e) => updateBlock(block.id, { height: Number(e.target.value) })}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Signature settings */}
+                            {block.type === 'signature' && (
+                              <div>
+                                <Label className="text-xs">Posição da Assinatura</Label>
+                                <Select
+                                  value={block.config.signatureAlign || 'left'}
+                                  onValueChange={(v) => updateBlock(block.id, { signatureAlign: v as BlockAlignment })}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="left">Esquerda</SelectItem>
+                                    <SelectItem value="center">Centro</SelectItem>
+                                    <SelectItem value="right">Direita</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+
+                            {/* Image block settings */}
+                            {block.type === 'image' && (
+                              <div className="space-y-3">
                                 <div>
-                                  <Label className="text-xs">Altura (mm)</Label>
-                                  <Input
-                                    type="number"
-                                    value={block.config.height || 60}
-                                    onChange={(e) => updateBlock(block.id, { height: Number(e.target.value) })}
-                                  />
+                                  <Label className="text-xs">Origem da Imagem</Label>
+                                  <Select
+                                    value={block.config.imageSource || 'system-logo'}
+                                    onValueChange={(v) => updateBlock(block.id, { imageSource: v as ImageSource })}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="system-logo">Logo do Sistema</SelectItem>
+                                      <SelectItem value="director-signature">Assinatura do Diretor</SelectItem>
+                                      <SelectItem value="custom-url">URL Personalizada</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                {block.config.imageSource === 'custom-url' && (
+                                  <div>
+                                    <Label className="text-xs">URL da Imagem</Label>
+                                    <Input
+                                      value={block.config.imageUrl || ''}
+                                      onChange={(e) => updateBlock(block.id, { imageUrl: e.target.value })}
+                                      placeholder="https://..."
+                                    />
+                                  </div>
+                                )}
+                                <div>
+                                  <Label className="text-xs">Posição</Label>
+                                  <Select
+                                    value={block.config.blockAlign || 'center'}
+                                    onValueChange={(v) => updateBlock(block.id, { blockAlign: v as BlockAlignment })}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="left">Esquerda</SelectItem>
+                                      <SelectItem value="center">Centro</SelectItem>
+                                      <SelectItem value="right">Direita</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <Label className="text-xs">Largura (mm)</Label>
+                                    <Input
+                                      type="number"
+                                      value={block.config.width || 40}
+                                      onChange={(e) => updateBlock(block.id, { width: Number(e.target.value) })}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Altura (mm)</Label>
+                                    <Input
+                                      type="number"
+                                      value={block.config.height || 30}
+                                      onChange={(e) => updateBlock(block.id, { height: Number(e.target.value) })}
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             )}

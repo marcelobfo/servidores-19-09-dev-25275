@@ -153,7 +153,11 @@ const renderBlock = async (
       break;
 
     case 'signature':
-      yPosition = await renderSignature(pdf, settings, yPosition, margins.left);
+      yPosition = await renderSignature(pdf, block, settings, yPosition, margins.left);
+      break;
+
+    case 'image':
+      yPosition = await renderImage(pdf, block, settings, yPosition, margins);
       break;
 
     case 'footer':
@@ -187,7 +191,7 @@ const renderBlock = async (
   return yPosition;
 };
 
-// Render QR Code
+// Render QR Code with alignment support
 const renderQRCode = async (
   pdf: jsPDF,
   data: PreviewData,
@@ -197,6 +201,20 @@ const renderQRCode = async (
 ): Promise<number> => {
   const pageWidth = pdf.internal.pageSize.getWidth();
   const qrSize = block.config.width || 60;
+  const qrcodeAlign = block.config.qrcodeAlign || 'center';
+  
+  // Calculate X position based on alignment
+  let qrX: number;
+  switch (qrcodeAlign) {
+    case 'left':
+      qrX = margins.left;
+      break;
+    case 'right':
+      qrX = pageWidth - margins.right - qrSize;
+      break;
+    default:
+      qrX = (pageWidth - qrSize) / 2;
+  }
   
   try {
     const verificationUrl = data.verification_url || `https://exemplo.com/verify/${data.certificate_code || 'CERT-XXXX'}`;
@@ -205,23 +223,91 @@ const renderQRCode = async (
       margin: 1
     });
     
-    pdf.addImage(qrCodeDataUrl, 'PNG', (pageWidth - qrSize) / 2, yPosition, qrSize, qrSize);
+    pdf.addImage(qrCodeDataUrl, 'PNG', qrX, yPosition, qrSize, qrSize);
     yPosition += qrSize + 5;
     
-    // Add verification text
+    // Add verification text with same alignment
     pdf.setFontSize(8);
     pdf.setTextColor(100, 100, 100);
-    pdf.text('Verificação Digital', pageWidth / 2, yPosition, { align: 'center' });
+    const textX = qrcodeAlign === 'center' ? pageWidth / 2 
+      : qrcodeAlign === 'right' ? pageWidth - margins.right 
+      : margins.left;
+    pdf.text('Verificação Digital', textX, yPosition, { align: qrcodeAlign as any });
     pdf.setTextColor(0, 0, 0);
     yPosition += 5;
   } catch (error) {
     console.warn('Could not generate QR Code:', error);
-    // Fallback to placeholder
     pdf.setDrawColor(200, 200, 200);
-    pdf.rect((pageWidth - qrSize) / 2, yPosition, qrSize, qrSize);
+    pdf.rect(qrX, yPosition, qrSize, qrSize);
     pdf.setFontSize(8);
-    pdf.text('QR Code', pageWidth / 2, yPosition + qrSize / 2, { align: 'center' });
+    pdf.text('QR Code', qrX + qrSize / 2, yPosition + qrSize / 2);
     yPosition += qrSize + 5;
+  }
+  
+  return yPosition;
+};
+
+// Render standalone image block with alignment support
+const renderImage = async (
+  pdf: jsPDF,
+  block: ContentBlock,
+  settings: SystemSettings,
+  yPosition: number,
+  margins: { left: number; right: number }
+): Promise<number> => {
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const imageSource = block.config.imageSource || 'system-logo';
+  const blockAlign = block.config.blockAlign || 'center';
+  const imgWidth = block.config.width || 40;
+  const imgHeight = block.config.height || 30;
+  
+  // Determine image URL based on source
+  let imageUrl: string | undefined;
+  switch (imageSource) {
+    case 'system-logo':
+      imageUrl = settings.logo_url;
+      break;
+    case 'director-signature':
+      imageUrl = settings.director_signature_url;
+      break;
+    case 'custom-url':
+      imageUrl = block.config.imageUrl;
+      break;
+  }
+  
+  if (!imageUrl) {
+    console.warn('No image URL provided for image block');
+    return yPosition;
+  }
+  
+  // Calculate X position based on alignment
+  let imgX: number;
+  switch (blockAlign) {
+    case 'left':
+      imgX = margins.left;
+      break;
+    case 'right':
+      imgX = pageWidth - margins.right - imgWidth;
+      break;
+    default:
+      imgX = (pageWidth - imgWidth) / 2;
+  }
+  
+  try {
+    const img = await loadImage(imageUrl);
+    const imgData = imageToDataURL(img);
+    if (imgData) {
+      pdf.addImage(imgData, 'PNG', imgX, yPosition, imgWidth, imgHeight);
+      yPosition += imgHeight + 5;
+    }
+  } catch (error) {
+    console.warn('Image could not be loaded:', error);
+    // Draw placeholder
+    pdf.setDrawColor(200, 200, 200);
+    pdf.rect(imgX, yPosition, imgWidth, imgHeight);
+    pdf.setFontSize(8);
+    pdf.text('Imagem', imgX + imgWidth / 2, yPosition + imgHeight / 2, { align: 'center' });
+    yPosition += imgHeight + 5;
   }
   
   return yPosition;
@@ -344,7 +430,7 @@ const renderFrame = async (pdf: jsPDF, block: ContentBlock): Promise<void> => {
   }
 };
 
-// Render header
+// Render header with flexible positioning
 const renderHeader = async (
   pdf: jsPDF,
   block: ContentBlock,
@@ -352,40 +438,122 @@ const renderHeader = async (
   yPosition: number,
   marginLeft: number
 ): Promise<number> => {
-  const showLogo = block.config.showLogo !== false; // Default true
-  const showInstitutionInfo = block.config.showInstitutionInfo !== false; // Default true
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const showLogo = block.config.showLogo !== false;
+  const showInstitutionInfo = block.config.showInstitutionInfo !== false;
+  const headerLayout = block.config.headerLayout || 'logo-left';
+  const logoAlign = block.config.logoAlign || 'left';
+  const infoAlign = block.config.infoAlign || 'left';
   
   let logoLoaded = false;
+  let logoData: string | null = null;
+  const logoWidth = 25;
+  const logoHeight = 18;
 
-  console.log('renderHeader:', { 
-    showLogo, 
-    showInstitutionInfo, 
-    hasLogoUrl: !!settings.logo_url,
-    logoUrl: settings.logo_url?.substring(0, 60)
-  });
+  console.log('renderHeader:', { showLogo, showInstitutionInfo, headerLayout, logoAlign, infoAlign });
 
+  // Try to load logo
   if (showLogo && settings.logo_url) {
     try {
-      console.log('Attempting to load logo:', settings.logo_url);
       const logo = await loadImage(settings.logo_url);
-      const logoData = imageToDataURL(logo);
+      logoData = imageToDataURL(logo);
       if (logoData) {
-        pdf.addImage(logoData, 'PNG', marginLeft, yPosition, 25, 18);
         logoLoaded = true;
-        console.log('Logo added to PDF successfully');
-      } else {
-        console.warn('Could not convert logo to data URL (CORS issue)');
+        console.log('Logo loaded successfully');
       }
     } catch (error) {
-      console.warn('Logo could not be loaded:', error, 'URL:', settings.logo_url);
+      console.warn('Logo could not be loaded:', error);
     }
-  } else {
-    console.log('Logo will not be displayed:', { showLogo, hasLogoUrl: !!settings.logo_url });
+  }
+
+  // Calculate logo X position based on alignment
+  const getAlignedX = (align: string, elementWidth: number): number => {
+    switch (align) {
+      case 'center': return (pageWidth - elementWidth) / 2;
+      case 'right': return pageWidth - marginLeft - elementWidth;
+      default: return marginLeft;
+    }
+  };
+
+  // Layout: Logo Above Info
+  if (headerLayout === 'logo-above') {
+    if (logoLoaded && logoData) {
+      const logoX = getAlignedX(logoAlign, logoWidth);
+      pdf.addImage(logoData, 'PNG', logoX, yPosition, logoWidth, logoHeight);
+      yPosition += logoHeight + 5;
+    }
+    
+    if (showInstitutionInfo) {
+      const textAlign = infoAlign as 'left' | 'center' | 'right';
+      let textX = marginLeft;
+      if (infoAlign === 'center') textX = pageWidth / 2;
+      else if (infoAlign === 'right') textX = pageWidth - marginLeft;
+      
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(settings.institution_name, textX, yPosition + 6, { align: textAlign });
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.text('Cursos Online e Presenciais', textX, yPosition + 11, { align: textAlign });
+      pdf.text(settings.institution_address, textX, yPosition + 15, { align: textAlign });
+      pdf.text(`CEP: ${settings.institution_cep}`, textX, yPosition + 19, { align: textAlign });
+      yPosition += 25;
+    }
+    
+    return yPosition;
+  }
+
+  // Layout: Logo Left/Center/Right with Info beside
+  if (headerLayout === 'logo-center') {
+    // Center layout - logo in center, info below
+    if (logoLoaded && logoData) {
+      const logoX = (pageWidth - logoWidth) / 2;
+      pdf.addImage(logoData, 'PNG', logoX, yPosition, logoWidth, logoHeight);
+    }
+    
+    if (showInstitutionInfo) {
+      const textY = logoLoaded ? yPosition + logoHeight + 5 : yPosition;
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(settings.institution_name, pageWidth / 2, textY + 6, { align: 'center' });
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.text('Cursos Online e Presenciais', pageWidth / 2, textY + 11, { align: 'center' });
+      return textY + 20;
+    }
+    
+    return yPosition + (logoLoaded ? logoHeight + 5 : 0);
+  }
+
+  if (headerLayout === 'logo-right') {
+    // Logo on right, info on left
+    if (logoLoaded && logoData) {
+      const logoX = pageWidth - marginLeft - logoWidth;
+      pdf.addImage(logoData, 'PNG', logoX, yPosition, logoWidth, logoHeight);
+    }
+    
+    if (showInstitutionInfo) {
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(settings.institution_name, marginLeft, yPosition + 6);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.text('Cursos Online e Presenciais', marginLeft, yPosition + 11);
+      pdf.text(settings.institution_address, marginLeft, yPosition + 15);
+      pdf.text(`CEP: ${settings.institution_cep}`, marginLeft, yPosition + 19);
+      return yPosition + 30;
+    }
+    
+    return yPosition + (logoLoaded ? logoHeight + 5 : 0);
+  }
+
+  // Default: logo-left - Logo on left, info beside
+  if (logoLoaded && logoData) {
+    pdf.addImage(logoData, 'PNG', marginLeft, yPosition, logoWidth, logoHeight);
   }
 
   if (showInstitutionInfo) {
-    const textStartX = logoLoaded ? marginLeft + 30 : marginLeft;
-
+    const textStartX = logoLoaded ? marginLeft + logoWidth + 5 : marginLeft;
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
     pdf.text(settings.institution_name, textStartX, yPosition + 6);
@@ -394,11 +562,10 @@ const renderHeader = async (
     pdf.text('Cursos Online e Presenciais', textStartX, yPosition + 11);
     pdf.text(settings.institution_address, textStartX, yPosition + 15);
     pdf.text(`CEP: ${settings.institution_cep}`, textStartX, yPosition + 19);
-
     return yPosition + 30;
   }
 
-  return yPosition + (logoLoaded ? 22 : 0);
+  return yPosition + (logoLoaded ? logoHeight + 5 : 0);
 };
 
 // Render text (title or paragraph)
@@ -440,19 +607,44 @@ const renderText = (
   return yPosition + (splitText.length * fontSize * 0.5);
 };
 
-// Render signature
+// Render signature with alignment support
 const renderSignature = async (
   pdf: jsPDF,
+  block: ContentBlock,
   settings: SystemSettings,
   yPosition: number,
   marginLeft: number
 ): Promise<number> => {
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const signatureAlign = block.config.signatureAlign || 'left';
+  const lineWidth = 70;
+  const signatureImgWidth = 40;
+  const signatureImgHeight = 15;
+  
+  // Calculate X position based on alignment
+  let xPosition: number;
+  switch (signatureAlign) {
+    case 'center':
+      xPosition = (pageWidth - lineWidth) / 2;
+      break;
+    case 'right':
+      xPosition = pageWidth - marginLeft - lineWidth;
+      break;
+    default:
+      xPosition = marginLeft;
+  }
+
   if (settings.director_signature_url) {
     try {
       const signature = await loadImage(settings.director_signature_url);
       const signatureData = imageToDataURL(signature);
       if (signatureData) {
-        pdf.addImage(signatureData, 'PNG', marginLeft, yPosition - 5, 40, 15);
+        const imgX = signatureAlign === 'center' 
+          ? (pageWidth - signatureImgWidth) / 2 
+          : signatureAlign === 'right' 
+            ? pageWidth - marginLeft - signatureImgWidth 
+            : marginLeft;
+        pdf.addImage(signatureData, 'PNG', imgX, yPosition - 5, signatureImgWidth, signatureImgHeight);
         yPosition += 12;
       }
     } catch (error) {
@@ -461,13 +653,20 @@ const renderSignature = async (
   }
 
   pdf.setLineWidth(0.5);
-  pdf.line(marginLeft, yPosition + 5, marginLeft + 70, yPosition + 5);
+  pdf.line(xPosition, yPosition + 5, xPosition + lineWidth, yPosition + 5);
+  
+  // Calculate text alignment
+  const textAlign = signatureAlign as 'left' | 'center' | 'right';
+  let textX = xPosition;
+  if (signatureAlign === 'center') textX = pageWidth / 2;
+  else if (signatureAlign === 'right') textX = pageWidth - marginLeft;
+  
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(10);
-  pdf.text(settings.director_name, marginLeft, yPosition + 10);
+  pdf.text(settings.director_name, textX, yPosition + 10, { align: textAlign });
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
-  pdf.text(`${settings.director_title} ${settings.institution_name}`, marginLeft, yPosition + 15);
+  pdf.text(`${settings.director_title} ${settings.institution_name}`, textX, yPosition + 15, { align: textAlign });
 
   return yPosition + 20;
 };
