@@ -35,7 +35,7 @@ export function DocumentPreview({ template }: DocumentPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Fetch system settings
-  const { data: systemSettings } = useQuery({
+  const { data: systemSettings, isLoading: isLoadingSettings } = useQuery({
     queryKey: ['system-settings-preview'],
     queryFn: async () => {
       const { data } = await supabase
@@ -74,6 +74,9 @@ export function DocumentPreview({ template }: DocumentPreviewProps) {
 
   // Generate preview PDF
   useEffect(() => {
+    // Wait for settings to load before generating
+    if (isLoadingSettings) return;
+
     const generatePreview = async () => {
       setIsGenerating(true);
       try {
@@ -102,17 +105,27 @@ export function DocumentPreview({ template }: DocumentPreviewProps) {
           }
         }
 
-        const settings = systemSettings || {
-          institution_name: 'Instituto Educacional',
-          institution_address: 'Rua Exemplo, 123 - Centro',
-          institution_cep: '00000-000',
-          institution_cnpj: '00.000.000/0001-00',
-          institution_phone: '(11) 99999-9999',
-          institution_email: 'contato@exemplo.com',
-          institution_website: 'www.exemplo.com',
-          director_name: 'Dr. João da Silva',
-          director_title: 'Diretor Acadêmico',
+        // Merge system settings with defaults, preserving logo_url and signature_url
+        const settings = {
+          institution_name: systemSettings?.institution_name || 'Instituto Educacional',
+          institution_address: systemSettings?.institution_address || 'Rua Exemplo, 123 - Centro',
+          institution_cep: systemSettings?.institution_cep || '00000-000',
+          institution_cnpj: systemSettings?.institution_cnpj || '00.000.000/0001-00',
+          institution_phone: systemSettings?.institution_phone || '(11) 99999-9999',
+          institution_email: systemSettings?.institution_email || 'contato@exemplo.com',
+          institution_website: systemSettings?.institution_website || 'www.exemplo.com',
+          director_name: systemSettings?.director_name || 'Dr. João da Silva',
+          director_title: systemSettings?.director_title || 'Diretor Acadêmico',
+          logo_url: systemSettings?.logo_url,
+          director_signature_url: systemSettings?.director_signature_url,
+          pix_key: (systemSettings as any)?.pix_key,
+          pix_holder_name: (systemSettings as any)?.pix_holder_name,
         };
+
+        console.log('Generating preview with settings:', { 
+          hasLogo: !!settings.logo_url, 
+          logoUrl: settings.logo_url?.substring(0, 50) 
+        });
 
         const pdfBlob = await generatePdfFromTemplate(template, previewData, settings);
         const url = URL.createObjectURL(pdfBlob);
@@ -137,7 +150,7 @@ export function DocumentPreview({ template }: DocumentPreviewProps) {
         URL.revokeObjectURL(pdfUrl);
       }
     };
-  }, [template, previewDataSource, systemSettings]);
+  }, [template, previewDataSource, systemSettings, isLoadingSettings]);
 
   const formatDate = (dateStr?: string): string => {
     if (!dateStr) return '01/01/2025';

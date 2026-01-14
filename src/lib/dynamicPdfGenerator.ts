@@ -41,24 +41,44 @@ interface PreviewData {
   modules: Array<{ name: string; hours: number }>;
 }
 
-// Helper function to load image from URL with timeout
-const loadImage = (url: string, timeout: number = 5000): Promise<HTMLImageElement> => {
+// Helper function to load image from URL with timeout and retry
+const loadImage = (url: string, timeout: number = 8000): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
     
     const timeoutId = setTimeout(() => {
-      reject(new Error('Image load timeout'));
+      console.warn('Image load timeout for:', url);
+      reject(new Error(`Image load timeout for: ${url}`));
     }, timeout);
     
     img.onload = () => {
       clearTimeout(timeoutId);
+      console.log('Image loaded successfully:', url.substring(0, 50));
       resolve(img);
     };
+    
     img.onerror = () => {
-      clearTimeout(timeoutId);
-      reject(new Error('Image load failed'));
+      // If failed without crossOrigin, retry with it
+      console.log('First load attempt failed, retrying with crossOrigin...');
+      const img2 = new Image();
+      img2.crossOrigin = 'anonymous';
+      
+      img2.onload = () => {
+        clearTimeout(timeoutId);
+        console.log('Image loaded with crossOrigin:', url.substring(0, 50));
+        resolve(img2);
+      };
+      
+      img2.onerror = () => {
+        clearTimeout(timeoutId);
+        console.warn('Image load failed for:', url);
+        reject(new Error(`Image load failed for: ${url}`));
+      };
+      
+      img2.src = url;
     };
+    
+    // First try without crossOrigin (works better for same-origin images)
     img.src = url;
   });
 };
@@ -163,8 +183,16 @@ const renderHeader = async (
   
   let logoLoaded = false;
 
+  console.log('renderHeader:', { 
+    showLogo, 
+    showInstitutionInfo, 
+    hasLogoUrl: !!settings.logo_url,
+    logoUrl: settings.logo_url?.substring(0, 60)
+  });
+
   if (showLogo && settings.logo_url) {
     try {
+      console.log('Attempting to load logo:', settings.logo_url);
       const logo = await loadImage(settings.logo_url);
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -175,10 +203,13 @@ const renderHeader = async (
         const logoData = canvas.toDataURL('image/png');
         pdf.addImage(logoData, 'PNG', marginLeft, yPosition, 25, 18);
         logoLoaded = true;
+        console.log('Logo added to PDF successfully');
       }
     } catch (error) {
-      console.warn('Logo could not be loaded:', error);
+      console.warn('Logo could not be loaded:', error, 'URL:', settings.logo_url);
     }
+  } else {
+    console.log('Logo will not be displayed:', { showLogo, hasLogoUrl: !!settings.logo_url });
   }
 
   if (showInstitutionInfo) {
