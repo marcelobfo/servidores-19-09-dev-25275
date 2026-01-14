@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StatusFilter } from "@/components/student/filters/StatusFilter";
 import { SearchFilter } from "@/components/student/filters/SearchFilter";
 import { SortOptions } from "@/components/student/filters/SortOptions";
-import { Clock, CheckCircle, DollarSign, FileText, Calendar, Download, Award, RefreshCw } from "lucide-react";
+import { Clock, CheckCircle, DollarSign, FileText, Calendar, Download, Award, RefreshCw, Percent } from "lucide-react";
 import { toast } from "sonner";
 
 interface DiscountInfo {
@@ -74,6 +74,7 @@ export function EnrollmentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("created_at_desc");
   const [generatingPayment, setGeneratingPayment] = useState(false);
+  const [generatingDiscountedPayment, setGeneratingDiscountedPayment] = useState(false);
   const [discountInfoMap, setDiscountInfoMap] = useState<Record<string, DiscountInfo>>({});
 
   useEffect(() => {
@@ -199,6 +200,54 @@ export function EnrollmentsPage() {
       toast.error("Erro ao gerar checkout. Tente novamente.");
     } finally {
       setGeneratingPayment(false);
+    }
+  };
+
+  // New function for discounted checkout
+  const handleGenerateDiscountedCheckout = async (enrollment: Enrollment, finalAmount: number) => {
+    try {
+      setGeneratingDiscountedPayment(true);
+      
+      console.log('💰 [DISCOUNTED-CHECKOUT] Gerando checkout com desconto');
+      console.log('📋 Enrollment ID:', enrollment.id);
+      console.log('💵 Valor final com desconto:', finalAmount);
+
+      const { data, error } = await supabase.functions.invoke('create-discounted-checkout', {
+        body: {
+          enrollment_id: enrollment.id,
+          force_amount: finalAmount
+        }
+      });
+
+      if (error) {
+        console.error("❌ [DISCOUNTED-CHECKOUT] Erro:", error);
+        toast.error("Erro ao gerar checkout com desconto. Tente novamente.");
+        throw error;
+      }
+
+      if (data?.checkout_url) {
+        console.log('✅ [DISCOUNTED-CHECKOUT] Checkout criado:', data);
+        console.log('   Original:', data.original_fee);
+        console.log('   Desconto:', data.discount);
+        console.log('   Final:', data.final_amount);
+        
+        toast.success(`Checkout criado com R$ ${data.discount?.toFixed(2) || '0.00'} de desconto! Redirecionando...`);
+        
+        setTimeout(() => {
+          window.location.href = data.checkout_url;
+        }, 1000);
+        
+        setTimeout(() => {
+          fetchEnrollments();
+        }, 2000);
+      } else {
+        throw new Error('Resposta inválida da função de checkout');
+      }
+    } catch (error) {
+      console.error("Error generating discounted checkout:", error);
+      toast.error("Erro ao gerar checkout com desconto. Tente novamente.");
+    } finally {
+      setGeneratingDiscountedPayment(false);
     }
   };
 
@@ -491,20 +540,33 @@ export function EnrollmentsPage() {
                           </div>
                         )}
                         
-                        <Button
-                          onClick={() => handleGenerateEnrollmentPayment(enrollment)}
-                          size="sm"
-                          className="flex items-center gap-2"
-                          disabled={generatingPayment}
-                        >
-                          <RefreshCw className="h-4 w-4" />
-                          {generatingPayment 
-                            ? "Gerando..." 
-                            : hasDiscount && displayDiscount > 0
-                              ? `Pagar Matrícula - R$ ${displayFinalAmount.toFixed(2)}`
-                              : `Pagar Matrícula - R$ ${enrollmentFee.toFixed(2)}`
-                          }
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            onClick={() => handleGenerateEnrollmentPayment(enrollment)}
+                            size="sm"
+                            variant="outline"
+                            className="flex items-center gap-2"
+                            disabled={generatingPayment || generatingDiscountedPayment}
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            {generatingPayment ? "Gerando..." : "Pagar (modo padrão)"}
+                          </Button>
+                          
+                          {hasDiscount && displayDiscount > 0 && (
+                            <Button
+                              onClick={() => handleGenerateDiscountedCheckout(enrollment, displayFinalAmount)}
+                              size="sm"
+                              className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                              disabled={generatingPayment || generatingDiscountedPayment}
+                            >
+                              <Percent className="h-4 w-4" />
+                              {generatingDiscountedPayment 
+                                ? "Gerando..." 
+                                : `Pagar com Desconto - R$ ${displayFinalAmount.toFixed(2)}`
+                              }
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     );
                   })()}

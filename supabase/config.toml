@@ -12,6 +12,9 @@ verify_jwt = false
 [functions.create-enrollment-payment]
 verify_jwt = false
 
+[functions.create-discounted-checkout]
+verify_jwt = false
+
 [functions.generate-enrollment-documents]
 verify_jwt = true
 
