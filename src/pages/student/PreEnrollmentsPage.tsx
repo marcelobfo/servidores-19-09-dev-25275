@@ -674,11 +674,20 @@ export function PreEnrollmentsPage() {
 
       if (data?.checkout_url) {
         console.log('✅ [ENROLLMENT-DISCOUNT] Checkout criado:', data.checkout_url);
-        toast.success("Checkout com desconto criado! Redirecionando...");
+        toast.success("Checkout com desconto criado! Abrindo página de pagamento...");
         
-        setTimeout(() => {
-          window.location.href = data.checkout_url;
-        }, 1000);
+        // Abrir em nova aba para evitar problemas de redirecionamento em iframes
+        const newWindow = window.open(data.checkout_url, '_blank');
+        if (!newWindow) {
+          // Fallback se popup foi bloqueado
+          toast.info("Clique no link para acessar o checkout", {
+            action: {
+              label: "Abrir Checkout",
+              onClick: () => window.open(data.checkout_url, '_blank')
+            },
+            duration: 10000
+          });
+        }
       } else {
         throw new Error('Resposta inválida da função de checkout');
       }
