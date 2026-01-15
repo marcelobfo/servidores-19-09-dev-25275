@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -355,33 +355,47 @@ serve(async (req) => {
     const feeType = isEnrollmentCheckout ? "matrícula" : "pré-matrícula";
     let preEnrollmentDiscount = 0;
 
-    // Se for checkout de matrícula, aplicar desconto do valor já pago na pré-matrícula
+    // Se for checkout de matrícula, aplicar desconto do TOTAL já pago na pré-matrícula
     if (isEnrollmentCheckout) {
-      console.log("🔍 Buscando pagamento de pré-matrícula confirmado para aplicar desconto...");
+      console.log("🔍 Buscando TODOS os pagamentos de pré-matrícula confirmados...");
       
-      const { data: confirmedPreEnrollmentPayment } = await serviceClient
+      // REGRA DE OURO: Somar TODOS os pagamentos confirmados, não só o último
+      const { data: confirmedPayments, error: paymentsError } = await serviceClient
         .from("payments")
-        .select("amount")
+        .select("amount, status, created_at")
         .eq("pre_enrollment_id", pre_enrollment_id)
         .eq("kind", "pre_enrollment")
-        .in("status", ["confirmed", "received"])
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .in("status", ["confirmed", "received"]);
 
-      if (confirmedPreEnrollmentPayment?.amount) {
-        preEnrollmentDiscount = Number(confirmedPreEnrollmentPayment.amount);
+      if (paymentsError) {
+        console.error("❌ Erro ao buscar pagamentos:", paymentsError);
+      }
+
+      // SOMAR todos os pagamentos confirmados
+      const prePaidTotal = confirmedPayments?.reduce(
+        (sum, p) => sum + Number(p.amount || 0),
+        0
+      ) ?? 0;
+
+      console.log("📊 ========== REGRA DE OURO - CÁLCULO DO DESCONTO ==========");
+      console.log(`   💳 Pagamentos encontrados: ${confirmedPayments?.length || 0}`);
+      confirmedPayments?.forEach((p, i) => {
+        console.log(`      [${i+1}] R$ ${p.amount} - status: ${p.status} - data: ${p.created_at}`);
+      });
+      console.log(`   📊 VALOR DA MATRÍCULA: R$ ${checkoutFee}`);
+      console.log(`   💰 TOTAL PRÉ PAGO: R$ ${prePaidTotal}`);
+
+      if (prePaidTotal > 0) {
+        preEnrollmentDiscount = prePaidTotal;
         const originalFee = checkoutFee;
-        checkoutFee = Math.max(checkoutFee - preEnrollmentDiscount, 5); // Mínimo R$ 5,00 do Asaas
+        checkoutFee = Math.max(checkoutFee - prePaidTotal, 5); // Mínimo R$ 5,00 do Asaas
         
-        console.log("✅ Desconto de pré-matrícula aplicado:");
-        console.log(`   📊 Valor original enrollment_fee: R$ ${originalFee}`);
-        console.log(`   💰 Pagamento pré-matrícula confirmado: R$ ${preEnrollmentDiscount}`);
-        console.log(`   ✂️ Desconto aplicado: R$ ${preEnrollmentDiscount}`);
-        console.log(`   ✅ Valor final do checkout: R$ ${checkoutFee}`);
+        console.log(`   ✂️ DESCONTO APLICADO: R$ ${preEnrollmentDiscount}`);
+        console.log(`   ✅ VALOR FINAL COBRADO: R$ ${checkoutFee}`);
       } else {
         console.log("ℹ️ Nenhum pagamento de pré-matrícula confirmado encontrado - sem desconto");
       }
+      console.log("📊 ========================================================");
     }
 
     console.log(`Checkout fee for ${feeType}:`, checkoutFee);
