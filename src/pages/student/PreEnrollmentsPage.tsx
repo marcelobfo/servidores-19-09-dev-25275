@@ -1017,9 +1017,24 @@ export function PreEnrollmentsPage() {
                           : 0;
                         const totalCredit = creditFromPayments + inferredCredit;
                         
-                        // Valor final: usar do banco se disponível, senão calcular
+                        // Valor final: PRIORIZAR valor do banco, senão calcular
                         const finalAmount = discountedFeeFromDB ?? Math.max(enrollmentFee - totalCredit, 5);
-                        const hasDiscount = totalCredit > 0 && enrollmentFee > 0;
+                        
+                        // hasDiscount considera:
+                        // 1. Tem crédito de pagamento/aprovação (totalCredit > 0)
+                        // 2. OU tem valor com desconto no banco diferente do valor cheio
+                        const hasDiscount = (totalCredit > 0 && enrollmentFee > 0) || 
+                                            (discountedFeeFromDB != null && discountedFeeFromDB < enrollmentFee);
+                        
+                        // DEBUG: Log para diagnóstico
+                        console.log('=== DEBUG CHECKOUT COM DESCONTO ===');
+                        console.log('Course:', preEnrollment.courses.name);
+                        console.log('discountedFeeFromDB:', discountedFeeFromDB);
+                        console.log('enrollmentFee:', enrollmentFee);
+                        console.log('totalCredit:', totalCredit);
+                        console.log('finalAmount (será passado ao checkout):', finalAmount);
+                        console.log('hasDiscount:', hasDiscount);
+                        console.log('===================================');
                         
                         if (!hasDiscount) {
                           return (
