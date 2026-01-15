@@ -122,10 +122,15 @@ const EnrollmentsPage = () => {
     try {
       console.log('Updating enrollment status:', { id, status, manualApproval });
       
-      // Get current enrollment status for webhook
+      // Get current enrollment status and course fee for webhook and payment creation
       const { data: currentEnrollment, error: fetchError } = await supabase
         .from("pre_enrollments")
-        .select("status")
+        .select(`
+          status,
+          courses (
+            pre_enrollment_fee
+          )
+        `)
         .eq("id", id)
         .single();
 
@@ -133,6 +138,8 @@ const EnrollmentsPage = () => {
         console.error('Error fetching enrollment:', fetchError);
         throw fetchError;
       }
+
+      const preEnrollmentFee = (currentEnrollment as any)?.courses?.pre_enrollment_fee || 0;
 
       // Build update object with only defined values
       const updateData: Record<string, any> = { 
@@ -177,6 +184,41 @@ const EnrollmentsPage = () => {
       if (error) {
         console.error('Error updating enrollment:', error);
         throw error;
+      }
+
+      // If manual approval, create a payment record so discount appears correctly
+      if (manualApproval && status === 'approved' && preEnrollmentFee > 0) {
+        // Check if payment already exists to avoid duplicates
+        const { data: existingPayment } = await (supabase as any)
+          .from("payments")
+          .select("id")
+          .eq("pre_enrollment_id", id)
+          .eq("kind", "pre_enrollment")
+          .in("status", ["confirmed", "received"])
+          .maybeSingle();
+
+        if (!existingPayment) {
+          const { error: paymentError } = await (supabase as any)
+            .from("payments")
+            .insert({
+              pre_enrollment_id: id,
+              amount: preEnrollmentFee,
+              currency: "BRL",
+              status: "confirmed",
+              kind: "pre_enrollment",
+              asaas_payment_id: `manual_approval_${id}_${Date.now()}`,
+              paid_at: new Date().toISOString()
+            });
+
+          if (paymentError) {
+            console.error('Erro ao criar registro de pagamento para aprovação manual:', paymentError);
+            // Continue even with error - status was already updated
+          } else {
+            console.log('✅ Registro de pagamento criado para aprovação manual');
+          }
+        } else {
+          console.log('⏭️ Pagamento já existe para esta pré-matrícula, não duplicando');
+        }
       }
 
       // Trigger webhook based on status change
