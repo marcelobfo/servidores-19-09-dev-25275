@@ -215,22 +215,23 @@ export function EnrollmentsPage() {
     }
   };
 
-  // Função para checkout com desconto - usa create-enrollment-checkout que já aplica o desconto automaticamente
+  // Função para checkout com desconto - passa override_amount diretamente para a Edge Function
   const handleGenerateDiscountedCheckout = async (enrollment: Enrollment, finalAmount: number) => {
     try {
       setGeneratingDiscountedPayment(true);
       
-      console.log('💰 [DISCOUNTED-CHECKOUT] Gerando checkout com desconto via create-enrollment-checkout');
+      console.log('💰 [DISCOUNTED-CHECKOUT] Gerando checkout com desconto DIRETO');
       console.log('📋 Enrollment ID:', enrollment.id);
       console.log('📋 Pre-Enrollment ID:', enrollment.pre_enrollments?.id);
-      console.log('💵 Valor final esperado:', finalAmount);
+      console.log('💵 override_amount (valor pré-calculado):', finalAmount);
 
-      // Usa create-enrollment-checkout com force_recalculate para garantir que o desconto seja aplicado
+      // Usa create-enrollment-checkout com override_amount para forçar o valor direto
       const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
         body: {
           pre_enrollment_id: enrollment.pre_enrollments?.id,
           enrollment_id: enrollment.id,
-          force_recalculate: true // Força recálculo para aplicar desconto de pré-matrícula
+          override_amount: finalAmount, // FORÇA O VALOR COM DESCONTO
+          force_recalculate: true
         }
       });
 
@@ -243,12 +244,7 @@ export function EnrollmentsPage() {
       if (data?.checkout_url) {
         console.log('✅ [DISCOUNTED-CHECKOUT] Checkout criado:', data.checkout_url);
         
-        const discountApplied = data.discount || (data.original_fee && data.final_amount ? data.original_fee - data.final_amount : 0);
-        if (discountApplied > 0) {
-          toast.success(`Checkout criado com R$ ${discountApplied.toFixed(2)} de desconto! Redirecionando...`);
-        } else {
-          toast.success("Checkout criado! Redirecionando para pagamento...");
-        }
+        toast.success(`Checkout com desconto criado! Valor: R$ ${finalAmount.toFixed(2)}. Redirecionando...`);
         
         setTimeout(() => {
           window.location.href = data.checkout_url;

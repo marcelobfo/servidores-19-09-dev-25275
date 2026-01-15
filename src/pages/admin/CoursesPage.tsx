@@ -36,6 +36,7 @@ interface Course {
   duration_days?: number | null;
   pre_enrollment_fee?: number | null;
   enrollment_fee?: number | null;
+  discounted_enrollment_fee?: number | null;
   published: boolean;
   areas?: { name: string };
 }
@@ -79,6 +80,7 @@ const [formData, setFormData] = useState({
   duration_days: 30,
   pre_enrollment_fee: 0,
   enrollment_fee: 0,
+  discounted_enrollment_fee: 0,
   published: false
 });
 
@@ -103,12 +105,26 @@ useEffect(() => {
   };
   
   const fees = calculateFees(formData.duration_days);
+  const discountedFee = Math.max(fees.enrollment - fees.preEnrollment, 5);
+  
   setFormData(prev => ({
     ...prev,
     enrollment_fee: fees.enrollment,
-    pre_enrollment_fee: fees.preEnrollment
+    pre_enrollment_fee: fees.preEnrollment,
+    discounted_enrollment_fee: discountedFee
   }));
 }, [formData.duration_days]);
+
+// Recalcular discounted_enrollment_fee quando mudar enrollment_fee ou pre_enrollment_fee manualmente
+useEffect(() => {
+  const discountedFee = Math.max(formData.enrollment_fee - formData.pre_enrollment_fee, 5);
+  if (formData.discounted_enrollment_fee !== discountedFee) {
+    setFormData(prev => ({
+      ...prev,
+      discounted_enrollment_fee: discountedFee
+    }));
+  }
+}, [formData.enrollment_fee, formData.pre_enrollment_fee]);
 
 useEffect(() => {
   fetchCourses();
@@ -368,6 +384,10 @@ try {
 }
 if (parsedModules.length === 0) parsedModules = [{ name: "", hours: 0 }];
 setModules(parsedModules);
+const enrollmentFee = course.enrollment_fee || 0;
+const preEnrollmentFee = course.pre_enrollment_fee || 0;
+const discountedFee = course.discounted_enrollment_fee ?? Math.max(enrollmentFee - preEnrollmentFee, 5);
+
 setFormData({
   name: course.name,
   subtitle: course.subtitle || "",
@@ -379,8 +399,9 @@ setFormData({
   area_id: course.area_id || "",
   duration_hours: course.duration_hours || parsedModules.reduce((s, m) => s + (Number(m.hours) || 0), 0),
   duration_days: (course as any).duration_days ?? 30,
-  pre_enrollment_fee: course.pre_enrollment_fee || 0,
-  enrollment_fee: course.enrollment_fee || 0,
+  pre_enrollment_fee: preEnrollmentFee,
+  enrollment_fee: enrollmentFee,
+  discounted_enrollment_fee: discountedFee,
   published: course.published
 });
 setIsDialogOpen(true);
@@ -421,6 +442,7 @@ setFormData({
   duration_days: 30,
   pre_enrollment_fee: 0,
   enrollment_fee: 0,
+  discounted_enrollment_fee: 0,
   published: false
 });
 setModules([{ name: "", hours: 0 }]);
@@ -632,7 +654,7 @@ setEditingCourse(null);
   </div>
 </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="pre_enrollment_fee">Taxa Pré-Matrícula</Label>
                   <div className="relative">
@@ -664,6 +686,25 @@ setEditingCourse(null);
                       className="pl-10"
                     />
                   </div>
+                </div>
+                <div>
+                  <Label htmlFor="discounted_enrollment_fee">Taxa com Desconto (calculado)</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                    <Input
+                      id="discounted_enrollment_fee"
+                      type="number"
+                      step="0.01"
+                      min="5"
+                      value={formData.discounted_enrollment_fee}
+                      onChange={(e) => setFormData({ ...formData, discounted_enrollment_fee: parseFloat(e.target.value) || 5 })}
+                      placeholder="0,00"
+                      className="pl-10"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Matrícula - Pré-Matrícula (mín. R$ 5,00)
+                  </p>
                 </div>
               </div>
 

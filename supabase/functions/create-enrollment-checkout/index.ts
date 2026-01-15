@@ -28,7 +28,7 @@ serve(async (req) => {
     const body = await req.json();
     console.log("📦 Request body:", JSON.stringify(body));
 
-    const { pre_enrollment_id, enrollment_id, force_recalculate } = body;
+    const { pre_enrollment_id, enrollment_id, force_recalculate, override_amount } = body;
 
     if (!pre_enrollment_id) {
       console.error("Missing pre_enrollment_id in request");
@@ -42,6 +42,12 @@ serve(async (req) => {
     const forceRecalculate = force_recalculate === true;
     if (forceRecalculate) {
       console.log("🔄 force_recalculate=true - Forçando recálculo do checkout com desconto");
+    }
+    
+    // Se override_amount foi passado, usar esse valor diretamente (não calcular)
+    const hasOverrideAmount = typeof override_amount === 'number' && override_amount > 0;
+    if (hasOverrideAmount) {
+      console.log(`💵 override_amount=${override_amount} - Usando valor direto sem cálculo dinâmico`);
     }
 
     // Determine if this is for pre-enrollment or enrollment
@@ -451,6 +457,14 @@ serve(async (req) => {
     }
 
     console.log(`Checkout fee for ${feeType}:`, checkoutFee);
+
+    // ========== OVERRIDE AMOUNT: Usar valor passado diretamente ==========
+    if (hasOverrideAmount) {
+      console.log(`🔒 OVERRIDE: Substituindo checkoutFee de R$ ${checkoutFee} por R$ ${override_amount}`);
+      checkoutFee = Math.max(override_amount, 5); // Mínimo R$ 5,00 Asaas
+      console.log(`🔒 OVERRIDE: Valor final do checkout: R$ ${checkoutFee}`);
+    }
+    // ======================================================================
 
     if (!checkoutFee || checkoutFee <= 0) {
       console.error(`Course ${feeType} fee not configured:`, {
