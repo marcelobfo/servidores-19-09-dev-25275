@@ -130,6 +130,7 @@ export function PreEnrollmentsPage() {
       setPreEnrollments(preEnrollmentsWithOrganTypes as PreEnrollment[]);
       
       // Buscar pagamentos confirmados de pré-matrícula para calcular descontos
+      // REGRA DE OURO: Somar TODOS os pagamentos confirmados, não só o último
       if (data && data.length > 0) {
         const preEnrollmentIds = data.map(p => p.id);
         const { data: payments } = await supabase
@@ -139,10 +140,13 @@ export function PreEnrollmentsPage() {
           .in('status', ['confirmed', 'received'])
           .in('pre_enrollment_id', preEnrollmentIds);
         
+        // Somar todos os pagamentos confirmados por pre_enrollment_id
         const paymentMap: Record<string, number> = {};
         payments?.forEach(p => {
-          paymentMap[p.pre_enrollment_id] = p.amount;
+          const currentAmount = paymentMap[p.pre_enrollment_id] || 0;
+          paymentMap[p.pre_enrollment_id] = currentAmount + Number(p.amount || 0);
         });
+        console.log('📊 [PRE-ENROLLMENTS] Pagamentos confirmados somados:', paymentMap);
         setPreEnrollmentPayments(paymentMap);
       }
     } catch (error) {
@@ -861,7 +865,10 @@ export function PreEnrollmentsPage() {
                     </div>
                   )}
 
-                  {preEnrollment.organ_approval_confirmed && (preEnrollment.status === "payment_confirmed" || preEnrollment.status === "approved") && (
+                  {/* Bloco de matrícula liberada - aparece quando:
+                      1) Status é "approved" (aprovado diretamente), OU
+                      2) organ_approval_confirmed E status é payment_confirmed/approved */}
+                  {(preEnrollment.status === "approved" || (preEnrollment.organ_approval_confirmed && (preEnrollment.status === "payment_confirmed" || preEnrollment.status === "approved"))) && (
                     <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                       <div className="flex items-center gap-2 text-sm text-blue-800 dark:text-blue-200 mb-3">
                         <CheckCircle className="h-4 w-4" />

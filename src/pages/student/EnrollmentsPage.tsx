@@ -84,6 +84,7 @@ export function EnrollmentsPage() {
   }, [user]);
 
   // Buscar informações de desconto para matrículas pendentes
+  // REGRA DE OURO: Somar TODOS os pagamentos confirmados, não só o último
   const fetchDiscountInfo = async (enrollmentsList: Enrollment[]) => {
     const pendingEnrollments = enrollmentsList.filter(
       e => (e.status === 'pending_payment' || e.status === 'awaiting_payment') && e.pre_enrollments?.id
@@ -102,16 +103,27 @@ export function EnrollmentsPage() {
     
     if (!payments) return;
     
+    // Somar todos os pagamentos confirmados por pre_enrollment_id
+    const paymentTotals: Record<string, number> = {};
+    payments.forEach(p => {
+      const currentAmount = paymentTotals[p.pre_enrollment_id] || 0;
+      paymentTotals[p.pre_enrollment_id] = currentAmount + Number(p.amount || 0);
+    });
+    
+    console.log('📊 [ENROLLMENTS] Pagamentos confirmados somados:', paymentTotals);
+    
     const newDiscountMap: Record<string, DiscountInfo> = {};
     
     pendingEnrollments.forEach(enrollment => {
-      const payment = payments.find(p => p.pre_enrollment_id === enrollment.pre_enrollments?.id);
-      if (payment?.amount) {
+      const preEnrollmentId = enrollment.pre_enrollments?.id;
+      const totalPaid = preEnrollmentId ? paymentTotals[preEnrollmentId] || 0 : 0;
+      
+      if (totalPaid > 0) {
         const originalFee = enrollment.courses.enrollment_fee || 0;
-        const finalAmount = Math.max(originalFee - payment.amount, 5);
+        const finalAmount = Math.max(originalFee - totalPaid, 5);
         
         newDiscountMap[enrollment.id] = {
-          preEnrollmentPaid: payment.amount,
+          preEnrollmentPaid: totalPaid,
           originalFee,
           finalAmount
         };
