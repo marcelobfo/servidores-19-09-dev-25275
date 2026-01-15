@@ -259,7 +259,42 @@ serve(async (req) => {
 
     const { data: existingPayment } = await paymentQuery.maybeSingle();
 
-    if (existingPayment && !forceRecalculate) {
+    // REGRA ANTI-REUSO INDEVIDO: Se override_amount foi passado, comparar com o checkout existente
+    if (existingPayment && hasOverrideAmount) {
+      const existingAmount = Number(existingPayment.amount || 0);
+      const tolerance = 0.5; // R$ 0,50 de tolerância
+      
+      if (Math.abs(existingAmount - overrideAmountNumber) > tolerance) {
+        console.log(`⚠️ ANTI-REUSO: Checkout existente R$ ${existingAmount} difere do override R$ ${overrideAmountNumber}`);
+        console.log(`📛 Cancelando checkout antigo ${existingPayment.id} para criar novo com valor correto...`);
+        
+        await serviceClient
+          .from("payments")
+          .update({ status: 'cancelled' })
+          .eq("id", existingPayment.id);
+        
+        // Não reutilizar - continuar para criar novo checkout
+      } else {
+        // Valores iguais (dentro da tolerância), pode reutilizar
+        console.log(`✅ Checkout existente R$ ${existingAmount} corresponde ao override R$ ${overrideAmountNumber}, reutilizando...`);
+        const checkoutUrl = `https://${environment === "production" ? "asaas.com" : "sandbox.asaas.com"}/checkoutSession/show?id=${existingPayment.asaas_payment_id}`;
+        return new Response(
+          JSON.stringify({
+            checkout_url: checkoutUrl,
+            checkout_id: existingPayment.asaas_payment_id,
+            reused: true,
+            applied_amount: existingAmount,
+            override_received: override_amount,
+            override_parsed: overrideAmountNumber,
+            used_override: true,
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+    } else if (existingPayment && !forceRecalculate) {
       console.log("Found existing payment:", existingPayment.id);
 
       // Para checkout de matrícula, verificar se há crédito de pré-matrícula que não foi aplicado
@@ -297,6 +332,7 @@ serve(async (req) => {
                 checkout_url: checkoutUrl,
                 checkout_id: existingPayment.asaas_payment_id,
                 reused: true,
+                applied_amount: existingPaymentAmount,
               }),
               {
                 headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -313,6 +349,7 @@ serve(async (req) => {
               checkout_url: checkoutUrl,
               checkout_id: existingPayment.asaas_payment_id,
               reused: true,
+              applied_amount: Number(existingPayment.amount),
             }),
             {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -329,6 +366,7 @@ serve(async (req) => {
             checkout_url: checkoutUrl,
             checkout_id: existingPayment.asaas_payment_id,
             reused: true,
+            applied_amount: Number(existingPayment.amount),
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -970,6 +1008,12 @@ serve(async (req) => {
     const originalFee = isEnrollmentCheckout ? (preEnrollment.courses?.enrollment_fee || 0) : (preEnrollment.courses?.pre_enrollment_fee || 0);
     const discountApplied = originalFee - checkoutFee;
 
+    console.log("✅ RESPOSTA FINAL:");
+    console.log(`   applied_amount: R$ ${checkoutFee}`);
+    console.log(`   override_received: ${override_amount}`);
+    console.log(`   override_parsed: ${overrideAmountNumber}`);
+    console.log(`   used_override: ${hasOverrideAmount}`);
+
     return new Response(
       JSON.stringify({
         checkout_url: checkoutUrl,
@@ -977,6 +1021,12 @@ serve(async (req) => {
         original_fee: originalFee,
         discount: discountApplied > 0 ? discountApplied : 0,
         final_amount: checkoutFee,
+        // AUDITORIA: Campos extras para debug/confirmação
+        applied_amount: checkoutFee,
+        override_received: override_amount,
+        override_parsed: overrideAmountNumber,
+        used_override: hasOverrideAmount,
+        reused: false,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

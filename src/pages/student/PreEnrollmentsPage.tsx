@@ -619,6 +619,7 @@ export function PreEnrollmentsPage() {
       }
 
       let enrollmentId: string;
+      const discountedAmountNumber = Number(discountedAmount); // Garantir que é número
 
       if (existingEnrollment) {
         console.log('📌 [ENROLLMENT-DISCOUNT] Matrícula já existe:', existingEnrollment.id);
@@ -630,6 +631,18 @@ export function PreEnrollmentsPage() {
         }
         
         enrollmentId = existingEnrollment.id;
+        
+        // CORREÇÃO: Atualizar enrollment_amount mesmo quando matrícula já existe
+        console.log('🔄 [ENROLLMENT-DISCOUNT] Atualizando enrollment_amount para:', discountedAmountNumber);
+        const { error: updateError } = await supabase
+          .from("enrollments")
+          .update({ enrollment_amount: discountedAmountNumber })
+          .eq("id", existingEnrollment.id);
+        
+        if (updateError) {
+          console.error('⚠️ [ENROLLMENT-DISCOUNT] Erro ao atualizar enrollment_amount:', updateError);
+          // Não falhar, apenas logar
+        }
       } else {
         // Criar nova matrícula com o valor COM DESCONTO
         const { data: newEnrollment, error: enrollmentError } = await supabase
@@ -640,7 +653,7 @@ export function PreEnrollmentsPage() {
             pre_enrollment_id: preEnrollment.id,
             status: "pending_payment",
             payment_status: "pending",
-            enrollment_amount: discountedAmount // VALOR COM DESCONTO
+            enrollment_amount: discountedAmountNumber // VALOR COM DESCONTO
           })
           .select()
           .single();
@@ -655,17 +668,17 @@ export function PreEnrollmentsPage() {
       }
 
       // Chamar edge function com override_amount para forçar o valor
-      console.log('🔄 [ENROLLMENT-DISCOUNT] Chamando edge function com override_amount:', discountedAmount);
+      console.log('🔄 [ENROLLMENT-DISCOUNT] Chamando edge function com override_amount:', discountedAmountNumber);
       const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
         body: {
           pre_enrollment_id: preEnrollment.id,
           enrollment_id: enrollmentId,
-          override_amount: discountedAmount, // FORÇA O VALOR COM DESCONTO
+          override_amount: discountedAmountNumber, // FORÇA O VALOR COM DESCONTO (número puro)
           force_recalculate: true
         }
       });
 
-      console.log('✅ [ENROLLMENT-DISCOUNT] Resposta da edge function:', data);
+      console.log('✅ [ENROLLMENT-DISCOUNT] Resposta da edge function:', JSON.stringify(data));
 
       if (error) {
         console.error('❌ [ENROLLMENT-DISCOUNT] Erro da edge function:', error);
@@ -673,14 +686,16 @@ export function PreEnrollmentsPage() {
       }
 
       if (data?.checkout_url) {
-        console.log('✅ [ENROLLMENT-DISCOUNT] Checkout criado:', data.checkout_url);
-        toast.success("Checkout com desconto criado! Abrindo página de pagamento...");
+        // AUDITORIA: Mostrar valor aplicado no checkout
+        const appliedAmount = data.applied_amount || discountedAmountNumber;
+        console.log(`✅ [ENROLLMENT-DISCOUNT] Checkout criado com valor R$ ${appliedAmount}`);
+        toast.success(`Checkout criado (R$ ${appliedAmount.toFixed(2)})! Abrindo página...`);
         
         // Abrir em nova aba para evitar problemas de redirecionamento em iframes
         const newWindow = window.open(data.checkout_url, '_blank');
         if (!newWindow) {
           // Fallback se popup foi bloqueado
-          toast.info("Clique no link para acessar o checkout", {
+          toast.info(`Checkout R$ ${appliedAmount.toFixed(2)} - clique para abrir`, {
             action: {
               label: "Abrir Checkout",
               onClick: () => window.open(data.checkout_url, '_blank')
