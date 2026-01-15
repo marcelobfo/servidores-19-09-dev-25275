@@ -364,7 +364,7 @@ serve(async (req) => {
       console.log("🔍 Buscando TODOS os pagamentos de pré-matrícula confirmados...");
       
       // REGRA DE OURO: Somar TODOS os pagamentos confirmados, não só o último
-      const { data: confirmedPayments, error: paymentsError } = await serviceClient
+      let { data: confirmedPayments, error: paymentsError } = await serviceClient
         .from("payments")
         .select("amount, status, created_at")
         .eq("pre_enrollment_id", pre_enrollment_id)
@@ -376,7 +376,7 @@ serve(async (req) => {
       }
 
       // SOMAR todos os pagamentos confirmados
-      const prePaidTotal = confirmedPayments?.reduce(
+      let prePaidTotal = confirmedPayments?.reduce(
         (sum, p) => sum + Number(p.amount || 0),
         0
       ) ?? 0;
@@ -388,6 +388,54 @@ serve(async (req) => {
       });
       console.log(`   📊 VALOR DA MATRÍCULA: R$ ${checkoutFee}`);
       console.log(`   💰 TOTAL PRÉ PAGO: R$ ${prePaidTotal}`);
+
+      // ========== AUTO-HEAL: Criar pagamento se manual_approval=true e não houver pagamento ==========
+      const preEnrollmentFee = preEnrollment.courses?.pre_enrollment_fee || 0;
+      if (
+        prePaidTotal === 0 &&
+        preEnrollment.manual_approval === true &&
+        preEnrollment.status === 'payment_confirmed' &&
+        preEnrollmentFee > 0
+      ) {
+        console.log("🔧 AUTO-HEAL: Aprovação manual detectada sem registro de pagamento. Criando...");
+        
+        // Verificar se já existe para evitar duplicação
+        const { data: existingHeal } = await serviceClient
+          .from("payments")
+          .select("id")
+          .eq("pre_enrollment_id", pre_enrollment_id)
+          .eq("kind", "pre_enrollment")
+          .in("status", ["confirmed", "received"])
+          .maybeSingle();
+
+        if (!existingHeal) {
+          const { data: healedPayment, error: healError } = await serviceClient
+            .from("payments")
+            .insert({
+              pre_enrollment_id: pre_enrollment_id,
+              amount: preEnrollmentFee,
+              currency: "BRL",
+              status: "confirmed",
+              kind: "pre_enrollment",
+              asaas_payment_id: `autoheal_${pre_enrollment_id}_${Date.now()}`,
+              paid_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+          if (healError) {
+            console.error("❌ AUTO-HEAL: Falha ao criar pagamento:", healError);
+          } else {
+            console.log("✅ AUTO-HEAL: Pagamento criado com sucesso:", healedPayment.id);
+            // Recalcular prePaidTotal
+            prePaidTotal = preEnrollmentFee;
+            console.log(`   💰 NOVO TOTAL PRÉ PAGO (após auto-heal): R$ ${prePaidTotal}`);
+          }
+        } else {
+          console.log("⏭️ AUTO-HEAL: Pagamento já existe, pulando criação");
+        }
+      }
+      // ========== FIM AUTO-HEAL ==========
 
       if (prePaidTotal > 0) {
         preEnrollmentDiscount = prePaidTotal;
@@ -864,15 +912,23 @@ serve(async (req) => {
       } else {
         console.log("Payment record created:", newPayment.id);
 
-        // Update enrollment with payment reference if this is an enrollment checkout
+        // Update enrollment with payment reference AND enrollment_amount if this is an enrollment checkout
         if (isEnrollmentCheckout && enrollment_id) {
+          const updateData: any = { enrollment_payment_id: checkoutResult.id };
+          
+          // Persistir o valor final da matrícula (com desconto aplicado)
+          updateData.enrollment_amount = checkoutFee;
+          console.log(`💾 Persistindo enrollment_amount = R$ ${checkoutFee} na matrícula ${enrollment_id}`);
+          
           const { error: updateError } = await serviceClient
             .from("enrollments")
-            .update({ enrollment_payment_id: checkoutResult.id })
+            .update(updateData)
             .eq("id", enrollment_id);
 
           if (updateError) {
-            console.error("Error updating enrollment with payment ID:", updateError);
+            console.error("Error updating enrollment with payment ID and amount:", updateError);
+          } else {
+            console.log("✅ Enrollment atualizado com enrollment_amount:", checkoutFee);
           }
         }
       }
