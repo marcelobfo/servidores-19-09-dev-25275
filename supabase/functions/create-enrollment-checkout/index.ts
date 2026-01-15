@@ -72,15 +72,15 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    // Verify the JWT using getClaims
-    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    // Verify the user using getUser() - the client extracts JWT from the Authorization header
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
 
-    if (claimsError || !claimsData?.claims) {
-      console.error("Authentication error:", claimsError?.message || "No claims found");
+    if (authError) {
+      console.error("Authentication error:", authError.message);
       return new Response(
         JSON.stringify({
           error: "Invalid authentication",
-          details: claimsError?.message || "Token validation failed",
+          details: authError.message,
         }),
         {
           status: 401,
@@ -89,16 +89,15 @@ serve(async (req) => {
       );
     }
 
-    const userId = claimsData.claims.sub as string;
-    if (!userId) {
-      console.error("No user ID found in claims");
+    if (!user) {
+      console.error("No user found in token");
       return new Response(JSON.stringify({ error: "Invalid authentication - no user found" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`✅ Authenticated user: ${userId}`);
+    console.log(`✅ Authenticated user: ${user.id}`);
 
     // Get payment settings using serviceClient to bypass RLS
     console.log("💳 Fetching payment settings...");
@@ -196,9 +195,9 @@ serve(async (req) => {
       }
 
       // Validate ownership
-      if (enrollmentData.user_id !== userId) {
+      if (enrollmentData.user_id !== user.id) {
         console.error(
-          `User ${userId} attempted to access enrollment ${enrollment_id} owned by ${enrollmentData.user_id}`,
+          `User ${user.id} attempted to access enrollment ${enrollment_id} owned by ${enrollmentData.user_id}`,
         );
         return new Response(JSON.stringify({ error: "Acesso não autorizado à matrícula" }), {
           status: 403,
@@ -210,7 +209,7 @@ serve(async (req) => {
     }
 
     // Get user profile data as fallback
-    const { data: userProfile } = await serviceClient.from("profiles").select("*").eq("user_id", userId).single();
+    const { data: userProfile } = await serviceClient.from("profiles").select("*").eq("user_id", user.id).single();
 
     // Validate pre-enrollment exists BEFORE accessing its properties
     if (preEnrollmentError || !preEnrollment) {
@@ -223,9 +222,9 @@ serve(async (req) => {
     }
 
     // Validate ownership
-    if (preEnrollment.user_id !== userId) {
+    if (preEnrollment.user_id !== user.id) {
       console.error(
-        `User ${userId} attempted to access pre-enrollment ${pre_enrollment_id} owned by ${preEnrollment.user_id}`,
+        `User ${user.id} attempted to access pre-enrollment ${pre_enrollment_id} owned by ${preEnrollment.user_id}`,
       );
       return new Response(JSON.stringify({ error: "Acesso não autorizado à pré-matrícula" }), {
         status: 403,
