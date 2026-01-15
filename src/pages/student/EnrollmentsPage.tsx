@@ -558,29 +558,43 @@ export function EnrollmentsPage() {
                         )}
                         
                         <div className="flex flex-wrap gap-2">
-                          <Button
-                            onClick={() => handleGenerateEnrollmentPayment(enrollment)}
-                            size="sm"
-                            variant="outline"
-                            className="flex items-center gap-2"
-                            disabled={generatingPayment || generatingDiscountedPayment}
-                          >
-                            <RefreshCw className="h-4 w-4" />
-                            {generatingPayment ? "Gerando..." : "Pagar (modo padrão)"}
-                          </Button>
-                          
-                          {hasDiscount && displayDiscount > 0 && (
+                          {hasDiscount && displayDiscount > 0 ? (
+                            <>
+                              {/* Botão 1: Pagar valor cheio */}
+                              <Button
+                                onClick={() => handleGenerateEnrollmentPayment(enrollment)}
+                                size="sm"
+                                variant="outline"
+                                className="flex items-center gap-2"
+                                disabled={generatingPayment || generatingDiscountedPayment}
+                              >
+                                <DollarSign className="h-4 w-4" />
+                                {generatingPayment ? "Gerando..." : `Pagar Valor Cheio - R$ ${displayOriginalFee.toFixed(2)}`}
+                              </Button>
+                              
+                              {/* Botão 2: Pagar com desconto */}
+                              <Button
+                                onClick={() => handleGenerateDiscountedCheckout(enrollment, displayFinalAmount)}
+                                size="sm"
+                                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+                                disabled={generatingPayment || generatingDiscountedPayment}
+                              >
+                                <Percent className="h-4 w-4" />
+                                {generatingDiscountedPayment 
+                                  ? "Gerando..." 
+                                  : `Pagar com Desconto - R$ ${displayFinalAmount.toFixed(2)}`
+                                }
+                              </Button>
+                            </>
+                          ) : (
                             <Button
-                              onClick={() => handleGenerateDiscountedCheckout(enrollment, displayFinalAmount)}
+                              onClick={() => handleGenerateEnrollmentPayment(enrollment)}
                               size="sm"
-                              className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
-                              disabled={generatingPayment || generatingDiscountedPayment}
+                              className="flex items-center gap-2"
+                              disabled={generatingPayment}
                             >
-                              <Percent className="h-4 w-4" />
-                              {generatingDiscountedPayment 
-                                ? "Gerando..." 
-                                : `Pagar com Desconto - R$ ${displayFinalAmount.toFixed(2)}`
-                              }
+                              <DollarSign className="h-4 w-4" />
+                              {generatingPayment ? "Gerando..." : `Pagar Matrícula - R$ ${displayOriginalFee.toFixed(2)}`}
                             </Button>
                           )}
                         </div>
