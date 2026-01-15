@@ -212,7 +212,12 @@ const EnrollmentsPage = () => {
 
           if (paymentError) {
             console.error('Erro ao criar registro de pagamento para aprovação manual:', paymentError);
-            // Continue even with error - status was already updated
+            // MOSTRAR ERRO EXPLÍCITO para o admin saber que algo falhou
+            toast({
+              title: "Aviso",
+              description: `Aprovação realizada, mas erro ao criar registro de pagamento: ${paymentError.message}. O desconto pode não aparecer para o aluno.`,
+              variant: "destructive"
+            });
           } else {
             console.log('✅ Registro de pagamento criado para aprovação manual');
           }
@@ -407,21 +412,41 @@ const EnrollmentsPage = () => {
 
       // Create payment record so the discount appears correctly on the student side
       if (preEnrollmentFee > 0) {
-        const { error: paymentError } = await (supabase as any)
+        // Verificar se já existe pagamento para evitar duplicação
+        const { data: existingPayment } = await (supabase as any)
           .from("payments")
-          .insert({
-            pre_enrollment_id: enrollmentId,
-            amount: preEnrollmentFee,
-            currency: "BRL",
-            status: "confirmed",
-            kind: "pre_enrollment",
-            asaas_payment_id: `manual_${enrollmentId}_${Date.now()}`,
-            paid_at: new Date().toISOString()
-          });
+          .select("id")
+          .eq("pre_enrollment_id", enrollmentId)
+          .eq("kind", "pre_enrollment")
+          .in("status", ["confirmed", "received"])
+          .maybeSingle();
 
-        if (paymentError) {
-          console.error('Erro ao criar registro de pagamento:', paymentError);
-          // Continue even with error - status was already updated
+        if (existingPayment) {
+          console.log('⏭️ Pagamento já existe para esta pré-matrícula, não duplicando');
+        } else {
+          const { error: paymentError } = await (supabase as any)
+            .from("payments")
+            .insert({
+              pre_enrollment_id: enrollmentId,
+              amount: preEnrollmentFee,
+              currency: "BRL",
+              status: "confirmed",
+              kind: "pre_enrollment",
+              asaas_payment_id: `manual_${enrollmentId}_${Date.now()}`,
+              paid_at: new Date().toISOString()
+            });
+
+          if (paymentError) {
+            console.error('Erro ao criar registro de pagamento:', paymentError);
+            // MOSTRAR ERRO EXPLÍCITO para o admin saber que algo falhou
+            toast({
+              title: "Aviso",
+              description: `Status atualizado, mas erro ao criar registro de pagamento: ${paymentError.message}. O desconto pode não aparecer para o aluno.`,
+              variant: "destructive"
+            });
+          } else {
+            console.log('✅ Registro de pagamento criado para confirmação manual');
+          }
         }
       }
 
