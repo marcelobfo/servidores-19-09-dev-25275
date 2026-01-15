@@ -40,6 +40,7 @@ interface PreEnrollment {
     name: string;
     pre_enrollment_fee?: number;
     enrollment_fee?: number;
+    discounted_enrollment_fee?: number;
     duration_hours?: number;
     start_date?: string;
     end_date?: string;
@@ -101,6 +102,7 @@ export function PreEnrollmentsPage() {
             name,
             pre_enrollment_fee,
             enrollment_fee,
+            discounted_enrollment_fee,
             duration_hours,
             start_date,
             end_date,
@@ -597,6 +599,95 @@ export function PreEnrollmentsPage() {
     }
   };
 
+  // Função específica para checkout COM DESCONTO - passa o valor direto para a Edge Function
+  const handleEnrollmentWithDiscount = async (preEnrollment: PreEnrollment, discountedAmount: number) => {
+    try {
+      console.log('🎟️ [ENROLLMENT-DISCOUNT] Iniciando checkout COM DESCONTO');
+      console.log('📋 Pré-matrícula ID:', preEnrollment.id);
+      console.log('💰 Valor com desconto (direto):', discountedAmount);
+
+      // Verificar se já existe uma matrícula para esta pré-matrícula
+      const { data: existingEnrollment, error: checkError } = await supabase
+        .from("enrollments")
+        .select('*')
+        .eq('pre_enrollment_id', preEnrollment.id)
+        .maybeSingle();
+
+      if (checkError) {
+        console.error('❌ [ENROLLMENT-DISCOUNT] Erro ao verificar enrollment existente:', checkError);
+        throw checkError;
+      }
+
+      let enrollmentId: string;
+
+      if (existingEnrollment) {
+        console.log('📌 [ENROLLMENT-DISCOUNT] Matrícula já existe:', existingEnrollment.id);
+        
+        if (existingEnrollment.status === 'active' && existingEnrollment.payment_status === 'paid') {
+          toast.info("Matrícula já foi realizada e paga!");
+          window.location.href = "/student/enrollments";
+          return;
+        }
+        
+        enrollmentId = existingEnrollment.id;
+      } else {
+        // Criar nova matrícula com o valor COM DESCONTO
+        const { data: newEnrollment, error: enrollmentError } = await supabase
+          .from("enrollments")
+          .insert({
+            user_id: user?.id,
+            course_id: preEnrollment.courses.id,
+            pre_enrollment_id: preEnrollment.id,
+            status: "pending_payment",
+            payment_status: "pending",
+            enrollment_amount: discountedAmount // VALOR COM DESCONTO
+          })
+          .select()
+          .single();
+
+        if (enrollmentError) {
+          console.error('❌ [ENROLLMENT-DISCOUNT] Erro ao criar enrollment:', enrollmentError);
+          throw enrollmentError;
+        }
+
+        enrollmentId = newEnrollment.id;
+        console.log('✅ [ENROLLMENT-DISCOUNT] Nova matrícula criada:', enrollmentId);
+      }
+
+      // Chamar edge function com override_amount para forçar o valor
+      console.log('🔄 [ENROLLMENT-DISCOUNT] Chamando edge function com override_amount:', discountedAmount);
+      const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
+        body: {
+          pre_enrollment_id: preEnrollment.id,
+          enrollment_id: enrollmentId,
+          override_amount: discountedAmount, // FORÇA O VALOR COM DESCONTO
+          force_recalculate: true
+        }
+      });
+
+      console.log('✅ [ENROLLMENT-DISCOUNT] Resposta da edge function:', data);
+
+      if (error) {
+        console.error('❌ [ENROLLMENT-DISCOUNT] Erro da edge function:', error);
+        throw error;
+      }
+
+      if (data?.checkout_url) {
+        console.log('✅ [ENROLLMENT-DISCOUNT] Checkout criado:', data.checkout_url);
+        toast.success("Checkout com desconto criado! Redirecionando...");
+        
+        setTimeout(() => {
+          window.location.href = data.checkout_url;
+        }, 1000);
+      } else {
+        throw new Error('Resposta inválida da função de checkout');
+      }
+    } catch (error) {
+      console.error("Error creating discounted enrollment:", error);
+      toast.error("Erro ao criar checkout com desconto");
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "pending":
@@ -916,6 +1007,9 @@ export function PreEnrollmentsPage() {
                         const enrollmentFee = preEnrollment.courses.enrollment_fee || 0;
                         const preEnrollmentFee = preEnrollment.courses.pre_enrollment_fee || 0;
                         
+                        // Usar o valor pré-calculado do banco, ou calcular como fallback
+                        const discountedFeeFromDB = preEnrollment.courses.discounted_enrollment_fee;
+                        
                         // Crédito real (do banco) OU inferido (aprovação manual)
                         const creditFromPayments = preEnrollmentPayments[preEnrollment.id] || 0;
                         const inferredCredit = preEnrollment.manual_approval && creditFromPayments === 0 
@@ -923,7 +1017,8 @@ export function PreEnrollmentsPage() {
                           : 0;
                         const totalCredit = creditFromPayments + inferredCredit;
                         
-                        const finalAmount = Math.max(enrollmentFee - totalCredit, 5);
+                        // Valor final: usar do banco se disponível, senão calcular
+                        const finalAmount = discountedFeeFromDB ?? Math.max(enrollmentFee - totalCredit, 5);
                         const hasDiscount = totalCredit > 0 && enrollmentFee > 0;
                         
                         if (!hasDiscount) {
@@ -974,9 +1069,9 @@ export function PreEnrollmentsPage() {
                                 Pagar Valor Cheio - R$ {enrollmentFee.toFixed(2)}
                               </Button>
                               
-                              {/* Botão 2: Pagar com desconto */}
+                              {/* Botão 2: Pagar com desconto - USA FUNÇÃO SEPARADA */}
                               <Button
-                                onClick={() => handleEnrollment(preEnrollment)}
+                                onClick={() => handleEnrollmentWithDiscount(preEnrollment, finalAmount)}
                                 size="lg"
                                 className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
                               >
