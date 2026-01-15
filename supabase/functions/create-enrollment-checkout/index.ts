@@ -65,18 +65,22 @@ serve(async (req) => {
     const token = authHeader.replace("Bearer ", "");
     console.log("Token extracted:", token.substring(0, 20) + "...");
 
-    // Verify the user with anon client
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseClient.auth.getUser(token);
+    // Create a client with the user's auth header for proper JWT validation
+    const authClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } }
+    );
 
-    if (authError) {
-      console.error("Authentication error:", authError.message);
+    // Verify the JWT using getClaims
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+
+    if (claimsError || !claimsData?.claims) {
+      console.error("Authentication error:", claimsError?.message || "No claims found");
       return new Response(
         JSON.stringify({
           error: "Invalid authentication",
-          details: authError.message,
+          details: claimsError?.message || "Token validation failed",
         }),
         {
           status: 401,
@@ -85,15 +89,16 @@ serve(async (req) => {
       );
     }
 
-    if (!user) {
-      console.error("No user found in token");
+    const userId = claimsData.claims.sub as string;
+    if (!userId) {
+      console.error("No user ID found in claims");
       return new Response(JSON.stringify({ error: "Invalid authentication - no user found" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`✅ Authenticated user: ${user.id}`);
+    console.log(`✅ Authenticated user: ${userId}`);
 
     // Get payment settings using serviceClient to bypass RLS
     console.log("💳 Fetching payment settings...");
@@ -191,9 +196,9 @@ serve(async (req) => {
       }
 
       // Validate ownership
-      if (enrollmentData.user_id !== user.id) {
+      if (enrollmentData.user_id !== userId) {
         console.error(
-          `User ${user.id} attempted to access enrollment ${enrollment_id} owned by ${enrollmentData.user_id}`,
+          `User ${userId} attempted to access enrollment ${enrollment_id} owned by ${enrollmentData.user_id}`,
         );
         return new Response(JSON.stringify({ error: "Acesso não autorizado à matrícula" }), {
           status: 403,
@@ -205,7 +210,7 @@ serve(async (req) => {
     }
 
     // Get user profile data as fallback
-    const { data: userProfile } = await serviceClient.from("profiles").select("*").eq("user_id", user.id).single();
+    const { data: userProfile } = await serviceClient.from("profiles").select("*").eq("user_id", userId).single();
 
     // Validate pre-enrollment exists BEFORE accessing its properties
     if (preEnrollmentError || !preEnrollment) {
@@ -218,9 +223,9 @@ serve(async (req) => {
     }
 
     // Validate ownership
-    if (preEnrollment.user_id !== user.id) {
+    if (preEnrollment.user_id !== userId) {
       console.error(
-        `User ${user.id} attempted to access pre-enrollment ${pre_enrollment_id} owned by ${preEnrollment.user_id}`,
+        `User ${userId} attempted to access pre-enrollment ${pre_enrollment_id} owned by ${preEnrollment.user_id}`,
       );
       return new Response(JSON.stringify({ error: "Acesso não autorizado à pré-matrícula" }), {
         status: 403,
