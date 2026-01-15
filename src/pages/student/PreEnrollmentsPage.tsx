@@ -866,13 +866,12 @@ export function PreEnrollmentsPage() {
                     </div>
                   )}
 
-                  {/* Bloco de matrícula liberada - aparece quando:
-                      1) Status é "approved" (aprovado diretamente), OU
-                      2) organ_approval_confirmed E status é payment_confirmed/approved, OU
-                      3) manual_approval === true E status é payment_confirmed (aprovação manual pelo admin) */}
-                  {(preEnrollment.status === "approved" || 
-                    (preEnrollment.organ_approval_confirmed && (preEnrollment.status === "payment_confirmed" || preEnrollment.status === "approved")) ||
-                    (preEnrollment.manual_approval === true && preEnrollment.status === "payment_confirmed")) && (
+                  {/* Bloco de matrícula liberada - aparece SOMENTE quando:
+                      1) organ_approval_confirmed === true E status é payment_confirmed/approved, OU
+                      2) organ_approval_confirmed === true E manual_approval === true
+                      IMPORTANTE: Exigir sempre organ_approval_confirmed para liberar matrícula */}
+                  {preEnrollment.organ_approval_confirmed && 
+                   (preEnrollment.status === "payment_confirmed" || preEnrollment.status === "approved" || preEnrollment.manual_approval === true) && (
                     <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                       <div className="flex items-center gap-2 text-sm text-blue-800 dark:text-blue-200 mb-3">
                         <CheckCircle className="h-4 w-4" />
