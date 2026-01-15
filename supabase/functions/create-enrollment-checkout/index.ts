@@ -28,7 +28,7 @@ serve(async (req) => {
     const body = await req.json();
     console.log("📦 Request body:", JSON.stringify(body));
 
-    const { pre_enrollment_id, enrollment_id } = body;
+    const { pre_enrollment_id, enrollment_id, force_recalculate } = body;
 
     if (!pre_enrollment_id) {
       console.error("Missing pre_enrollment_id in request");
@@ -36,6 +36,12 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+    
+    // Se force_recalculate=true, forçar recriação do checkout para aplicar desconto
+    const forceRecalculate = force_recalculate === true;
+    if (forceRecalculate) {
+      console.log("🔄 force_recalculate=true - Forçando recálculo do checkout com desconto");
     }
 
     // Determine if this is for pre-enrollment or enrollment
@@ -241,7 +247,7 @@ serve(async (req) => {
 
     const { data: existingPayment } = await paymentQuery.maybeSingle();
 
-    if (existingPayment) {
+    if (existingPayment && !forceRecalculate) {
       console.log("Found existing payment:", existingPayment.id);
 
       // Para checkout de matrícula, verificar se há crédito de pré-matrícula que não foi aplicado
@@ -318,6 +324,13 @@ serve(async (req) => {
           },
         );
       }
+    } else if (existingPayment && forceRecalculate) {
+      // Forçar recálculo - cancelar checkout antigo
+      console.log("🔄 force_recalculate=true - Cancelando checkout antigo:", existingPayment.id);
+      await serviceClient
+        .from("payments")
+        .update({ status: 'cancelled' })
+        .eq("id", existingPayment.id);
     }
 
     // ETAPA 2: Validar dados do curso
@@ -863,10 +876,17 @@ serve(async (req) => {
       });
     }
 
+    // Calcular desconto aplicado para retornar ao frontend
+    const originalFee = isEnrollmentCheckout ? (preEnrollment.courses?.enrollment_fee || 0) : (preEnrollment.courses?.pre_enrollment_fee || 0);
+    const discountApplied = originalFee - checkoutFee;
+
     return new Response(
       JSON.stringify({
         checkout_url: checkoutUrl,
         checkout_id: checkoutResult.id,
+        original_fee: originalFee,
+        discount: discountApplied > 0 ? discountApplied : 0,
+        final_amount: checkoutFee,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

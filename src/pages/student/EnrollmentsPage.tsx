@@ -213,11 +213,12 @@ export function EnrollmentsPage() {
       console.log('📋 Pre-Enrollment ID:', enrollment.pre_enrollments?.id);
       console.log('💵 Valor final esperado:', finalAmount);
 
-      // Usa create-enrollment-checkout que já tem a lógica de desconto embutida
+      // Usa create-enrollment-checkout com force_recalculate para garantir que o desconto seja aplicado
       const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
         body: {
           pre_enrollment_id: enrollment.pre_enrollments?.id,
-          enrollment_id: enrollment.id
+          enrollment_id: enrollment.id,
+          force_recalculate: true // Força recálculo para aplicar desconto de pré-matrícula
         }
       });
 
