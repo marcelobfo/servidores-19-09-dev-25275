@@ -911,42 +911,82 @@ export function PreEnrollmentsPage() {
                         </div>
                       </div>
                       
-                      {/* Exibir informação do desconto se houver pagamento de pré-matrícula */}
-                      {preEnrollmentPayments[preEnrollment.id] && preEnrollment.courses.enrollment_fee && (
-                        <div className="mb-3 p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg">
-                          <div className="flex items-center gap-2 text-green-800 dark:text-green-200 text-sm font-medium mb-1">
-                            <DollarSign className="h-4 w-4" />
-                            Desconto aplicado!
-                          </div>
-                          <div className="text-sm text-green-700 dark:text-green-300">
-                            <span className="line-through text-muted-foreground">
-                              Valor original: R$ {preEnrollment.courses.enrollment_fee?.toFixed(2)}
-                            </span>
-                            <br />
-                            <span>
-                              Desconto (pré-matrícula): - R$ {preEnrollmentPayments[preEnrollment.id]?.toFixed(2)}
-                            </span>
-                            <br />
-                            <strong className="text-green-800 dark:text-green-100">
-                              Valor final: R$ {Math.max((preEnrollment.courses.enrollment_fee || 0) - preEnrollmentPayments[preEnrollment.id], 5).toFixed(2)}
-                            </strong>
-                          </div>
-                        </div>
-                      )}
-                      
-                      <Button
-                        onClick={() => handleEnrollment(preEnrollment)}
-                        size="lg"
-                        className="flex items-center gap-2"
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        Realizar Matrícula
-                        {preEnrollmentPayments[preEnrollment.id] && preEnrollment.courses.enrollment_fee && (
-                          <span className="ml-1">
-                            - R$ {Math.max((preEnrollment.courses.enrollment_fee || 0) - preEnrollmentPayments[preEnrollment.id], 5).toFixed(2)}
-                          </span>
-                        )}
-                      </Button>
+                      {/* Exibir informação do desconto e dois botões */}
+                      {(() => {
+                        const enrollmentFee = preEnrollment.courses.enrollment_fee || 0;
+                        const preEnrollmentFee = preEnrollment.courses.pre_enrollment_fee || 0;
+                        
+                        // Crédito real (do banco) OU inferido (aprovação manual)
+                        const creditFromPayments = preEnrollmentPayments[preEnrollment.id] || 0;
+                        const inferredCredit = preEnrollment.manual_approval && creditFromPayments === 0 
+                          ? preEnrollmentFee 
+                          : 0;
+                        const totalCredit = creditFromPayments + inferredCredit;
+                        
+                        const finalAmount = Math.max(enrollmentFee - totalCredit, 5);
+                        const hasDiscount = totalCredit > 0 && enrollmentFee > 0;
+                        
+                        if (!hasDiscount) {
+                          return (
+                            <Button
+                              onClick={() => handleEnrollment(preEnrollment)}
+                              size="lg"
+                              className="flex items-center gap-2"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                              Realizar Matrícula
+                              {enrollmentFee > 0 && (
+                                <span className="ml-1">- R$ {enrollmentFee.toFixed(2)}</span>
+                              )}
+                            </Button>
+                          );
+                        }
+                        
+                        return (
+                          <>
+                            <div className="mb-3 p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg">
+                              <div className="flex items-center gap-2 text-green-800 dark:text-green-200 text-sm font-medium mb-1">
+                                <DollarSign className="h-4 w-4" />
+                                Desconto de pré-matrícula aplicado!
+                              </div>
+                              <div className="text-sm text-green-700 dark:text-green-300 space-y-1">
+                                <div className="line-through text-muted-foreground">
+                                  Valor original: R$ {enrollmentFee.toFixed(2)}
+                                </div>
+                                <div className="text-green-600 dark:text-green-400">
+                                  Crédito (pré-matrícula): - R$ {totalCredit.toFixed(2)}
+                                </div>
+                                <div className="font-bold text-green-800 dark:text-green-100 text-base">
+                                  Valor a pagar: R$ {finalAmount.toFixed(2)}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-2">
+                              {/* Botão 1: Pagar valor cheio */}
+                              <Button
+                                variant="outline"
+                                onClick={() => handleEnrollment(preEnrollment)}
+                                size="lg"
+                                className="flex items-center gap-2"
+                              >
+                                <DollarSign className="h-4 w-4" />
+                                Pagar Valor Cheio - R$ {enrollmentFee.toFixed(2)}
+                              </Button>
+                              
+                              {/* Botão 2: Pagar com desconto */}
+                              <Button
+                                onClick={() => handleEnrollment(preEnrollment)}
+                                size="lg"
+                                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                                Pagar com Desconto - R$ {finalAmount.toFixed(2)}
+                              </Button>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
