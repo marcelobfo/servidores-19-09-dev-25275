@@ -335,16 +335,22 @@ const EnrollmentsPage = () => {
 
   const confirmPaymentManually = async (enrollmentId: string) => {
     try {
-      // Get current enrollment status for webhook
+      // Get current enrollment data including course fee
       const { data: currentEnrollment, error: fetchError } = await supabase
         .from("pre_enrollments")
-        .select("status")
+        .select(`
+          status,
+          courses (
+            pre_enrollment_fee
+          )
+        `)
         .eq("id", enrollmentId)
         .single();
 
       if (fetchError) throw fetchError;
 
       const previousStatus = currentEnrollment?.status;
+      const preEnrollmentFee = (currentEnrollment as any)?.courses?.pre_enrollment_fee || 0;
 
       // Update status to payment_confirmed
       const { error } = await supabase
@@ -356,6 +362,26 @@ const EnrollmentsPage = () => {
         .eq("id", enrollmentId);
 
       if (error) throw error;
+
+      // Create payment record so the discount appears correctly on the student side
+      if (preEnrollmentFee > 0) {
+        const { error: paymentError } = await (supabase as any)
+          .from("payments")
+          .insert({
+            pre_enrollment_id: enrollmentId,
+            amount: preEnrollmentFee,
+            currency: "BRL",
+            status: "confirmed",
+            kind: "pre_enrollment",
+            asaas_payment_id: `manual_${enrollmentId}_${Date.now()}`,
+            paid_at: new Date().toISOString()
+          });
+
+        if (paymentError) {
+          console.error('Erro ao criar registro de pagamento:', paymentError);
+          // Continue even with error - status was already updated
+        }
+      }
 
       // Trigger webhook for payment confirmed
       try {
