@@ -43,11 +43,13 @@ serve(async (req) => {
     if (forceRecalculate) {
       console.log("🔄 force_recalculate=true - Forçando recálculo do checkout com desconto");
     }
-    
+
     // Se override_amount foi passado, usar esse valor diretamente (não calcular)
-    const hasOverrideAmount = typeof override_amount === 'number' && override_amount > 0;
+    // Aceita number OU string numérica (ex: "380", "380.00")
+    const overrideAmountNumber = typeof override_amount === "number" ? override_amount : Number(override_amount);
+    const hasOverrideAmount = Number.isFinite(overrideAmountNumber) && overrideAmountNumber > 0;
     if (hasOverrideAmount) {
-      console.log(`💵 override_amount=${override_amount} - Usando valor direto sem cálculo dinâmico`);
+      console.log(`💵 override_amount=${override_amount} (parsed=${overrideAmountNumber}) - Usando valor direto sem cálculo dinâmico`);
     }
 
     // Determine if this is for pre-enrollment or enrollment
@@ -460,8 +462,8 @@ serve(async (req) => {
 
     // ========== OVERRIDE AMOUNT: Usar valor passado diretamente ==========
     if (hasOverrideAmount) {
-      console.log(`🔒 OVERRIDE: Substituindo checkoutFee de R$ ${checkoutFee} por R$ ${override_amount}`);
-      checkoutFee = Math.max(override_amount, 5); // Mínimo R$ 5,00 Asaas
+      console.log(`🔒 OVERRIDE: Substituindo checkoutFee de R$ ${checkoutFee} por R$ ${overrideAmountNumber}`);
+      checkoutFee = Math.max(overrideAmountNumber, 5); // Mínimo R$ 5,00 Asaas
       console.log(`🔒 OVERRIDE: Valor final do checkout: R$ ${checkoutFee}`);
     }
     // ======================================================================
