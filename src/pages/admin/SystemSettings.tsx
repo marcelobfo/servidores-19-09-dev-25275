@@ -33,6 +33,7 @@ interface SystemSettings {
   contact_email?: string;
   dpo_email?: string;
   business_hours?: string;
+  discount_checkout_webhook_url?: string;
 }
 
 interface WebhookLog {
@@ -503,6 +504,19 @@ const SystemSettingsPage = () => {
                   {testingWebhook ? "Testando..." : "Testar"}
                 </Button>
               </div>
+            </div>
+
+            <div>
+              <Label htmlFor="discount_checkout_webhook_url">Webhook Checkout com Desconto</Label>
+              <Input
+                id="discount_checkout_webhook_url"
+                value={settings.discount_checkout_webhook_url || ""}
+                onChange={(e) => updateField("discount_checkout_webhook_url", e.target.value)}
+                placeholder="https://n8n.seudominio.com/webhook/checkout-desconto"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Webhook que recebe dados do aluno + curso e retorna a URL do checkout com desconto
+              </p>
             </div>
 
             <div>

@@ -599,12 +599,33 @@ export function PreEnrollmentsPage() {
     }
   };
 
-  // Função específica para checkout COM DESCONTO - passa o valor direto para a Edge Function
+  // Função específica para checkout COM DESCONTO - envia para webhook N8N
   const handleEnrollmentWithDiscount = async (preEnrollment: PreEnrollment, discountedAmount: number) => {
     try {
-      console.log('🎟️ [ENROLLMENT-DISCOUNT] Iniciando checkout COM DESCONTO');
+      console.log('🎟️ [ENROLLMENT-DISCOUNT] Iniciando checkout COM DESCONTO via webhook N8N');
       console.log('📋 Pré-matrícula ID:', preEnrollment.id);
-      console.log('💰 Valor com desconto (direto):', discountedAmount);
+      console.log('💰 Valor com desconto:', discountedAmount);
+
+      // Buscar configurações do sistema para obter a URL do webhook
+      const { data: settings, error: settingsError } = await supabase
+        .from('system_settings')
+        .select('discount_checkout_webhook_url')
+        .maybeSingle();
+
+      if (settingsError) {
+        console.error('❌ [ENROLLMENT-DISCOUNT] Erro ao buscar configurações:', settingsError);
+        throw settingsError;
+      }
+
+      const webhookUrl = (settings as any)?.discount_checkout_webhook_url;
+      
+      if (!webhookUrl) {
+        console.error('❌ [ENROLLMENT-DISCOUNT] Webhook de desconto não configurado');
+        toast.error("Webhook de checkout com desconto não configurado. Entre em contato com o suporte.");
+        return;
+      }
+
+      console.log('🔗 [ENROLLMENT-DISCOUNT] Webhook URL:', webhookUrl);
 
       // Verificar se já existe uma matrícula para esta pré-matrícula
       const { data: existingEnrollment, error: checkError } = await supabase
@@ -619,7 +640,7 @@ export function PreEnrollmentsPage() {
       }
 
       let enrollmentId: string;
-      const discountedAmountNumber = Number(discountedAmount); // Garantir que é número
+      const discountedAmountNumber = Number(discountedAmount);
 
       if (existingEnrollment) {
         console.log('📌 [ENROLLMENT-DISCOUNT] Matrícula já existe:', existingEnrollment.id);
@@ -632,17 +653,11 @@ export function PreEnrollmentsPage() {
         
         enrollmentId = existingEnrollment.id;
         
-        // CORREÇÃO: Atualizar enrollment_amount mesmo quando matrícula já existe
-        console.log('🔄 [ENROLLMENT-DISCOUNT] Atualizando enrollment_amount para:', discountedAmountNumber);
-        const { error: updateError } = await supabase
+        // Atualizar enrollment_amount
+        await supabase
           .from("enrollments")
           .update({ enrollment_amount: discountedAmountNumber })
           .eq("id", existingEnrollment.id);
-        
-        if (updateError) {
-          console.error('⚠️ [ENROLLMENT-DISCOUNT] Erro ao atualizar enrollment_amount:', updateError);
-          // Não falhar, apenas logar
-        }
       } else {
         // Criar nova matrícula com o valor COM DESCONTO
         const { data: newEnrollment, error: enrollmentError } = await supabase
@@ -653,7 +668,7 @@ export function PreEnrollmentsPage() {
             pre_enrollment_id: preEnrollment.id,
             status: "pending_payment",
             payment_status: "pending",
-            enrollment_amount: discountedAmountNumber // VALOR COM DESCONTO
+            enrollment_amount: discountedAmountNumber
           })
           .select()
           .single();
@@ -667,38 +682,91 @@ export function PreEnrollmentsPage() {
         console.log('✅ [ENROLLMENT-DISCOUNT] Nova matrícula criada:', enrollmentId);
       }
 
-      // Chamar edge function com override_amount para forçar o valor
-      console.log('🔄 [ENROLLMENT-DISCOUNT] Chamando edge function com override_amount:', discountedAmountNumber);
-      const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
-        body: {
-          pre_enrollment_id: preEnrollment.id,
-          enrollment_id: enrollmentId,
-          override_amount: discountedAmountNumber, // FORÇA O VALOR COM DESCONTO (número puro)
-          force_recalculate: true
-        }
+      // Calcular carga horária efetiva
+      const durationHours = preEnrollment.courses.duration_hours || 390;
+      const hoursMultiplier = preEnrollment.organ_types?.hours_multiplier || 1;
+      const effectiveHours = preEnrollment.custom_hours || Math.round(durationHours * hoursMultiplier);
+
+      // Montar payload completo para o webhook N8N
+      const webhookPayload = {
+        // Dados do usuário/aluno
+        student: {
+          id: user?.id,
+          full_name: preEnrollment.full_name,
+          email: preEnrollment.email,
+          phone: preEnrollment.phone,
+          cpf: preEnrollment.cpf,
+          organization: preEnrollment.organization,
+        },
+        // Dados do curso
+        course: {
+          id: preEnrollment.courses.id,
+          name: preEnrollment.courses.name,
+          duration_hours: durationHours,
+          effective_hours: effectiveHours,
+          pre_enrollment_fee: preEnrollment.courses.pre_enrollment_fee,
+          enrollment_fee: preEnrollment.courses.enrollment_fee,
+          discounted_enrollment_fee: preEnrollment.courses.discounted_enrollment_fee,
+        },
+        // Dados da pré-matrícula
+        pre_enrollment: {
+          id: preEnrollment.id,
+          status: preEnrollment.status,
+          organ_type: preEnrollment.organ_types?.name,
+          license_start_date: preEnrollment.license_start_date,
+          license_end_date: preEnrollment.license_end_date,
+          created_at: preEnrollment.created_at,
+        },
+        // Dados da matrícula
+        enrollment: {
+          id: enrollmentId,
+        },
+        // Dados de pagamento
+        payment: {
+          discounted_amount: discountedAmountNumber,
+          original_amount: preEnrollment.courses.enrollment_fee || 0,
+          credit_applied: preEnrollmentPayments[preEnrollment.id] || 0,
+        },
+        // Metadados
+        timestamp: new Date().toISOString(),
+        event_type: 'discount_checkout_request',
+      };
+
+      console.log('📤 [ENROLLMENT-DISCOUNT] Enviando para webhook:', JSON.stringify(webhookPayload, null, 2));
+      
+      toast.info("Gerando checkout com desconto...");
+
+      // Chamar webhook N8N
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(webhookPayload),
       });
 
-      console.log('✅ [ENROLLMENT-DISCOUNT] Resposta da edge function:', JSON.stringify(data));
-
-      if (error) {
-        console.error('❌ [ENROLLMENT-DISCOUNT] Erro da edge function:', error);
-        throw error;
+      if (!response.ok) {
+        console.error('❌ [ENROLLMENT-DISCOUNT] Erro do webhook:', response.status, response.statusText);
+        throw new Error(`Webhook retornou erro: ${response.status}`);
       }
 
-      if (data?.checkout_url) {
-        // AUDITORIA: Mostrar valor aplicado no checkout
-        const appliedAmount = data.applied_amount || discountedAmountNumber;
-        console.log(`✅ [ENROLLMENT-DISCOUNT] Checkout criado com valor R$ ${appliedAmount}`);
-        toast.success(`Checkout criado (R$ ${appliedAmount.toFixed(2)})! Abrindo página...`);
+      const data = await response.json();
+      console.log('✅ [ENROLLMENT-DISCOUNT] Resposta do webhook:', JSON.stringify(data));
+
+      // Espera que o webhook retorne checkout_url
+      const checkoutUrl = data?.checkout_url || data?.url || data?.checkoutUrl;
+      
+      if (checkoutUrl) {
+        console.log(`✅ [ENROLLMENT-DISCOUNT] Checkout com desconto criado: ${checkoutUrl}`);
+        toast.success(`Checkout criado (R$ ${discountedAmountNumber.toFixed(2)})! Abrindo página...`);
         
-        // Abrir em nova aba para evitar problemas de redirecionamento em iframes
-        const newWindow = window.open(data.checkout_url, '_blank');
+        // Abrir em nova aba
+        const newWindow = window.open(checkoutUrl, '_blank');
         if (!newWindow) {
-          // Fallback se popup foi bloqueado
-          toast.info(`Checkout R$ ${appliedAmount.toFixed(2)} - clique para abrir`, {
+          toast.info(`Checkout R$ ${discountedAmountNumber.toFixed(2)} - clique para abrir`, {
             action: {
               label: "Abrir Checkout",
-              onClick: () => window.open(data.checkout_url, '_blank')
+              onClick: () => window.open(checkoutUrl, '_blank')
             },
             duration: 10000
           });
