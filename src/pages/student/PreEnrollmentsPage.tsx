@@ -599,50 +599,12 @@ export function PreEnrollmentsPage() {
     }
   };
 
-  // Função específica para checkout COM DESCONTO - envia para webhook N8N
+  // Função específica para checkout COM DESCONTO - envia para Edge Function proxy (resolve CORS)
   const handleEnrollmentWithDiscount = async (preEnrollment: PreEnrollment, discountedAmount: number) => {
     try {
-      console.log('🎟️ [ENROLLMENT-DISCOUNT] Iniciando checkout COM DESCONTO via webhook N8N');
+      console.log('🎟️ [ENROLLMENT-DISCOUNT] Iniciando checkout COM DESCONTO via Edge Function proxy');
       console.log('📋 Pré-matrícula ID:', preEnrollment.id);
       console.log('💰 Valor com desconto:', discountedAmount);
-
-      // Buscar configurações do sistema para obter a URL do webhook
-      const { data: settings, error: settingsError } = await supabase
-        .from('system_settings')
-        .select('discount_checkout_webhook_url')
-        .maybeSingle();
-
-      if (settingsError) {
-        console.error('❌ [ENROLLMENT-DISCOUNT] Erro ao buscar configurações:', settingsError);
-        throw settingsError;
-      }
-
-      const webhookUrl = (settings as any)?.discount_checkout_webhook_url;
-      
-      if (!webhookUrl) {
-        console.error('❌ [ENROLLMENT-DISCOUNT] Webhook de desconto não configurado');
-        toast.error("Webhook de checkout com desconto não configurado. Entre em contato com o suporte.");
-        return;
-      }
-
-      console.log('🔗 [ENROLLMENT-DISCOUNT] Webhook URL:', webhookUrl);
-
-      // Buscar configurações do Asaas (token e ambiente)
-      const { data: paymentSettings } = await supabase
-        .from("payment_settings")
-        .select("asaas_environment, asaas_api_key, asaas_sandbox_api_key")
-        .maybeSingle();
-
-      const asaasEnvironment = (paymentSettings as any)?.asaas_environment || 'sandbox';
-      const asaasApiKey = asaasEnvironment === 'production' 
-        ? (paymentSettings as any)?.asaas_api_key 
-        : (paymentSettings as any)?.asaas_sandbox_api_key;
-      const asaasBaseUrl = asaasEnvironment === 'production' 
-        ? 'https://api.asaas.com/' 
-        : 'https://api-sandbox.asaas.com/';
-
-      console.log('🔑 [ENROLLMENT-DISCOUNT] Asaas Environment:', asaasEnvironment);
-      console.log('🌐 [ENROLLMENT-DISCOUNT] Asaas Base URL:', asaasBaseUrl);
 
       // Verificar se já existe uma matrícula para esta pré-matrícula
       const { data: existingEnrollment, error: checkError } = await supabase
@@ -704,7 +666,7 @@ export function PreEnrollmentsPage() {
       const hoursMultiplier = preEnrollment.organ_types?.hours_multiplier || 1;
       const effectiveHours = preEnrollment.custom_hours || Math.round(durationHours * hoursMultiplier);
 
-      // Montar payload completo para o webhook N8N
+      // Montar payload para a Edge Function (ela adiciona Asaas config internamente)
       const webhookPayload = {
         // Dados do usuário/aluno
         student: {
@@ -744,37 +706,26 @@ export function PreEnrollmentsPage() {
           original_amount: preEnrollment.courses.enrollment_fee || 0,
           credit_applied: preEnrollmentPayments[preEnrollment.id] || 0,
         },
-        // Configurações do Asaas
-        asaas: {
-          api_key: asaasApiKey || '',
-          environment: asaasEnvironment,
-          base_url: asaasBaseUrl,
-        },
         // Metadados
         timestamp: new Date().toISOString(),
         event_type: 'discount_checkout_request',
       };
 
-      console.log('📤 [ENROLLMENT-DISCOUNT] Enviando para webhook:', JSON.stringify(webhookPayload, null, 2));
+      console.log('📤 [ENROLLMENT-DISCOUNT] Enviando para Edge Function:', JSON.stringify(webhookPayload, null, 2));
       
       toast.info("Gerando checkout com desconto...");
 
-      // Chamar webhook N8N
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(webhookPayload),
+      // Chamar Edge Function proxy (resolve CORS)
+      const { data, error } = await supabase.functions.invoke('call-discount-webhook', {
+        body: webhookPayload,
       });
 
-      if (!response.ok) {
-        console.error('❌ [ENROLLMENT-DISCOUNT] Erro do webhook:', response.status, response.statusText);
-        throw new Error(`Webhook retornou erro: ${response.status}`);
+      if (error) {
+        console.error('❌ [ENROLLMENT-DISCOUNT] Erro da Edge Function:', error);
+        throw new Error(error.message || 'Erro ao chamar webhook');
       }
 
-      const data = await response.json();
-      console.log('✅ [ENROLLMENT-DISCOUNT] Resposta do webhook:', JSON.stringify(data));
+      console.log('✅ [ENROLLMENT-DISCOUNT] Resposta da Edge Function:', JSON.stringify(data));
 
       // Espera que o webhook retorne checkout_url
       const checkoutUrl = data?.checkout_url || data?.url || data?.checkoutUrl;
@@ -794,6 +745,8 @@ export function PreEnrollmentsPage() {
             duration: 10000
           });
         }
+      } else if (data?.error) {
+        throw new Error(data.error);
       } else {
         throw new Error('Resposta inválida da função de checkout');
       }
