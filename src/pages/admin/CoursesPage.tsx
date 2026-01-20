@@ -589,7 +589,10 @@ setEditingCourse(null);
               </div>
 
               <div>
-                <Label htmlFor="description">Descrição Completa</Label>
+                <Label htmlFor="description">Descrição Completa (Conteúdo Programático)</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Este conteúdo será exibido na seção "Conteúdo Programático" do Plano de Estudos e outros documentos.
+                </p>
                 <ReactQuill
                   theme="snow"
                   value={formData.description}

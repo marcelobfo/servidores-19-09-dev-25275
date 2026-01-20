@@ -82,6 +82,7 @@ const BLOCK_TYPE_CONFIG: Record<ContentBlockType, { label: string; icon: typeof 
   qrcode: { label: 'QR Code', icon: QrCode },
   spacer: { label: 'Espaçador', icon: Minus },
   frame: { label: 'Moldura', icon: LayoutGrid },
+  course_content: { label: 'Conteúdo Programático', icon: AlignLeft },
 };
 
 export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentTemplateEditorProps) {
@@ -158,6 +159,8 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
         return { width: 60, height: 60, marginTop: 20 };
       case 'frame':
         return { frameStyle: 'classic', frameColor: '#1E40AF', frameWidth: 4 };
+      case 'course_content':
+        return { fontSize: 10, align: 'justify' as const, marginTop: 10 };
       default:
         return {};
     }
