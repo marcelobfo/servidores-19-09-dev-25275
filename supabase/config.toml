@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.test-gemini-api-key]
 verify_jwt = false
+
+[functions.call-discount-webhook]
+verify_jwt = false
