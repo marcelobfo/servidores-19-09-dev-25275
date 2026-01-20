@@ -627,6 +627,23 @@ export function PreEnrollmentsPage() {
 
       console.log('🔗 [ENROLLMENT-DISCOUNT] Webhook URL:', webhookUrl);
 
+      // Buscar configurações do Asaas (token e ambiente)
+      const { data: paymentSettings } = await supabase
+        .from("payment_settings")
+        .select("asaas_environment, asaas_api_key, asaas_sandbox_api_key")
+        .maybeSingle();
+
+      const asaasEnvironment = (paymentSettings as any)?.asaas_environment || 'sandbox';
+      const asaasApiKey = asaasEnvironment === 'production' 
+        ? (paymentSettings as any)?.asaas_api_key 
+        : (paymentSettings as any)?.asaas_sandbox_api_key;
+      const asaasBaseUrl = asaasEnvironment === 'production' 
+        ? 'https://api.asaas.com/' 
+        : 'https://api-sandbox.asaas.com/';
+
+      console.log('🔑 [ENROLLMENT-DISCOUNT] Asaas Environment:', asaasEnvironment);
+      console.log('🌐 [ENROLLMENT-DISCOUNT] Asaas Base URL:', asaasBaseUrl);
+
       // Verificar se já existe uma matrícula para esta pré-matrícula
       const { data: existingEnrollment, error: checkError } = await supabase
         .from("enrollments")
@@ -726,6 +743,12 @@ export function PreEnrollmentsPage() {
           discounted_amount: discountedAmountNumber,
           original_amount: preEnrollment.courses.enrollment_fee || 0,
           credit_applied: preEnrollmentPayments[preEnrollment.id] || 0,
+        },
+        // Configurações do Asaas
+        asaas: {
+          api_key: asaasApiKey || '',
+          environment: asaasEnvironment,
+          base_url: asaasBaseUrl,
         },
         // Metadados
         timestamp: new Date().toISOString(),
