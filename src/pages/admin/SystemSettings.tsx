@@ -82,7 +82,8 @@ const SystemSettingsPage = () => {
     
     setSaving(true);
     try {
-      const { error } = await supabase
+      // Type casting para campos que podem não estar no types.ts gerado
+      const { error } = await (supabase as any)
         .from("system_settings")
         .update(settings)
         .eq("id", settings.id);
@@ -94,6 +95,7 @@ const SystemSettingsPage = () => {
         description: "Configurações salvas com sucesso!"
       });
     } catch (error) {
+      console.error("Error saving settings:", error);
       toast({
         title: "Erro",
         description: "Falha ao salvar configurações",
