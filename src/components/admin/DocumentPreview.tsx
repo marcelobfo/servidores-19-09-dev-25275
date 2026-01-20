@@ -59,6 +59,7 @@ export function DocumentPreview({ template }: DocumentPreviewProps) {
           organization,
           courses (
             name,
+            description,
             duration_hours,
             modules,
             start_date,
@@ -100,6 +101,7 @@ export function DocumentPreview({ template }: DocumentPreviewProps) {
               enrollment_fee: formatCurrency(course?.enrollment_fee || 0),
               pre_enrollment_credit: formatCurrency(course?.pre_enrollment_fee || 0),
               final_amount: formatCurrency((course?.enrollment_fee || 0) - (course?.pre_enrollment_fee || 0)),
+              course_content: course?.description || '',
               modules: parseModules(course?.modules),
             };
           }

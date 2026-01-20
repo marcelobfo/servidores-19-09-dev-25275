@@ -39,6 +39,7 @@ interface PreviewData {
   institution_name: string;
   director_name: string;
   director_title?: string;
+  course_content?: string;
   modules: Array<{ name: string; hours: number }>;
 }
 
@@ -182,6 +183,10 @@ const renderBlock = async (
 
     case 'frame':
       await renderFrame(pdf, block);
+      break;
+
+    case 'course_content':
+      yPosition = renderCourseContent(pdf, block, data, yPosition, margins, contentWidth);
       break;
   }
 
@@ -825,6 +830,79 @@ const renderCronogramaTable = (
   });
 
   return yPosition;
+};
+
+// Render course content (description) block
+const renderCourseContent = (
+  pdf: jsPDF,
+  block: ContentBlock,
+  data: PreviewData,
+  yPosition: number,
+  margins: { left: number; right: number },
+  contentWidth: number
+): number => {
+  const courseContent = data.course_content || '';
+  
+  if (!courseContent) {
+    return yPosition;
+  }
+  
+  // Strip HTML tags and decode entities
+  const stripHtml = (html: string): string => {
+    // Create a temporary div to parse HTML
+    const temp = html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<\/li>/gi, '\n')
+      .replace(/<li>/gi, '• ')
+      .replace(/<\/h[1-6]>/gi, '\n\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    return temp;
+  };
+  
+  const plainText = stripHtml(courseContent);
+  
+  const fontSize = block.config.fontSize || 10;
+  const textAlign = block.config.align || 'justify';
+  
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(fontSize);
+  
+  // Split text into lines that fit the content width
+  const lines = pdf.splitTextToSize(plainText, contentWidth);
+  
+  const lineHeight = fontSize * 0.4;
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  
+  for (const line of lines) {
+    // Check if we need a new page
+    if (yPosition > pageHeight - margins.right - 20) {
+      pdf.addPage();
+      yPosition = 20;
+    }
+    
+    let xPosition = margins.left;
+    if (textAlign === 'center') {
+      xPosition = pdf.internal.pageSize.getWidth() / 2;
+    } else if (textAlign === 'right') {
+      xPosition = pdf.internal.pageSize.getWidth() - margins.right;
+    }
+    
+    pdf.text(line, xPosition, yPosition, { 
+      align: textAlign === 'justify' ? 'left' : textAlign as any 
+    });
+    yPosition += lineHeight;
+  }
+  
+  return yPosition + 5;
 };
 
 // Main function to generate PDF from template

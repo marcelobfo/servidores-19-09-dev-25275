@@ -14,7 +14,8 @@ export type ContentBlockType =
   | 'spacer'
   | 'modules_table'
   | 'cronograma_table'
-  | 'frame';
+  | 'frame'
+  | 'course_content';
 
 // Frame styles for certificates
 export type FrameStyle = 'none' | 'simple' | 'double' | 'classic' | 'elegant' | 'modern';
@@ -156,6 +157,7 @@ export const TEMPLATE_VARIABLES: Record<DocumentTemplateType, Array<{ key: strin
     { key: '{{end_date}}', label: 'Data de Término', description: 'Data de término do curso' },
     { key: '{{modules_table}}', label: 'Tabela de Módulos', description: 'Lista de módulos com carga horária' },
     { key: '{{cronograma_table}}', label: 'Cronograma', description: 'Tabela de cronograma de atividades' },
+    { key: '{{course_content}}', label: 'Conteúdo Programático', description: 'Descrição completa do curso' },
     { key: '{{institution_name}}', label: 'Nome da Instituição', description: 'Nome da instituição' },
   ],
   quote: [
@@ -210,7 +212,9 @@ export const DEFAULT_CONTENT_BLOCKS: Record<DocumentTemplateType, ContentBlock[]
     { id: '8', type: 'modules_table', order: 8, config: { marginTop: 12 } },
     { id: '9', type: 'title', order: 9, config: { text: 'Cronograma', fontSize: 12, fontWeight: 'bold' as const, align: 'left' as const, marginTop: 15 } },
     { id: '10', type: 'cronograma_table', order: 10, config: { marginTop: 8 } },
-    { id: '11', type: 'footer', order: 11, config: { footerAlign: 'center' as const } },
+    { id: '11', type: 'title', order: 11, config: { text: 'CONTEÚDO PROGRAMÁTICO DO CURSO', fontSize: 12, fontWeight: 'bold' as const, align: 'left' as const, marginTop: 15 } },
+    { id: '12', type: 'course_content', order: 12, config: { marginTop: 8, fontSize: 10 } },
+    { id: '13', type: 'footer', order: 13, config: { footerAlign: 'center' as const } },
   ],
   quote: [
     { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true } },
@@ -349,6 +353,7 @@ export const MOCK_PREVIEW_DATA = {
   institution_name: 'Instituto Educacional',
   director_name: 'Dr. João da Silva',
   director_title: 'Diretor Acadêmico',
+  course_content: 'O curso de Gestão Pública Municipal aborda os fundamentos da administração pública, incluindo planejamento estratégico, gestão de recursos humanos, finanças públicas, licitações e contratos administrativos. Os participantes aprenderão sobre as melhores práticas de governança, transparência e prestação de contas, além de desenvolver habilidades para implementar políticas públicas eficazes. O conteúdo também inclui estudos de caso e exercícios práticos para aplicação dos conhecimentos adquiridos.',
   modules: [
     { name: 'Introdução à Gestão Pública', hours: 40 },
     { name: 'Finanças Públicas', hours: 60 },
