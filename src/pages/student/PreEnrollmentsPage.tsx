@@ -600,8 +600,8 @@ export function PreEnrollmentsPage() {
   };
 
   // Função específica para checkout COM DESCONTO
-  // ESTRATÉGIA: Usa SEMPRE create-enrollment-checkout com override_amount (mais confiável)
-  // O webhook N8N é opcional e pode ser habilitado nas configurações do sistema
+  // REGRA: o BACKEND é a fonte da verdade. O front NÃO envia valor.
+  // O desconto é calculado no Edge Function somando pagamentos confirmados de pré-matrícula.
   const handleEnrollmentWithDiscount = async (preEnrollment: PreEnrollment, discountedAmount: number) => {
     try {
       console.log('🎟️ [ENROLLMENT-DISCOUNT] ========================================');
@@ -673,13 +673,13 @@ export function PreEnrollmentsPage() {
         console.log('✅ [ENROLLMENT-DISCOUNT] Nova matrícula criada:', enrollmentId, 'com valor:', discountedAmountNumber);
       }
 
-      // Usar SEMPRE o create-enrollment-checkout com override_amount (mais confiável)
-      console.log('🔄 [ENROLLMENT-DISCOUNT] Chamando create-enrollment-checkout com override_amount:', discountedAmountNumber);
+      // Chamar create-enrollment-checkout SEM override_amount
+      // (o servidor calcula e aplica o desconto com segurança)
+      console.log('🔄 [ENROLLMENT-DISCOUNT] Chamando create-enrollment-checkout (servidor calcula o desconto)');
       
       const requestBody = {
         pre_enrollment_id: preEnrollment.id,
         enrollment_id: enrollmentId,
-        override_amount: discountedAmountNumber,
         force_recalculate: true
       };
       
