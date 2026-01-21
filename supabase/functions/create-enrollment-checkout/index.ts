@@ -681,8 +681,16 @@ serve(async (req) => {
     console.log("   Course name:", preEnrollment.courses.name);
     console.log("   Checkout fee:", checkoutFee);
 
+    // Usar apenas PIX no Sandbox (evita erro de billingTypes não habilitados)
+    // Em Produção, oferecer todas as opções após completar Dados Comerciais no Asaas
+    const allowedBillingTypes = environment === "production" 
+      ? ["CREDIT_CARD", "PIX", "BOLETO"] 
+      : ["PIX"];
+
+    console.log(`🔄 Ambiente: ${environment} - billingTypes: ${JSON.stringify(allowedBillingTypes)}`);
+
     const checkoutData = {
-      billingTypes: ["CREDIT_CARD", "PIX", "BOLETO"],
+      billingTypes: allowedBillingTypes,
       chargeTypes: ["DETACHED"],
       minutesToExpire: 60,
       callback: {
