@@ -236,12 +236,12 @@ serve(async (req) => {
     // Build checkout data
     const origin = req.headers.get("origin") || "https://6be1b209-32ae-497f-88c1-5af12f9e3bfe.lovableproject.com";
 
-    // FIXADO: Usar APENAS PIX para evitar erro "billingTypes é inválido"
-    // O Asaas requer verificação de Dados Comerciais para habilitar CREDIT_CARD e BOLETO
-    // Mesmo em produção, PIX é a opção mais segura até a conta estar 100% verificada
-    const allowedBillingTypes = ["PIX"];
+    // Matrícula com desconto: TODOS os métodos em produção
+    const allowedBillingTypes = environment === "production" 
+      ? ["CREDIT_CARD", "PIX", "BOLETO"] 
+      : ["PIX"]; // Sandbox = só PIX para evitar erros
 
-    console.log(`🔄 Ambiente: ${environment} - billingTypes: ${JSON.stringify(allowedBillingTypes)} (FIXADO EM PIX)`);
+    console.log(`🔄 Tipo: MATRÍCULA COM DESCONTO | Ambiente: ${environment} | billingTypes: ${JSON.stringify(allowedBillingTypes)}`);
 
     const checkoutData = {
       billingTypes: allowedBillingTypes,

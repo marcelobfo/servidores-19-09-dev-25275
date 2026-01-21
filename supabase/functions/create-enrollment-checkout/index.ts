@@ -721,12 +721,15 @@ serve(async (req) => {
     console.log("   Course name:", preEnrollment.courses.name);
     console.log("   Checkout fee:", checkoutFee);
 
-    // FIXADO: Usar APENAS PIX para evitar erro "billingTypes é inválido"
-    // O Asaas requer verificação de Dados Comerciais para habilitar CREDIT_CARD e BOLETO
-    // Mesmo em produção, PIX é a opção mais segura até a conta estar 100% verificada
-    const allowedBillingTypes = ["PIX"];
+    // Pré-matrícula: SEMPRE apenas PIX
+    // Matrícula (valor cheio ou com desconto): TODOS os métodos em produção
+    const allowedBillingTypes = isEnrollmentCheckout
+      ? (environment === "production" 
+          ? ["CREDIT_CARD", "PIX", "BOLETO"] 
+          : ["PIX"]) // Sandbox = só PIX para evitar erros
+      : ["PIX"]; // Pré-matrícula = sempre PIX
 
-    console.log(`🔄 Ambiente: ${environment} - billingTypes: ${JSON.stringify(allowedBillingTypes)} (FIXADO EM PIX)`);
+    console.log(`🔄 Tipo: ${isEnrollmentCheckout ? 'MATRÍCULA' : 'PRÉ-MATRÍCULA'} | Ambiente: ${environment} | billingTypes: ${JSON.stringify(allowedBillingTypes)}`);
 
     const checkoutData = {
       billingTypes: allowedBillingTypes,
