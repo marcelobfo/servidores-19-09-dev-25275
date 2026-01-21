@@ -1155,10 +1155,43 @@ serve(async (req) => {
       },
     );
   } catch (error) {
-    console.error("Unexpected error:", error);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("💥 Unexpected error:", error);
+    
+    // Enhanced error logging for debugging
+    let errorMessage = "Internal server error";
+    let errorDetails = "Unknown error";
+    let errorStack = "";
+    
+    if (error instanceof Error) {
+      console.error("💥 Error name:", error.name);
+      console.error("💥 Error message:", error.message);
+      console.error("💥 Error stack:", error.stack);
+      errorMessage = error.message || errorMessage;
+      errorDetails = error.name || "Error";
+      errorStack = error.stack || "";
+    } else if (typeof error === "string") {
+      console.error("💥 Error string:", error);
+      errorMessage = error;
+    } else {
+      console.error("💥 Error object:", JSON.stringify(error));
+      try {
+        errorDetails = JSON.stringify(error);
+      } catch {
+        errorDetails = String(error);
+      }
+    }
+    
+    return new Response(
+      JSON.stringify({ 
+        error: errorMessage, 
+        details: errorDetails,
+        stack: errorStack.split('\n').slice(0, 5).join('\n'), // First 5 lines of stack
+        hint: "Check Edge Function logs for full details"
+      }), 
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   }
 });
