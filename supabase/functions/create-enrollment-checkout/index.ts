@@ -411,11 +411,18 @@ serve(async (req) => {
     let preEnrollmentDiscount = 0;
 
     // ========== ESTRATÉGIA DE DESCONTO PARA MATRÍCULA ==========
-    // PRIORIDADE:
-    // 1. discounted_enrollment_fee do banco (mais confiável, pré-calculado pelo admin)
-    // 2. Pagamentos confirmados na tabela payments
-    // 3. Auto-heal para aprovações manuais
+    // NOVA ABORDAGEM: Calcular AMBOS os candidatos e escolher o MENOR
+    // 1. candidateFromDB = discounted_enrollment_fee (se existir)
+    // 2. candidateFromPayments = original - soma_pagamentos_confirmados
+    // 3. Escolher o menor (mais favorável ao aluno)
     // ============================================================
+    
+    // Variáveis para audit payload
+    let discountReason = "full_price";
+    let prePaidTotal = 0;
+    let candidateFromDB = 0;
+    let candidateFromPayments = 0;
+    
     if (isEnrollmentCheckout) {
       console.log("📊 ========== CÁLCULO DO DESCONTO DE MATRÍCULA ==========");
       console.log(`   📋 VALOR ORIGINAL DA MATRÍCULA: R$ ${originalEnrollmentFee}`);
@@ -424,99 +431,134 @@ serve(async (req) => {
       console.log(`   📋 Status pré-matrícula: ${preEnrollment.status}`);
       console.log(`   📋 Aprovação manual: ${preEnrollment.manual_approval}`);
       
-      // MÉTODO 1: Usar discounted_enrollment_fee se disponível e pré-matrícula confirmada
       const preEnrollmentConfirmed = preEnrollment.status === 'payment_confirmed' || 
-                                      preEnrollment.status === 'enrolled';
+                                      preEnrollment.status === 'enrolled' ||
+                                      preEnrollment.status === 'waiting_organ_approval';
       
+      // PASSO 1: Calcular candidato do banco (se disponível)
       if (discountedFeeFromDB && discountedFeeFromDB > 0 && preEnrollmentConfirmed) {
-        console.log(`   ✅ USANDO VALOR PRÉ-CALCULADO DO BANCO: R$ ${discountedFeeFromDB}`);
-        preEnrollmentDiscount = originalEnrollmentFee - discountedFeeFromDB;
-        checkoutFee = Math.max(discountedFeeFromDB, 5);
-        console.log(`   ✂️ DESCONTO IMPLÍCITO: R$ ${preEnrollmentDiscount}`);
-        console.log(`   ✅ VALOR FINAL DO CHECKOUT: R$ ${checkoutFee}`);
-      } else {
-        // MÉTODO 2: Buscar pagamentos confirmados na tabela payments
-        console.log("🔍 Buscando pagamentos de pré-matrícula confirmados na tabela payments...");
+        candidateFromDB = Math.max(discountedFeeFromDB, 5);
+        console.log(`   💾 Candidato do banco: R$ ${candidateFromDB}`);
+      }
+      
+      // PASSO 2: SEMPRE buscar pagamentos confirmados na tabela payments
+      console.log("🔍 Buscando pagamentos de pré-matrícula confirmados na tabela payments...");
+      
+      let { data: confirmedPayments, error: paymentsError } = await serviceClient
+        .from("payments")
+        .select("amount, status, created_at")
+        .eq("pre_enrollment_id", pre_enrollment_id)
+        .eq("kind", "pre_enrollment")
+        .in("status", ["confirmed", "received"]);
+
+      if (paymentsError) {
+        console.error("❌ Erro ao buscar pagamentos:", paymentsError);
+      }
+
+      prePaidTotal = confirmedPayments?.reduce(
+        (sum, p) => sum + Number(p.amount || 0),
+        0
+      ) ?? 0;
+
+      console.log(`   💳 Pagamentos encontrados: ${confirmedPayments?.length || 0}`);
+      confirmedPayments?.forEach((p, i) => {
+        console.log(`      [${i+1}] R$ ${p.amount} - status: ${p.status} - data: ${p.created_at}`);
+      });
+      console.log(`   💰 TOTAL PRÉ PAGO (payments table): R$ ${prePaidTotal}`);
+
+      // AUTO-HEAL para aprovações manuais sem registro de pagamento
+      if (
+        prePaidTotal === 0 &&
+        preEnrollment.manual_approval === true &&
+        preEnrollmentConfirmed &&
+        preEnrollmentFeeDB > 0
+      ) {
+        console.log("🔧 AUTO-HEAL: Aprovação manual detectada sem registro de pagamento.");
         
-        let { data: confirmedPayments, error: paymentsError } = await serviceClient
+        const { data: existingHeal } = await serviceClient
           .from("payments")
-          .select("amount, status, created_at")
+          .select("id")
           .eq("pre_enrollment_id", pre_enrollment_id)
           .eq("kind", "pre_enrollment")
-          .in("status", ["confirmed", "received"]);
+          .in("status", ["confirmed", "received"])
+          .maybeSingle();
 
-        if (paymentsError) {
-          console.error("❌ Erro ao buscar pagamentos:", paymentsError);
-        }
-
-        let prePaidTotal = confirmedPayments?.reduce(
-          (sum, p) => sum + Number(p.amount || 0),
-          0
-        ) ?? 0;
-
-        console.log(`   💳 Pagamentos encontrados: ${confirmedPayments?.length || 0}`);
-        confirmedPayments?.forEach((p, i) => {
-          console.log(`      [${i+1}] R$ ${p.amount} - status: ${p.status} - data: ${p.created_at}`);
-        });
-        console.log(`   💰 TOTAL PRÉ PAGO: R$ ${prePaidTotal}`);
-
-        // MÉTODO 3: AUTO-HEAL para aprovações manuais sem registro de pagamento
-        if (
-          prePaidTotal === 0 &&
-          preEnrollment.manual_approval === true &&
-          preEnrollmentConfirmed &&
-          preEnrollmentFeeDB > 0
-        ) {
-          console.log("🔧 AUTO-HEAL: Aprovação manual detectada sem registro de pagamento.");
-          
-          const { data: existingHeal } = await serviceClient
+        if (!existingHeal) {
+          const { data: healedPayment, error: healError } = await serviceClient
             .from("payments")
-            .select("id")
-            .eq("pre_enrollment_id", pre_enrollment_id)
-            .eq("kind", "pre_enrollment")
-            .in("status", ["confirmed", "received"])
-            .maybeSingle();
+            .insert({
+              pre_enrollment_id: pre_enrollment_id,
+              amount: preEnrollmentFeeDB,
+              currency: "BRL",
+              status: "confirmed",
+              kind: "pre_enrollment",
+              asaas_payment_id: `autoheal_${pre_enrollment_id}_${Date.now()}`,
+              paid_at: new Date().toISOString()
+            })
+            .select()
+            .single();
 
-          if (!existingHeal) {
-            const { data: healedPayment, error: healError } = await serviceClient
-              .from("payments")
-              .insert({
-                pre_enrollment_id: pre_enrollment_id,
-                amount: preEnrollmentFeeDB,
-                currency: "BRL",
-                status: "confirmed",
-                kind: "pre_enrollment",
-                asaas_payment_id: `autoheal_${pre_enrollment_id}_${Date.now()}`,
-                paid_at: new Date().toISOString()
-              })
-              .select()
-              .single();
-
-            if (healError) {
-              console.error("❌ AUTO-HEAL: Falha ao criar pagamento:", healError);
-            } else {
-              console.log("✅ AUTO-HEAL: Pagamento criado:", healedPayment.id);
-              prePaidTotal = preEnrollmentFeeDB;
-            }
+          if (healError) {
+            console.error("❌ AUTO-HEAL: Falha ao criar pagamento:", healError);
+          } else {
+            console.log("✅ AUTO-HEAL: Pagamento criado:", healedPayment.id);
+            prePaidTotal = preEnrollmentFeeDB;
           }
         }
-        
-        // MÉTODO 4 (FALLBACK): Se pré-matrícula confirmada mas sem pagamento, usar taxa de pré-matrícula
-        if (prePaidTotal === 0 && preEnrollmentConfirmed && preEnrollmentFeeDB > 0) {
-          console.log("⚠️ FALLBACK: Pré-matrícula confirmada sem pagamento registrado.");
-          console.log(`   Usando taxa de pré-matrícula como crédito: R$ ${preEnrollmentFeeDB}`);
-          prePaidTotal = preEnrollmentFeeDB;
-        }
-
-        if (prePaidTotal > 0) {
-          preEnrollmentDiscount = prePaidTotal;
-          checkoutFee = Math.max(originalEnrollmentFee - prePaidTotal, 5);
-          console.log(`   ✂️ DESCONTO APLICADO: R$ ${preEnrollmentDiscount}`);
-          console.log(`   ✅ VALOR FINAL COBRADO: R$ ${checkoutFee}`);
-        } else {
-          console.log("ℹ️ Nenhum crédito de pré-matrícula encontrado - cobrando valor cheio");
-        }
       }
+      
+      // FALLBACK: Se pré-matrícula confirmada mas sem pagamento, usar taxa de pré-matrícula
+      if (prePaidTotal === 0 && preEnrollmentConfirmed && preEnrollmentFeeDB > 0) {
+        console.log("⚠️ FALLBACK: Pré-matrícula confirmada sem pagamento registrado.");
+        console.log(`   Usando taxa de pré-matrícula como crédito: R$ ${preEnrollmentFeeDB}`);
+        prePaidTotal = preEnrollmentFeeDB;
+      }
+
+      // Calcular candidato baseado em pagamentos
+      if (prePaidTotal > 0) {
+        candidateFromPayments = Math.max(originalEnrollmentFee - prePaidTotal, 5);
+        console.log(`   💳 Candidato dos pagamentos: R$ ${candidateFromPayments}`);
+      }
+
+      // PASSO 3: DECISÃO FINAL - escolher o MENOR valor válido
+      console.log("🎯 DECISÃO FINAL:");
+      console.log(`   📊 Candidato do banco: R$ ${candidateFromDB || 'N/A'}`);
+      console.log(`   📊 Candidato dos pagamentos: R$ ${candidateFromPayments || 'N/A'}`);
+      
+      if (candidateFromDB > 0 && candidateFromPayments > 0) {
+        // AMBOS disponíveis - escolher o MENOR (mais favorável)
+        if (candidateFromPayments <= candidateFromDB) {
+          checkoutFee = candidateFromPayments;
+          preEnrollmentDiscount = prePaidTotal;
+          discountReason = "payments_total";
+          console.log(`   ✅ ESCOLHIDO: Pagamentos (menor) - R$ ${checkoutFee}`);
+        } else {
+          checkoutFee = candidateFromDB;
+          preEnrollmentDiscount = originalEnrollmentFee - candidateFromDB;
+          discountReason = "db_discounted_fee";
+          console.log(`   ✅ ESCOLHIDO: Banco (menor) - R$ ${checkoutFee}`);
+        }
+      } else if (candidateFromPayments > 0) {
+        // Só pagamentos disponíveis
+        checkoutFee = candidateFromPayments;
+        preEnrollmentDiscount = prePaidTotal;
+        discountReason = "payments_total";
+        console.log(`   ✅ ESCOLHIDO: Pagamentos (único disponível) - R$ ${checkoutFee}`);
+      } else if (candidateFromDB > 0) {
+        // Só banco disponível
+        checkoutFee = candidateFromDB;
+        preEnrollmentDiscount = originalEnrollmentFee - candidateFromDB;
+        discountReason = "db_discounted_fee";
+        console.log(`   ✅ ESCOLHIDO: Banco (único disponível) - R$ ${checkoutFee}`);
+      } else {
+        // Nenhum desconto disponível
+        discountReason = "no_credit_full_price";
+        console.log("ℹ️ Nenhum crédito de pré-matrícula encontrado - cobrando valor cheio");
+      }
+      
+      console.log(`   ✂️ DESCONTO TOTAL: R$ ${preEnrollmentDiscount}`);
+      console.log(`   💵 VALOR FINAL: R$ ${checkoutFee}`);
+      console.log(`   📝 RAZÃO: ${discountReason}`);
       console.log("📊 ========================================================");
     }
 
@@ -1034,9 +1076,10 @@ serve(async (req) => {
 
     console.log("✅ RESPOSTA FINAL:");
     console.log(`   applied_amount: R$ ${checkoutFee}`);
-    console.log(`   override_received: ${override_amount}`);
-    console.log(`   override_parsed: ${overrideAmountNumber}`);
-    console.log(`   used_override: ${hasOverrideAmount}`);
+    console.log(`   reason: ${discountReason}`);
+    console.log(`   pre_paid_total: R$ ${prePaidTotal}`);
+    console.log(`   candidate_from_db: R$ ${candidateFromDB}`);
+    console.log(`   candidate_from_payments: R$ ${candidateFromPayments}`);
 
     return new Response(
       JSON.stringify({
@@ -1047,6 +1090,12 @@ serve(async (req) => {
         final_amount: checkoutFee,
         // AUDITORIA: Campos extras para debug/confirmação
         applied_amount: checkoutFee,
+        reason: discountReason,
+        pre_paid_total: prePaidTotal,
+        candidate_from_db: candidateFromDB,
+        candidate_from_payments: candidateFromPayments,
+        discounted_fee_db: discountedFeeFromDB || null,
+        pre_enrollment_fee_db: preEnrollmentFeeDB,
         override_received: override_amount,
         override_parsed: overrideAmountNumber,
         used_override: hasOverrideAmount,
