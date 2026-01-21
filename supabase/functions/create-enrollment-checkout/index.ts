@@ -6,6 +6,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Default API URLs
+const DEFAULT_SANDBOX_URL = "https://api-sandbox.asaas.com/v3";
+const DEFAULT_PRODUCTION_URL = "https://api.asaas.com/v3";
+
 // Helper functions
 const cleanCPF = (cpf: string | null): string => {
   if (!cpf) return "";
@@ -55,6 +59,7 @@ async function getOrCreateAsaasCustomer(
   }
 ): Promise<{ id: string; error?: string }> {
   console.log("🔍 Buscando/criando customer no Asaas...");
+  console.log(`📡 API URL: ${asaasApiUrl}`);
   
   // First, search for existing customer by CPF
   if (customerData.cpfCnpj) {
@@ -124,6 +129,8 @@ async function getOrCreateAsaasCustomer(
   }
 }
 
+console.log("🔧 create-enrollment-checkout v34 - Using /v3/payments API with configurable URLs");
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -138,7 +145,7 @@ serve(async (req) => {
   );
 
   try {
-    console.log("🚀 Edge function started - Using /v3/payments API");
+    console.log("🚀 Edge function started - v34 with configurable URLs");
 
     // Parse request body
     const body = await req.json();
@@ -207,10 +214,10 @@ serve(async (req) => {
     console.log(`✅ Authenticated user: ${userId}`);
     const user = { id: userId, email: claimsData.claims.email as string };
 
-    // Get payment settings
+    // Get payment settings including custom URLs
     const { data: paymentSettings, error: settingsError } = await serviceClient
       .from("payment_settings")
-      .select("environment, asaas_api_key_sandbox, asaas_api_key_production")
+      .select("environment, asaas_api_key_sandbox, asaas_api_key_production, asaas_base_url_sandbox, asaas_base_url_production")
       .maybeSingle();
 
     if (settingsError || !paymentSettings) {
@@ -237,9 +244,13 @@ serve(async (req) => {
       });
     }
 
+    // Use custom URL from settings, or fall back to defaults
     const asaasApiUrl = environment === "production"
-      ? "https://api.asaas.com/v3"
-      : "https://api-sandbox.asaas.com/v3";
+      ? ((paymentSettings as any).asaas_base_url_production || DEFAULT_PRODUCTION_URL)
+      : ((paymentSettings as any).asaas_base_url_sandbox || DEFAULT_SANDBOX_URL);
+
+    console.log(`🌐 Environment: ${environment}`);
+    console.log(`🔗 API URL: ${asaasApiUrl}`);
 
     // Get pre-enrollment data
     const { data: preEnrollment, error: preEnrollmentError } = await serviceClient
@@ -508,6 +519,7 @@ serve(async (req) => {
     console.log(`💳 Billing type: ${billingType} (environment: ${environment}, isEnrollment: ${isEnrollmentCheckout})`);
 
     // Create payment using /v3/payments API
+    // IMPORTANT: Using "billingType" (singular) NOT "billingTypes" (plural)
     const paymentData = {
       customer: customerId,
       billingType: billingType,
@@ -519,6 +531,7 @@ serve(async (req) => {
     };
 
     console.log("📤 Payment payload:", JSON.stringify(paymentData));
+    console.log(`📡 POST ${asaasApiUrl}/payments`);
 
     const paymentResponse = await fetch(`${asaasApiUrl}/payments`, {
       method: "POST",

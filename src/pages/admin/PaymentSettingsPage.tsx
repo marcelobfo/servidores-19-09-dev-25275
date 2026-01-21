@@ -8,7 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Globe, Zap } from "lucide-react";
 
 interface PaymentSettings {
   id?: string;
@@ -22,6 +22,15 @@ interface PaymentSettings {
   asaas_api_key_sandbox: string | null;
   asaas_api_key_production: string | null;
   asaas_webhook_token: string | null;
+  asaas_base_url_sandbox: string;
+  asaas_base_url_production: string;
+}
+
+interface TestResult {
+  success: boolean;
+  url: string;
+  accountName?: string;
+  message: string;
 }
 
 export default function PaymentSettingsPage() {
@@ -36,10 +45,13 @@ export default function PaymentSettingsPage() {
     asaas_api_key_sandbox: null,
     asaas_api_key_production: null,
     asaas_webhook_token: null,
+    asaas_base_url_sandbox: 'https://api-sandbox.asaas.com/v3',
+    asaas_base_url_production: 'https://api.asaas.com/v3',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -68,6 +80,8 @@ export default function PaymentSettingsPage() {
           asaas_api_key_sandbox: data.asaas_api_key_sandbox,
           asaas_api_key_production: data.asaas_api_key_production,
           asaas_webhook_token: data.asaas_webhook_token,
+          asaas_base_url_sandbox: (data as any).asaas_base_url_sandbox || 'https://api-sandbox.asaas.com/v3',
+          asaas_base_url_production: (data as any).asaas_base_url_production || 'https://api.asaas.com/v3',
         });
       }
     } catch (error) {
@@ -97,11 +111,17 @@ export default function PaymentSettingsPage() {
     }
 
     setTesting(true);
+    setTestResult(null);
+    
     try {
-      // Test connection by trying to fetch account info
-      const apiUrl = settings.environment === 'production' 
-        ? 'https://api.asaas.com/v3/myAccount'
-        : 'https://sandbox.asaas.com/api/v3/myAccount';
+      // Use the configured base URL
+      const baseUrl = settings.environment === 'production' 
+        ? settings.asaas_base_url_production 
+        : settings.asaas_base_url_sandbox;
+      
+      const apiUrl = `${baseUrl}/myAccount`;
+      
+      console.log(`🔍 Testando conexão Asaas: ${apiUrl}`);
         
       const response = await fetch(apiUrl, {
         headers: {
@@ -110,22 +130,52 @@ export default function PaymentSettingsPage() {
         },
       });
 
+      const responseText = await response.text();
+      console.log(`📊 Resposta: ${response.status}`, responseText);
+
       if (response.ok) {
+        let accountData;
+        try {
+          accountData = JSON.parse(responseText);
+        } catch {
+          accountData = {};
+        }
+        
+        setTestResult({
+          success: true,
+          url: apiUrl,
+          accountName: accountData.name || accountData.tradingName || 'Conta Asaas',
+          message: `Conexão estabelecida com sucesso!`,
+        });
+        
         toast({
           title: "Sucesso",
-          description: `Conexão com Asaas (${settings.environment}) estabelecida com sucesso!`,
+          description: `Conexão com Asaas (${settings.environment}) estabelecida!`,
         });
       } else {
-        const errorData = await response.text();
-        console.error('Asaas connection test failed:', response.status, errorData);
+        setTestResult({
+          success: false,
+          url: apiUrl,
+          message: `Erro ${response.status}: ${responseText.substring(0, 200)}`,
+        });
+        
         toast({
           title: "Erro",
-          description: `Falha na conexão com Asaas (${settings.environment}). Verifique a chave API.`,
+          description: `Falha na conexão. Verifique a chave API e a URL.`,
           variant: "destructive",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error testing Asaas connection:', error);
+      
+      setTestResult({
+        success: false,
+        url: settings.environment === 'production' 
+          ? settings.asaas_base_url_production 
+          : settings.asaas_base_url_sandbox,
+        message: `Erro de conexão: ${error.message}`,
+      });
+      
       toast({
         title: "Erro",
         description: "Erro ao testar conexão com Asaas",
@@ -139,7 +189,6 @@ export default function PaymentSettingsPage() {
   const handleSave = async () => {
     // Validar ambiente e chaves API
     if (settings.enabled) {
-      // Validar chave do ambiente atual
       const currentApiKey = settings.environment === 'production' 
         ? settings.asaas_api_key_production 
         : settings.asaas_api_key_sandbox;
@@ -153,7 +202,6 @@ export default function PaymentSettingsPage() {
         return;
       }
 
-      // Validar formato da chave API
       if (!currentApiKey.startsWith('$aact_')) {
         toast({
           title: "Erro de Configuração",
@@ -185,7 +233,25 @@ export default function PaymentSettingsPage() {
       }
     }
 
-    // Validar webhook token
+    // Validar URLs
+    const urlPattern = /^https:\/\/.+/;
+    if (!urlPattern.test(settings.asaas_base_url_sandbox)) {
+      toast({
+        title: "Erro de Configuração",
+        description: "URL Sandbox inválida. Deve começar com https://",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!urlPattern.test(settings.asaas_base_url_production)) {
+      toast({
+        title: "Erro de Configuração",
+        description: "URL Produção inválida. Deve começar com https://",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (settings.enabled && (!settings.asaas_webhook_token || settings.asaas_webhook_token.trim() === '')) {
       toast({
         title: "Aviso",
@@ -196,14 +262,16 @@ export default function PaymentSettingsPage() {
 
     setSaving(true);
     try {
+      const saveData: any = { ...settings };
+      
       const { error } = settings.id
         ? await supabase
             .from('payment_settings')
-            .update(settings)
+            .update(saveData)
             .eq('id', settings.id)
         : await supabase
             .from('payment_settings')
-            .insert([settings]);
+            .insert([saveData]);
 
       if (error) throw error;
 
@@ -212,12 +280,10 @@ export default function PaymentSettingsPage() {
         description: "Configurações de pagamento salvas com sucesso!",
       });
       
-      // Recarregar settings após salvar
       await fetchSettings();
     } catch (error: any) {
       console.error('Error saving payment settings:', error);
       
-      // Erro específico de RLS
       if (error.code === '42501') {
         toast({
           title: "Erro de Permissão",
@@ -240,6 +306,14 @@ export default function PaymentSettingsPage() {
     setSettings(prev => ({ ...prev, [field]: value }));
   };
 
+  const resetUrlToDefault = (field: 'asaas_base_url_sandbox' | 'asaas_base_url_production') => {
+    const defaults = {
+      asaas_base_url_sandbox: 'https://api-sandbox.asaas.com/v3',
+      asaas_base_url_production: 'https://api.asaas.com/v3',
+    };
+    updateField(field, defaults[field]);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -247,6 +321,10 @@ export default function PaymentSettingsPage() {
       </div>
     );
   }
+
+  const activeBaseUrl = settings.environment === 'production' 
+    ? settings.asaas_base_url_production 
+    : settings.asaas_base_url_sandbox;
 
   return (
     <div className="space-y-6">
@@ -335,9 +413,81 @@ export default function PaymentSettingsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Integração Asaas</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Globe className="h-5 w-5" />
+                URLs da API Asaas
+              </CardTitle>
               <CardDescription>
-                Configure as credenciais da API do Asaas para processar pagamentos PIX
+                Configure as URLs base da API Asaas. Use os valores padrão a menos que precise de uma configuração específica.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="asaas-base-url-sandbox">URL Base - Sandbox</Label>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => resetUrlToDefault('asaas_base_url_sandbox')}
+                    className="text-xs"
+                  >
+                    Restaurar padrão
+                  </Button>
+                </div>
+                <Input
+                  id="asaas-base-url-sandbox"
+                  value={settings.asaas_base_url_sandbox}
+                  onChange={(e) => updateField('asaas_base_url_sandbox', e.target.value)}
+                  placeholder="https://api-sandbox.asaas.com/v3"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Padrão: https://api-sandbox.asaas.com/v3
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="asaas-base-url-production">URL Base - Produção</Label>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => resetUrlToDefault('asaas_base_url_production')}
+                    className="text-xs"
+                  >
+                    Restaurar padrão
+                  </Button>
+                </div>
+                <Input
+                  id="asaas-base-url-production"
+                  value={settings.asaas_base_url_production}
+                  onChange={(e) => updateField('asaas_base_url_production', e.target.value)}
+                  placeholder="https://api.asaas.com/v3"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Padrão: https://api.asaas.com/v3
+                </p>
+              </div>
+
+              <div className="bg-primary/10 border border-primary/20 p-3 rounded-lg">
+                <div className="flex items-center gap-2 text-sm font-medium text-primary mb-1">
+                  <Zap className="h-4 w-4" />
+                  Endpoint Ativo
+                </div>
+                <code className="text-xs bg-background p-2 rounded block font-mono">
+                  {activeBaseUrl}/payments
+                </code>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Este é o endpoint que será usado para criar pagamentos no ambiente {settings.environment}.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Credenciais Asaas</CardTitle>
+              <CardDescription>
+                Configure as chaves de API do Asaas para processar pagamentos
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -386,40 +536,73 @@ export default function PaymentSettingsPage() {
                 />
               </div>
 
-               <div className="space-y-2">
-                 <Label htmlFor="asaas-webhook-token">Token do Webhook</Label>
-                 <Input
-                   id="asaas-webhook-token"
-                   value={settings.asaas_webhook_token || ''}
-                   onChange={(e) => updateField('asaas_webhook_token', e.target.value)}
-                   placeholder="Token para validar webhooks do Asaas"
-                 />
-               </div>
+              <div className="space-y-2">
+                <Label htmlFor="asaas-webhook-token">Token do Webhook</Label>
+                <Input
+                  id="asaas-webhook-token"
+                  value={settings.asaas_webhook_token || ''}
+                  onChange={(e) => updateField('asaas_webhook_token', e.target.value)}
+                  placeholder="Token para validar webhooks do Asaas"
+                />
+              </div>
 
-               {(settings.asaas_api_key_sandbox || settings.asaas_api_key_production) && (
-                 <Button
-                   onClick={testAsaasConnection}
-                   disabled={testing}
-                   variant="outline"
-                   className="w-full"
-                 >
-                   {testing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                   Testar Conexão - {settings.environment === 'production' ? 'Produção' : 'Sandbox'}
-                 </Button>
-               )}
+              {(settings.asaas_api_key_sandbox || settings.asaas_api_key_production) && (
+                <div className="space-y-3">
+                  <Button
+                    onClick={testAsaasConnection}
+                    disabled={testing}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    {testing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Testar Conexão - {settings.environment === 'production' ? 'Produção' : 'Sandbox'}
+                  </Button>
 
-               <div className="bg-muted p-4 rounded-lg">
-                 <h4 className="font-medium mb-2">Configuração do Webhook</h4>
-                 <p className="text-sm text-muted-foreground mb-2">
-                   Configure o seguinte URL no painel do Asaas:
-                 </p>
-                 <code className="text-xs bg-background p-2 rounded block">
-                   https://lavqzqqfsdtduwphzehr.supabase.co/functions/v1/webhook-asaas
-                 </code>
-                 <p className="text-xs text-muted-foreground mt-2">
-                   Use a mesma URL para ambos os ambientes (sandbox e produção)
-                 </p>
-               </div>
+                  {testResult && (
+                    <div className={`p-4 rounded-lg border ${testResult.success ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800' : 'bg-destructive/10 border-destructive/30'}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        {testResult.success ? (
+                          <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-destructive" />
+                        )}
+                        <span className={`font-medium ${testResult.success ? 'text-foreground' : 'text-destructive'}`}>
+                          {testResult.success ? 'Conexão OK' : 'Falha na Conexão'}
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-1 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">URL testada: </span>
+                          <code className="bg-background px-1 rounded text-xs">{testResult.url}</code>
+                        </div>
+                        {testResult.accountName && (
+                          <div>
+                            <span className="text-muted-foreground">Conta: </span>
+                            <span className="font-medium">{testResult.accountName}</span>
+                          </div>
+                        )}
+                        <div className="text-xs text-muted-foreground mt-2">
+                          {testResult.message}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="bg-muted p-4 rounded-lg">
+                <h4 className="font-medium mb-2">Configuração do Webhook</h4>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Configure o seguinte URL no painel do Asaas:
+                </p>
+                <code className="text-xs bg-background p-2 rounded block">
+                  https://lavqzqqfsdtduwphzehr.supabase.co/functions/v1/webhook-asaas
+                </code>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Use a mesma URL para ambos os ambientes (sandbox e produção)
+                </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -443,6 +626,13 @@ export default function PaymentSettingsPage() {
                 <span className={`text-xs px-2 py-1 rounded ${settings.environment === 'production' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}`}>
                   {settings.environment === 'production' ? "Produção" : "Sandbox"}
                 </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm">URL Base Ativa</span>
+                <code className="text-xs px-2 py-1 rounded bg-muted font-mono">
+                  {activeBaseUrl}
+                </code>
               </div>
               
               <div className="flex items-center justify-between">

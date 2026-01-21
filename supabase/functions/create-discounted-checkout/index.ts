@@ -7,6 +7,10 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
+// Default API URLs
+const DEFAULT_SANDBOX_URL = "https://api-sandbox.asaas.com/v3";
+const DEFAULT_PRODUCTION_URL = "https://api.asaas.com/v3";
+
 // Helper functions
 const cleanCPF = (cpf: string | null): string => {
   if (!cpf) return "";
@@ -47,6 +51,7 @@ async function getOrCreateAsaasCustomer(
   }
 ): Promise<{ id: string; error?: string }> {
   console.log("🔍 Buscando/criando customer no Asaas...");
+  console.log(`📡 API URL: ${asaasApiUrl}`);
   
   if (customerData.cpfCnpj) {
     try {
@@ -106,7 +111,7 @@ async function getOrCreateAsaasCustomer(
   }
 }
 
-console.log("🔧 create-discounted-checkout function loaded - Using /v3/payments API");
+console.log("🔧 create-discounted-checkout v34 - Using /v3/payments API with configurable URLs");
 
 serve(async (req) => {
   const method = req.method;
@@ -117,7 +122,7 @@ serve(async (req) => {
 
   if (method === "GET") {
     return new Response(
-      JSON.stringify({ ok: true, function: "create-discounted-checkout", api: "/v3/payments" }),
+      JSON.stringify({ ok: true, function: "create-discounted-checkout", version: "v34", api: "/v3/payments" }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -137,7 +142,7 @@ serve(async (req) => {
   );
 
   try {
-    console.log("🚀 Create Discounted Checkout - Started");
+    console.log("🚀 Create Discounted Checkout v34 - Started");
 
     let body;
     try {
@@ -180,10 +185,10 @@ serve(async (req) => {
     const userId = claimsData.claims.sub as string;
     console.log(`✅ Authenticated user: ${userId}`);
 
-    // Get payment settings
+    // Get payment settings including custom URLs
     const { data: paymentSettings, error: settingsError } = await serviceClient
       .from("payment_settings")
-      .select("environment, asaas_api_key_sandbox, asaas_api_key_production")
+      .select("environment, asaas_api_key_sandbox, asaas_api_key_production, asaas_base_url_sandbox, asaas_base_url_production")
       .maybeSingle();
 
     if (settingsError || !paymentSettings) {
@@ -210,9 +215,13 @@ serve(async (req) => {
       });
     }
 
+    // Use custom URL from settings, or fall back to defaults
     const asaasApiUrl = environment === "production"
-      ? "https://api.asaas.com/v3"
-      : "https://api-sandbox.asaas.com/v3";
+      ? ((paymentSettings as any).asaas_base_url_production || DEFAULT_PRODUCTION_URL)
+      : ((paymentSettings as any).asaas_base_url_sandbox || DEFAULT_SANDBOX_URL);
+
+    console.log(`🌐 Environment: ${environment}`);
+    console.log(`🔗 API URL: ${asaasApiUrl}`);
 
     // Get enrollment with course and pre-enrollment data
     const { data: enrollment, error: enrollmentError } = await serviceClient
@@ -335,7 +344,8 @@ serve(async (req) => {
     // Billing type: UNDEFINED in production (all methods), PIX in sandbox
     const billingType = environment === "production" ? "UNDEFINED" : "PIX";
 
-    // Create payment
+    // Create payment using /v3/payments API
+    // IMPORTANT: Using "billingType" (singular) NOT "billingTypes" (plural)
     const paymentData = {
       customer: customerId,
       billingType: billingType,
@@ -347,6 +357,7 @@ serve(async (req) => {
     };
 
     console.log("📤 Payment payload:", JSON.stringify(paymentData));
+    console.log(`📡 POST ${asaasApiUrl}/payments`);
 
     let paymentResponse = await fetch(`${asaasApiUrl}/payments`, {
       method: "POST",
