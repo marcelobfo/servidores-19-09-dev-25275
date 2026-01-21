@@ -38,6 +38,7 @@ import UsersManagementPage from "./pages/admin/UsersManagementPage";
 import DiscountsReportPage from "./pages/admin/DiscountsReportPage";
 import OrganTypesPage from "./pages/admin/OrganTypesPage";
 import DocumentTemplatesPage from "./pages/admin/DocumentTemplatesPage";
+import CheckoutDebugPage from "./pages/debug/CheckoutDebugPage";
 
 const queryClient = new QueryClient();
 
@@ -253,6 +254,23 @@ const App = () => (
                   </AuthGuard>
                 } 
               />
+              
+              {/* Debug route */}
+              <Route 
+                path="/debug/checkout" 
+                element={
+                  <AuthGuard>
+                    <div className="min-h-screen bg-background flex flex-col">
+                      <Header />
+                      <main className="flex-1">
+                        <CheckoutDebugPage />
+                      </main>
+                      <Footer />
+                    </div>
+                  </AuthGuard>
+                } 
+              />
+              
               <Route path="*" element={
                 <div className="min-h-screen bg-background flex flex-col">
                   <Header />
