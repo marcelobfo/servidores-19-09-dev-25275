@@ -236,8 +236,16 @@ serve(async (req) => {
     // Build checkout data
     const origin = req.headers.get("origin") || "https://6be1b209-32ae-497f-88c1-5af12f9e3bfe.lovableproject.com";
 
+    // Usar apenas PIX no Sandbox (evita erro de billingTypes não habilitados)
+    // Em Produção, oferecer todas as opções após completar Dados Comerciais no Asaas
+    const allowedBillingTypes = environment === "production" 
+      ? ["CREDIT_CARD", "PIX", "BOLETO"] 
+      : ["PIX"];
+
+    console.log(`🔄 Ambiente: ${environment} - billingTypes: ${JSON.stringify(allowedBillingTypes)}`);
+
     const checkoutData = {
-      billingTypes: ["CREDIT_CARD", "PIX", "BOLETO"],
+      billingTypes: allowedBillingTypes,
       chargeTypes: ["DETACHED"],
       minutesToExpire: 60,
       callback: {
