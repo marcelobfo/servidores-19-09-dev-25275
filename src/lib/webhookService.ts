@@ -48,31 +48,47 @@ export const sendWebhook = async (
     const responseText = await response.text();
     const success = response.ok;
 
-    // Log the webhook attempt
-    await supabase.from('webhook_logs').insert({
-      webhook_url: webhookUrl,
-      event_type: payload.event,
-      payload: payload as any,
-      response_status: response.status,
-      response_body: responseText,
-      success: success,
-      enrollment_id: enrollmentId,
-    });
+    // Log the webhook attempt (non-critical)
+    try {
+      const { error: logError } = await supabase.from('webhook_logs').insert({
+        webhook_url: webhookUrl,
+        event_type: payload.event,
+        payload: payload as any,
+        response_status: response.status,
+        response_body: responseText,
+        success: success,
+        enrollment_id: enrollmentId,
+      });
+
+      if (logError) {
+        console.warn('Webhook log insert failed (non-critical):', logError);
+      }
+    } catch (logCrash) {
+      console.warn('Webhook log insert crashed (non-critical):', logCrash);
+    }
 
     return success;
   } catch (error) {
     console.error('Webhook error:', error);
     
-    // Log the failed attempt
-    await supabase.from('webhook_logs').insert({
-      webhook_url: webhookUrl,
-      event_type: payload.event,
-      payload: payload as any,
-      response_status: 0,
-      response_body: error instanceof Error ? error.message : 'Unknown error',
-      success: false,
-      enrollment_id: enrollmentId,
-    });
+    // Log the failed attempt (non-critical)
+    try {
+      const { error: logError } = await supabase.from('webhook_logs').insert({
+        webhook_url: webhookUrl,
+        event_type: payload.event,
+        payload: payload as any,
+        response_status: 0,
+        response_body: error instanceof Error ? error.message : 'Unknown error',
+        success: false,
+        enrollment_id: enrollmentId,
+      });
+
+      if (logError) {
+        console.warn('Webhook log insert failed (non-critical):', logError);
+      }
+    } catch (logCrash) {
+      console.warn('Webhook log insert crashed (non-critical):', logCrash);
+    }
 
     return false;
   }
