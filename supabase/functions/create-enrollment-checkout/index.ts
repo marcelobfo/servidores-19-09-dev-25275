@@ -59,30 +59,66 @@ serve(async (req) => {
 
     // Check if user is authenticated
     const authHeader = req.headers.get("Authorization");
-    console.log("Authorization header present:", !!authHeader);
+    console.log("🔐 Authorization header present:", !!authHeader);
+    console.log("🔐 Authorization header prefix:", authHeader?.substring(0, 15) || "null");
 
     if (!authHeader) {
-      console.error("No authorization header provided");
+      console.error("❌ No authorization header provided");
       return new Response(JSON.stringify({ error: "Authentication required" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Extract token from Bearer string
-    const token = authHeader.replace("Bearer ", "");
-    console.log("Token extracted:", token.substring(0, 20) + "...");
+    // Robust token extraction - handles "Bearer", "bearer", extra spaces
+    const headerLower = authHeader.toLowerCase();
+    if (!headerLower.startsWith("bearer ")) {
+      console.error("❌ Malformed Authorization header - does not start with 'Bearer '");
+      console.error("Header starts with:", authHeader.substring(0, 20));
+      return new Response(
+        JSON.stringify({ 
+          error: "Malformed Authorization header",
+          hint: "Expected format: 'Bearer <token>'"
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // Extract token using split to handle any whitespace variations
+    const parts = authHeader.split(/\s+/);
+    const token = parts[1]?.trim();
+    
+    if (!token || token.split('.').length !== 3) {
+      console.error("❌ Invalid JWT format - token parts:", token?.split('.').length || 0);
+      return new Response(
+        JSON.stringify({ 
+          error: "Invalid token format",
+          hint: "JWT must have 3 parts separated by dots"
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    console.log("🔐 Token extracted - length:", token.length, "parts:", token.split('.').length);
 
     // Validate JWT using getClaims() - works without active session lookup
     // This validates the token locally and extracts claims without network call
     const { data: claimsData, error: authError } = await supabaseClient.auth.getClaims(token);
 
     if (authError || !claimsData?.claims) {
-      console.error("Authentication error:", authError?.message || "No claims found");
+      console.error("❌ getClaims error:", JSON.stringify(authError || { message: "No claims found" }));
       return new Response(
         JSON.stringify({
           error: "Invalid authentication",
           details: authError?.message || "Token validation failed",
+          code: (authError as any)?.code || "AUTH_ERROR",
+          hint: "Token may be expired or invalid"
         }),
         {
           status: 401,
@@ -94,7 +130,8 @@ serve(async (req) => {
     // Extract user ID from claims
     const userId = claimsData.claims.sub as string;
     if (!userId) {
-      console.error("No user ID (sub) in token claims");
+      console.error("❌ No user ID (sub) in token claims");
+      console.error("Claims received:", JSON.stringify(claimsData.claims));
       return new Response(
         JSON.stringify({ error: "Invalid token - no user ID" }),
         {
@@ -105,6 +142,7 @@ serve(async (req) => {
     }
 
     console.log(`✅ Authenticated user: ${userId}`);
+    console.log(`✅ Token expires at: ${new Date((claimsData.claims.exp as number) * 1000).toISOString()}`);
     
     // Create a user-like object for compatibility with rest of code
     const user = { id: userId, email: claimsData.claims.email as string };
