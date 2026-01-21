@@ -171,7 +171,8 @@ serve(async (req) => {
           name,
           asaas_title,
           pre_enrollment_fee,
-          enrollment_fee
+          enrollment_fee,
+          discounted_enrollment_fee
         )
       `,
       )
@@ -398,110 +399,133 @@ serve(async (req) => {
     }
 
     // Determine which fee to use based on checkout type
+    const originalEnrollmentFee = preEnrollment.courses.enrollment_fee || 0;
+    const discountedFeeFromDB = preEnrollment.courses.discounted_enrollment_fee;
+    const preEnrollmentFeeDB = preEnrollment.courses.pre_enrollment_fee || 0;
+    
     let checkoutFee = isEnrollmentCheckout
-      ? preEnrollment.courses.enrollment_fee || 0
-      : preEnrollment.courses.pre_enrollment_fee || 0;
+      ? originalEnrollmentFee
+      : preEnrollmentFeeDB;
 
     const feeType = isEnrollmentCheckout ? "matrícula" : "pré-matrícula";
     let preEnrollmentDiscount = 0;
 
-    // Se for checkout de matrícula, aplicar desconto do TOTAL já pago na pré-matrícula
+    // ========== ESTRATÉGIA DE DESCONTO PARA MATRÍCULA ==========
+    // PRIORIDADE:
+    // 1. discounted_enrollment_fee do banco (mais confiável, pré-calculado pelo admin)
+    // 2. Pagamentos confirmados na tabela payments
+    // 3. Auto-heal para aprovações manuais
+    // ============================================================
     if (isEnrollmentCheckout) {
-      console.log("🔍 Buscando TODOS os pagamentos de pré-matrícula confirmados...");
+      console.log("📊 ========== CÁLCULO DO DESCONTO DE MATRÍCULA ==========");
+      console.log(`   📋 VALOR ORIGINAL DA MATRÍCULA: R$ ${originalEnrollmentFee}`);
+      console.log(`   📋 VALOR COM DESCONTO (DB): R$ ${discountedFeeFromDB ?? 'NÃO DEFINIDO'}`);
+      console.log(`   📋 TAXA DE PRÉ-MATRÍCULA: R$ ${preEnrollmentFeeDB}`);
+      console.log(`   📋 Status pré-matrícula: ${preEnrollment.status}`);
+      console.log(`   📋 Aprovação manual: ${preEnrollment.manual_approval}`);
       
-      // REGRA DE OURO: Somar TODOS os pagamentos confirmados, não só o último
-      let { data: confirmedPayments, error: paymentsError } = await serviceClient
-        .from("payments")
-        .select("amount, status, created_at")
-        .eq("pre_enrollment_id", pre_enrollment_id)
-        .eq("kind", "pre_enrollment")
-        .in("status", ["confirmed", "received"]);
-
-      if (paymentsError) {
-        console.error("❌ Erro ao buscar pagamentos:", paymentsError);
-      }
-
-      // SOMAR todos os pagamentos confirmados
-      let prePaidTotal = confirmedPayments?.reduce(
-        (sum, p) => sum + Number(p.amount || 0),
-        0
-      ) ?? 0;
-
-      console.log("📊 ========== REGRA DE OURO - CÁLCULO DO DESCONTO ==========");
-      console.log(`   💳 Pagamentos encontrados: ${confirmedPayments?.length || 0}`);
-      confirmedPayments?.forEach((p, i) => {
-        console.log(`      [${i+1}] R$ ${p.amount} - status: ${p.status} - data: ${p.created_at}`);
-      });
-      console.log(`   📊 VALOR DA MATRÍCULA: R$ ${checkoutFee}`);
-      console.log(`   💰 TOTAL PRÉ PAGO: R$ ${prePaidTotal}`);
-
-      // ========== AUTO-HEAL: Criar pagamento se manual_approval=true e não houver pagamento ==========
-      const preEnrollmentFee = preEnrollment.courses?.pre_enrollment_fee || 0;
-      if (
-        prePaidTotal === 0 &&
-        preEnrollment.manual_approval === true &&
-        preEnrollment.status === 'payment_confirmed' &&
-        preEnrollmentFee > 0
-      ) {
-        console.log("🔧 AUTO-HEAL: Aprovação manual detectada sem registro de pagamento. Criando...");
+      // MÉTODO 1: Usar discounted_enrollment_fee se disponível e pré-matrícula confirmada
+      const preEnrollmentConfirmed = preEnrollment.status === 'payment_confirmed' || 
+                                      preEnrollment.status === 'enrolled';
+      
+      if (discountedFeeFromDB && discountedFeeFromDB > 0 && preEnrollmentConfirmed) {
+        console.log(`   ✅ USANDO VALOR PRÉ-CALCULADO DO BANCO: R$ ${discountedFeeFromDB}`);
+        preEnrollmentDiscount = originalEnrollmentFee - discountedFeeFromDB;
+        checkoutFee = Math.max(discountedFeeFromDB, 5);
+        console.log(`   ✂️ DESCONTO IMPLÍCITO: R$ ${preEnrollmentDiscount}`);
+        console.log(`   ✅ VALOR FINAL DO CHECKOUT: R$ ${checkoutFee}`);
+      } else {
+        // MÉTODO 2: Buscar pagamentos confirmados na tabela payments
+        console.log("🔍 Buscando pagamentos de pré-matrícula confirmados na tabela payments...");
         
-        // Verificar se já existe para evitar duplicação
-        const { data: existingHeal } = await serviceClient
+        let { data: confirmedPayments, error: paymentsError } = await serviceClient
           .from("payments")
-          .select("id")
+          .select("amount, status, created_at")
           .eq("pre_enrollment_id", pre_enrollment_id)
           .eq("kind", "pre_enrollment")
-          .in("status", ["confirmed", "received"])
-          .maybeSingle();
+          .in("status", ["confirmed", "received"]);
 
-        if (!existingHeal) {
-          const { data: healedPayment, error: healError } = await serviceClient
-            .from("payments")
-            .insert({
-              pre_enrollment_id: pre_enrollment_id,
-              amount: preEnrollmentFee,
-              currency: "BRL",
-              status: "confirmed",
-              kind: "pre_enrollment",
-              asaas_payment_id: `autoheal_${pre_enrollment_id}_${Date.now()}`,
-              paid_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-          if (healError) {
-            console.error("❌ AUTO-HEAL: Falha ao criar pagamento:", healError);
-          } else {
-            console.log("✅ AUTO-HEAL: Pagamento criado com sucesso:", healedPayment.id);
-            // Recalcular prePaidTotal
-            prePaidTotal = preEnrollmentFee;
-            console.log(`   💰 NOVO TOTAL PRÉ PAGO (após auto-heal): R$ ${prePaidTotal}`);
-          }
-        } else {
-          console.log("⏭️ AUTO-HEAL: Pagamento já existe, pulando criação");
+        if (paymentsError) {
+          console.error("❌ Erro ao buscar pagamentos:", paymentsError);
         }
-      }
-      // ========== FIM AUTO-HEAL ==========
 
-      if (prePaidTotal > 0) {
-        preEnrollmentDiscount = prePaidTotal;
-        const originalFee = checkoutFee;
-        checkoutFee = Math.max(checkoutFee - prePaidTotal, 5); // Mínimo R$ 5,00 do Asaas
+        let prePaidTotal = confirmedPayments?.reduce(
+          (sum, p) => sum + Number(p.amount || 0),
+          0
+        ) ?? 0;
+
+        console.log(`   💳 Pagamentos encontrados: ${confirmedPayments?.length || 0}`);
+        confirmedPayments?.forEach((p, i) => {
+          console.log(`      [${i+1}] R$ ${p.amount} - status: ${p.status} - data: ${p.created_at}`);
+        });
+        console.log(`   💰 TOTAL PRÉ PAGO: R$ ${prePaidTotal}`);
+
+        // MÉTODO 3: AUTO-HEAL para aprovações manuais sem registro de pagamento
+        if (
+          prePaidTotal === 0 &&
+          preEnrollment.manual_approval === true &&
+          preEnrollmentConfirmed &&
+          preEnrollmentFeeDB > 0
+        ) {
+          console.log("🔧 AUTO-HEAL: Aprovação manual detectada sem registro de pagamento.");
+          
+          const { data: existingHeal } = await serviceClient
+            .from("payments")
+            .select("id")
+            .eq("pre_enrollment_id", pre_enrollment_id)
+            .eq("kind", "pre_enrollment")
+            .in("status", ["confirmed", "received"])
+            .maybeSingle();
+
+          if (!existingHeal) {
+            const { data: healedPayment, error: healError } = await serviceClient
+              .from("payments")
+              .insert({
+                pre_enrollment_id: pre_enrollment_id,
+                amount: preEnrollmentFeeDB,
+                currency: "BRL",
+                status: "confirmed",
+                kind: "pre_enrollment",
+                asaas_payment_id: `autoheal_${pre_enrollment_id}_${Date.now()}`,
+                paid_at: new Date().toISOString()
+              })
+              .select()
+              .single();
+
+            if (healError) {
+              console.error("❌ AUTO-HEAL: Falha ao criar pagamento:", healError);
+            } else {
+              console.log("✅ AUTO-HEAL: Pagamento criado:", healedPayment.id);
+              prePaidTotal = preEnrollmentFeeDB;
+            }
+          }
+        }
         
-        console.log(`   ✂️ DESCONTO APLICADO: R$ ${preEnrollmentDiscount}`);
-        console.log(`   ✅ VALOR FINAL COBRADO: R$ ${checkoutFee}`);
-      } else {
-        console.log("ℹ️ Nenhum pagamento de pré-matrícula confirmado encontrado - sem desconto");
+        // MÉTODO 4 (FALLBACK): Se pré-matrícula confirmada mas sem pagamento, usar taxa de pré-matrícula
+        if (prePaidTotal === 0 && preEnrollmentConfirmed && preEnrollmentFeeDB > 0) {
+          console.log("⚠️ FALLBACK: Pré-matrícula confirmada sem pagamento registrado.");
+          console.log(`   Usando taxa de pré-matrícula como crédito: R$ ${preEnrollmentFeeDB}`);
+          prePaidTotal = preEnrollmentFeeDB;
+        }
+
+        if (prePaidTotal > 0) {
+          preEnrollmentDiscount = prePaidTotal;
+          checkoutFee = Math.max(originalEnrollmentFee - prePaidTotal, 5);
+          console.log(`   ✂️ DESCONTO APLICADO: R$ ${preEnrollmentDiscount}`);
+          console.log(`   ✅ VALOR FINAL COBRADO: R$ ${checkoutFee}`);
+        } else {
+          console.log("ℹ️ Nenhum crédito de pré-matrícula encontrado - cobrando valor cheio");
+        }
       }
       console.log("📊 ========================================================");
     }
 
     console.log(`Checkout fee for ${feeType}:`, checkoutFee);
 
-    // ========== OVERRIDE AMOUNT: Usar valor passado diretamente ==========
+    // ========== OVERRIDE AMOUNT (mantido para compatibilidade) ==========
     if (hasOverrideAmount) {
       console.log(`🔒 OVERRIDE: Substituindo checkoutFee de R$ ${checkoutFee} por R$ ${overrideAmountNumber}`);
-      checkoutFee = Math.max(overrideAmountNumber, 5); // Mínimo R$ 5,00 Asaas
+      checkoutFee = Math.max(overrideAmountNumber, 5);
       console.log(`🔒 OVERRIDE: Valor final do checkout: R$ ${checkoutFee}`);
     }
     // ======================================================================
