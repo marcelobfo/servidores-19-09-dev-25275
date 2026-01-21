@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,9 @@ import { supabase } from "@/integrations/supabase/client";
 
 export default function Auth() {
   const { user, signIn, signUp } = useAuth();
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get("tab") === "signup" ? "signup" : "login";
+  
   const [loading, setLoading] = useState(false);
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [signupData, setSignupData] = useState({ email: "", password: "", fullName: "" });
@@ -52,16 +55,38 @@ export default function Auth() {
     const { error } = await signUp(signupData.email, signupData.password, signupData.fullName);
 
     if (error) {
+      let errorMessage = error.message;
+      let errorTitle = "Erro no cadastro";
+
+      // Detectar erros específicos do Supabase
+      if (error.message.includes("already registered") || 
+          error.message.includes("User already registered") ||
+          error.message.includes("already been registered")) {
+        errorTitle = "Email já cadastrado";
+        errorMessage = "Este email já está em uso. Tente fazer login ou use outro email.";
+      } else if (error.message.includes("Password") || error.message.includes("password")) {
+        errorTitle = "Senha inválida";
+        errorMessage = "A senha deve ter pelo menos 6 caracteres.";
+      } else if (error.message.includes("Invalid email") || error.message.includes("invalid email")) {
+        errorTitle = "Email inválido";
+        errorMessage = "Por favor, insira um email válido.";
+      } else if (error.message.includes("rate limit") || error.message.includes("too many")) {
+        errorTitle = "Muitas tentativas";
+        errorMessage = "Por favor, aguarde alguns minutos antes de tentar novamente.";
+      }
+
       toast({
-        title: "Erro no cadastro",
-        description: error.message,
+        title: errorTitle,
+        description: errorMessage,
         variant: "destructive",
       });
     } else {
       toast({
-        title: "Cadastro realizado",
+        title: "Cadastro realizado com sucesso! ✓",
         description: "Verifique seu email para confirmar a conta.",
       });
+      // Limpar formulário após sucesso
+      setSignupData({ email: "", password: "", fullName: "" });
     }
 
     setLoading(false);
@@ -101,7 +126,7 @@ export default function Auth() {
           <CardDescription>Acesse sua conta ou crie uma nova</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="login" className="w-full">
+          <Tabs defaultValue={defaultTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Entrar</TabsTrigger>
               <TabsTrigger value="signup">Cadastrar</TabsTrigger>
