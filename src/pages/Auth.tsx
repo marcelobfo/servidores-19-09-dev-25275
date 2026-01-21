@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { Navigate, useSearchParams } from "react-router-dom";
+import { Navigate, useSearchParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,10 +9,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { GraduationCap, Sparkles } from "lucide-react";
 
 export default function Auth() {
   const { user, signIn, signUp } = useAuth();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const defaultTab = searchParams.get("tab") === "signup" ? "signup" : "login";
   
   const [loading, setLoading] = useState(false);
@@ -81,12 +83,8 @@ export default function Auth() {
         variant: "destructive",
       });
     } else {
-      toast({
-        title: "Cadastro realizado com sucesso! ✓",
-        description: "Verifique seu email para confirmar a conta.",
-      });
-      // Limpar formulário após sucesso
-      setSignupData({ email: "", password: "", fullName: "" });
+      // Redirecionar para página de confirmação com email
+      navigate(`/email-sent?email=${encodeURIComponent(signupData.email)}&type=signup`);
     }
 
     setLoading(false);
@@ -107,11 +105,9 @@ export default function Auth() {
         variant: "destructive",
       });
     } else {
-      toast({
-        title: "Email enviado",
-        description: "Verifique sua caixa de entrada para redefinir sua senha.",
-      });
       setResetDialogOpen(false);
+      // Redirecionar para página de confirmação
+      navigate(`/email-sent?email=${encodeURIComponent(resetEmail)}&type=reset`);
       setResetEmail("");
     }
 
@@ -121,9 +117,19 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle>Sistema de Matrícula</CardTitle>
-          <CardDescription>Acesse sua conta ou crie uma nova</CardDescription>
+        <CardHeader className="text-center space-y-3">
+          <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+            <GraduationCap className="w-8 h-8 text-primary" />
+          </div>
+          <div>
+            <CardTitle className="text-2xl flex items-center justify-center gap-2">
+              Bem-vindo(a)!
+              <Sparkles className="w-5 h-5 text-accent-foreground" />
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Acesse sua conta ou crie uma nova para começar
+            </CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue={defaultTab} className="w-full">
@@ -166,9 +172,12 @@ export default function Auth() {
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Recuperar Senha</DialogTitle>
-                      <DialogDescription>
-                        Digite seu email para receber um link de redefinição de senha.
+                      <div className="mx-auto w-12 h-12 bg-muted rounded-full flex items-center justify-center mb-2">
+                        <span className="text-2xl">🔐</span>
+                      </div>
+                      <DialogTitle className="text-center">Esqueceu sua senha?</DialogTitle>
+                      <DialogDescription className="text-center">
+                        Não se preocupe! Digite seu email abaixo e enviaremos um link seguro para você criar uma nova senha.
                       </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handlePasswordReset} className="space-y-4">

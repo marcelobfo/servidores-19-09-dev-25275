@@ -39,7 +39,7 @@ import DiscountsReportPage from "./pages/admin/DiscountsReportPage";
 import OrganTypesPage from "./pages/admin/OrganTypesPage";
 import DocumentTemplatesPage from "./pages/admin/DocumentTemplatesPage";
 import CheckoutDebugPage from "./pages/debug/CheckoutDebugPage";
-
+import EmailSent from "./pages/EmailSent";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -102,6 +102,17 @@ const App = () => (
               {/* Legal pages */}
               <Route path="/privacy-policy" element={<PrivacyPolicy />} />
               <Route path="/terms-of-use" element={<TermsOfUse />} />
+              
+              {/* Email confirmation page */}
+              <Route path="/email-sent" element={
+                <div className="min-h-screen bg-background flex flex-col">
+                  <Header />
+                  <main className="flex-1 container mx-auto px-4 py-8">
+                    <EmailSent />
+                  </main>
+                  <Footer />
+                </div>
+              } />
               <Route 
                 path="/pre-enrollment" 
                 element={
