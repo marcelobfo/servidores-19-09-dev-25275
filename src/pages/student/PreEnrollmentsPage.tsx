@@ -600,12 +600,15 @@ export function PreEnrollmentsPage() {
   };
 
   // Função específica para checkout COM DESCONTO
-  // ESTRATÉGIA: Tenta primeiro via webhook N8N (se configurado), senão usa create-enrollment-checkout com override_amount
+  // ESTRATÉGIA: Usa SEMPRE create-enrollment-checkout com override_amount (mais confiável)
+  // O webhook N8N é opcional e pode ser habilitado nas configurações do sistema
   const handleEnrollmentWithDiscount = async (preEnrollment: PreEnrollment, discountedAmount: number) => {
     try {
+      console.log('🎟️ [ENROLLMENT-DISCOUNT] ========================================');
       console.log('🎟️ [ENROLLMENT-DISCOUNT] Iniciando checkout COM DESCONTO');
       console.log('📋 Pré-matrícula ID:', preEnrollment.id);
-      console.log('💰 Valor com desconto:', discountedAmount);
+      console.log('💰 Valor com desconto solicitado:', discountedAmount);
+      console.log('🎟️ [ENROLLMENT-DISCOUNT] ========================================');
 
       toast.info("Gerando checkout com desconto...");
 
@@ -635,11 +638,17 @@ export function PreEnrollmentsPage() {
         
         enrollmentId = existingEnrollment.id;
         
-        // Atualizar enrollment_amount
-        await supabase
+        // Atualizar enrollment_amount para garantir consistência
+        const { error: updateError } = await supabase
           .from("enrollments")
           .update({ enrollment_amount: discountedAmountNumber })
           .eq("id", existingEnrollment.id);
+          
+        if (updateError) {
+          console.warn('⚠️ [ENROLLMENT-DISCOUNT] Erro ao atualizar enrollment_amount:', updateError);
+        } else {
+          console.log('✅ [ENROLLMENT-DISCOUNT] enrollment_amount atualizado para:', discountedAmountNumber);
+        }
       } else {
         // Criar nova matrícula com o valor COM DESCONTO
         const { data: newEnrollment, error: enrollmentError } = await supabase
@@ -661,125 +670,58 @@ export function PreEnrollmentsPage() {
         }
 
         enrollmentId = newEnrollment.id;
-        console.log('✅ [ENROLLMENT-DISCOUNT] Nova matrícula criada:', enrollmentId);
+        console.log('✅ [ENROLLMENT-DISCOUNT] Nova matrícula criada:', enrollmentId, 'com valor:', discountedAmountNumber);
       }
 
-      // Primeiro, tentar via webhook N8N (se configurado)
-      let webhookSuccess = false;
-      let checkoutUrl: string | null = null;
+      // Usar SEMPRE o create-enrollment-checkout com override_amount (mais confiável)
+      console.log('🔄 [ENROLLMENT-DISCOUNT] Chamando create-enrollment-checkout com override_amount:', discountedAmountNumber);
+      
+      const requestBody = {
+        pre_enrollment_id: preEnrollment.id,
+        enrollment_id: enrollmentId,
+        override_amount: discountedAmountNumber,
+        force_recalculate: true
+      };
+      
+      console.log('📤 [ENROLLMENT-DISCOUNT] Request body:', JSON.stringify(requestBody, null, 2));
+      
+      const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-enrollment-checkout', {
+        body: requestBody
+      });
 
-      try {
-        console.log('🔄 [ENROLLMENT-DISCOUNT] Tentando via webhook N8N...');
-        
-        // Calcular carga horária efetiva
-        const durationHours = preEnrollment.courses.duration_hours || 390;
-        const hoursMultiplier = preEnrollment.organ_types?.hours_multiplier || 1;
-        const effectiveHours = preEnrollment.custom_hours || Math.round(durationHours * hoursMultiplier);
-
-        // Montar payload para a Edge Function (ela adiciona Asaas config internamente)
-        const webhookPayload = {
-          // Dados do usuário/aluno
-          student: {
-            id: user?.id,
-            full_name: preEnrollment.full_name,
-            email: preEnrollment.email,
-            phone: preEnrollment.phone,
-            cpf: preEnrollment.cpf,
-            organization: preEnrollment.organization,
-          },
-          // Dados do curso
-          course: {
-            id: preEnrollment.courses.id,
-            name: preEnrollment.courses.name,
-            duration_hours: durationHours,
-            effective_hours: effectiveHours,
-            pre_enrollment_fee: preEnrollment.courses.pre_enrollment_fee,
-            enrollment_fee: preEnrollment.courses.enrollment_fee,
-            discounted_enrollment_fee: preEnrollment.courses.discounted_enrollment_fee,
-          },
-          // Dados da pré-matrícula
-          pre_enrollment: {
-            id: preEnrollment.id,
-            status: preEnrollment.status,
-            organ_type: preEnrollment.organ_types?.name,
-            license_start_date: preEnrollment.license_start_date,
-            license_end_date: preEnrollment.license_end_date,
-            created_at: preEnrollment.created_at,
-          },
-          // Dados da matrícula
-          enrollment: {
-            id: enrollmentId,
-          },
-          // Dados de pagamento
-          payment: {
-            discounted_amount: discountedAmountNumber,
-            original_amount: preEnrollment.courses.enrollment_fee || 0,
-            credit_applied: preEnrollmentPayments[preEnrollment.id] || 0,
-          },
-          // Metadados
-          timestamp: new Date().toISOString(),
-          event_type: 'discount_checkout_request',
-        };
-
-        console.log('📤 [ENROLLMENT-DISCOUNT] Payload webhook:', JSON.stringify(webhookPayload, null, 2));
-
-        // Chamar Edge Function proxy (resolve CORS)
-        const { data: webhookData, error: webhookError } = await supabase.functions.invoke('call-discount-webhook', {
-          body: webhookPayload,
-        });
-
-        if (!webhookError && webhookData) {
-          console.log('✅ [ENROLLMENT-DISCOUNT] Resposta webhook:', JSON.stringify(webhookData));
-          checkoutUrl = webhookData?.checkout_url || webhookData?.url || webhookData?.checkoutUrl;
-          
-          if (checkoutUrl) {
-            webhookSuccess = true;
-            console.log('✅ [ENROLLMENT-DISCOUNT] Webhook retornou checkout_url:', checkoutUrl);
-          } else if (webhookData?.error) {
-            console.warn('⚠️ [ENROLLMENT-DISCOUNT] Webhook retornou erro:', webhookData.error);
-          }
-        } else {
-          console.warn('⚠️ [ENROLLMENT-DISCOUNT] Webhook falhou ou não configurado:', webhookError?.message);
-        }
-      } catch (webhookErr) {
-        console.warn('⚠️ [ENROLLMENT-DISCOUNT] Erro ao chamar webhook, usando fallback:', webhookErr);
+      console.log('📥 [ENROLLMENT-DISCOUNT] Response:', JSON.stringify(checkoutData, null, 2));
+      
+      if (checkoutError) {
+        console.error('❌ [ENROLLMENT-DISCOUNT] Erro na Edge Function:', checkoutError);
+        throw new Error(checkoutError.message || 'Erro ao criar checkout');
       }
 
-      // Se webhook não funcionou, usar create-enrollment-checkout com override_amount (fallback)
-      if (!webhookSuccess || !checkoutUrl) {
-        console.log('🔄 [ENROLLMENT-DISCOUNT] Usando fallback: create-enrollment-checkout com override_amount');
-        
-        const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-enrollment-checkout', {
-          body: {
-            pre_enrollment_id: preEnrollment.id,
-            enrollment_id: enrollmentId,
-            override_amount: discountedAmountNumber,
-            force_recalculate: true
-          }
-        });
+      if (!checkoutData) {
+        console.error('❌ [ENROLLMENT-DISCOUNT] Resposta vazia da Edge Function');
+        throw new Error('Resposta vazia do servidor');
+      }
 
-        if (checkoutError) {
-          console.error('❌ [ENROLLMENT-DISCOUNT] Erro no fallback:', checkoutError);
-          throw checkoutError;
-        }
-
-        console.log('✅ [ENROLLMENT-DISCOUNT] Resposta fallback:', JSON.stringify(checkoutData));
-        checkoutUrl = checkoutData?.checkout_url;
-        
-        if (!checkoutUrl) {
-          throw new Error('Nenhum checkout_url retornado');
-        }
+      const checkoutUrl = checkoutData?.checkout_url;
+      const appliedAmount = checkoutData?.applied_amount || discountedAmountNumber;
+      
+      if (!checkoutUrl) {
+        console.error('❌ [ENROLLMENT-DISCOUNT] Nenhum checkout_url na resposta:', checkoutData);
+        throw new Error(checkoutData?.error || 'Nenhum checkout_url retornado');
       }
 
       // Sucesso - abrir checkout
-      console.log(`✅ [ENROLLMENT-DISCOUNT] Checkout com desconto criado: ${checkoutUrl}`);
-      toast.success(`Checkout criado (R$ ${discountedAmountNumber.toFixed(2)})! Redirecionando...`);
+      console.log(`✅ [ENROLLMENT-DISCOUNT] Checkout com desconto criado com sucesso!`);
+      console.log(`   🔗 URL: ${checkoutUrl}`);
+      console.log(`   💰 Valor aplicado: R$ ${appliedAmount}`);
+      console.log(`   🔄 Reutilizado: ${checkoutData?.reused ? 'Sim' : 'Não'}`);
+      
+      toast.success(`Checkout com desconto criado (R$ ${Number(appliedAmount).toFixed(2)})! Redirecionando...`);
       
       // Tentar abrir em nova aba, senão redirecionar
       const newWindow = window.open(checkoutUrl, '_blank');
       if (!newWindow) {
         // Popup bloqueado - mostrar botão manual ou redirecionar
-        toast.info(`Checkout R$ ${discountedAmountNumber.toFixed(2)} - clique para abrir`, {
+        toast.info(`Checkout R$ ${Number(appliedAmount).toFixed(2)} - clique para abrir`, {
           action: {
             label: "Abrir Checkout",
             onClick: () => window.open(checkoutUrl!, '_blank')
@@ -793,8 +735,9 @@ export function PreEnrollmentsPage() {
         }, 1500);
       }
     } catch (error) {
-      console.error("Error creating discounted enrollment:", error);
-      toast.error("Erro ao criar checkout com desconto. Tente novamente.");
+      console.error("❌ [ENROLLMENT-DISCOUNT] Erro fatal:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast.error(`Erro ao criar checkout com desconto: ${errorMessage}`);
     }
   };
 
