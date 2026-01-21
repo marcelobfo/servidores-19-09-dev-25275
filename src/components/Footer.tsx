@@ -204,6 +204,17 @@ export const Footer = () => {
         <div className="pt-8 border-t text-center text-sm text-muted-foreground">
           <p>© {new Date().getFullYear()} {footerData.institution_name}. Todos os direitos reservados.</p>
           <p className="mt-2">CNPJ: {footerData.institution_cnpj}</p>
+          <p className="mt-2">
+            Construído por{" "}
+            <a 
+              href="https://technedigital.com.br" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary hover:underline font-medium"
+            >
+              Techne Digital
+            </a>
+          </p>
         </div>
       </div>
     </footer>

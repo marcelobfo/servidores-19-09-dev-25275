@@ -189,9 +189,14 @@ export const Header = () => {
                 </DropdownMenu>
               </>
             ) : (
-              <Link to="/auth">
-                <Button size="sm">Entrar</Button>
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link to="/auth?tab=signup">
+                  <Button variant="outline" size="sm">Cadastrar</Button>
+                </Link>
+                <Link to="/auth">
+                  <Button size="sm">Entrar</Button>
+                </Link>
+              </div>
             )}
           </div>
         </nav>
@@ -350,6 +355,14 @@ export const Header = () => {
                   >
                     <Award className="h-4 w-4 mr-2" />
                     Verificar Certificado
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate("/auth?tab=signup")}
+                    size="sm"
+                    className="justify-start"
+                  >
+                    Cadastrar
                   </Button>
                   <Button
                     onClick={() => navigate("/auth")}
