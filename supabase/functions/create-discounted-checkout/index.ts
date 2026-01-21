@@ -7,46 +7,125 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-console.log("🔧 create-discounted-checkout function loaded");
+// Helper functions
+const cleanCPF = (cpf: string | null): string => {
+  if (!cpf) return "";
+  return cpf.replace(/\D/g, "");
+};
+
+const cleanPhone = (phone: string | null): string => {
+  if (!phone) return "";
+  const cleaned = phone.replace(/\D/g, "");
+  return cleaned.length >= 10 && cleaned.length <= 11 ? cleaned : "";
+};
+
+const cleanPostalCode = (postalCode: string | null): string => {
+  if (!postalCode) return "";
+  const cleaned = postalCode.replace(/\D/g, "");
+  return cleaned.length === 8 ? cleaned : "";
+};
+
+const truncate = (str: string | null | undefined, max: number): string => {
+  if (!str) return "";
+  const trimmed = str.trim();
+  return trimmed.length <= max ? trimmed : trimmed.substring(0, max);
+};
+
+// Get or create Asaas customer
+async function getOrCreateAsaasCustomer(
+  asaasApiKey: string, 
+  asaasApiUrl: string,
+  customerData: {
+    name: string;
+    cpfCnpj: string;
+    email: string;
+    phone: string;
+    postalCode: string;
+    address: string;
+    addressNumber: string;
+    province: string;
+  }
+): Promise<{ id: string; error?: string }> {
+  console.log("🔍 Buscando/criando customer no Asaas...");
+  
+  if (customerData.cpfCnpj) {
+    try {
+      const searchUrl = `${asaasApiUrl}/customers?cpfCnpj=${customerData.cpfCnpj}`;
+      const searchResponse = await fetch(searchUrl, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          access_token: asaasApiKey,
+        },
+      });
+      
+      const searchResult = await searchResponse.json();
+      
+      if (searchResult.data && searchResult.data.length > 0) {
+        console.log("✅ Customer encontrado:", searchResult.data[0].id);
+        return { id: searchResult.data[0].id };
+      }
+    } catch (searchError) {
+      console.log("⚠️ Erro ao buscar customer:", searchError);
+    }
+  }
+  
+  console.log("📝 Criando novo customer...");
+  
+  const createPayload = {
+    name: customerData.name || "Nome não informado",
+    cpfCnpj: customerData.cpfCnpj,
+    email: customerData.email,
+    phone: customerData.phone,
+    postalCode: customerData.postalCode,
+    address: customerData.address,
+    addressNumber: customerData.addressNumber || "S/N",
+    province: customerData.province,
+  };
+  
+  try {
+    const createResponse = await fetch(`${asaasApiUrl}/customers`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        access_token: asaasApiKey,
+      },
+      body: JSON.stringify(createPayload),
+    });
+    
+    const createResult = await createResponse.json();
+    
+    if (!createResponse.ok) {
+      return { id: "", error: JSON.stringify(createResult) };
+    }
+    
+    console.log("✅ Customer criado:", createResult.id);
+    return { id: createResult.id };
+  } catch (createError) {
+    return { id: "", error: String(createError) };
+  }
+}
+
+console.log("🔧 create-discounted-checkout function loaded - Using /v3/payments API");
 
 serve(async (req) => {
   const method = req.method;
-  console.log(`📨 Request received: ${method} ${req.url}`);
 
-  // Handle CORS preflight requests - must be first, outside try/catch
   if (method === "OPTIONS") {
-    console.log("✅ OPTIONS preflight - returning 200");
-    return new Response(null, { 
-      status: 200,
-      headers: corsHeaders 
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
-  // Health check endpoint
   if (method === "GET") {
-    console.log("✅ GET health check");
     return new Response(
-      JSON.stringify({ 
-        ok: true, 
-        function: "create-discounted-checkout",
-        timestamp: new Date().toISOString()
-      }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
+      JSON.stringify({ ok: true, function: "create-discounted-checkout", api: "/v3/payments" }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
-  // Only POST allowed beyond this point
   if (method !== "POST") {
-    console.log(`❌ Method not allowed: ${method}`);
     return new Response(
       JSON.stringify({ error: "Method not allowed" }),
-      { 
-        status: 405, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
@@ -60,20 +139,16 @@ serve(async (req) => {
   try {
     console.log("🚀 Create Discounted Checkout - Started");
 
-    // Safe JSON parsing
     let body;
     try {
       body = await req.json();
     } catch (parseError) {
-      console.error("❌ Invalid JSON body:", parseError);
       return new Response(
         JSON.stringify({ error: "Invalid JSON body" }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
     const { enrollment_id, force_amount } = body;
 
     if (!enrollment_id) {
@@ -92,17 +167,18 @@ serve(async (req) => {
       });
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+    const token = authHeader.replace(/^bearer\s+/i, "");
+    const { data: claimsData, error: authError } = await supabaseClient.auth.getClaims(token);
 
-    if (authError || !user) {
+    if (authError || !claimsData?.claims?.sub) {
       return new Response(JSON.stringify({ error: "Invalid authentication" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`✅ Authenticated user: ${user.id}`);
+    const userId = claimsData.claims.sub as string;
+    console.log(`✅ Authenticated user: ${userId}`);
 
     // Get payment settings
     const { data: paymentSettings, error: settingsError } = await serviceClient
@@ -117,13 +193,9 @@ serve(async (req) => {
       });
     }
 
-    // Normalize to avoid issues like "Produção", "PRODUCTION", etc.
     const rawEnvironment = (paymentSettings.environment ?? "sandbox").toString().toLowerCase().trim();
     const environment =
-      rawEnvironment === "production" ||
-      rawEnvironment === "prod" ||
-      rawEnvironment === "producao" ||
-      rawEnvironment === "produção"
+      rawEnvironment === "production" || rawEnvironment === "prod" || rawEnvironment === "producao" || rawEnvironment === "produção"
         ? "production"
         : "sandbox";
 
@@ -138,6 +210,10 @@ serve(async (req) => {
       });
     }
 
+    const asaasApiUrl = environment === "production"
+      ? "https://api.asaas.com/v3"
+      : "https://api-sandbox.asaas.com/v3";
+
     // Get enrollment with course and pre-enrollment data
     const { data: enrollment, error: enrollmentError } = await serviceClient
       .from("enrollments")
@@ -150,14 +226,13 @@ serve(async (req) => {
       .single();
 
     if (enrollmentError || !enrollment) {
-      console.error("Enrollment not found:", enrollmentError);
       return new Response(JSON.stringify({ error: "Matrícula não encontrada" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (enrollment.user_id !== user.id) {
+    if (enrollment.user_id !== userId) {
       return new Response(JSON.stringify({ error: "Acesso não autorizado" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -174,7 +249,7 @@ serve(async (req) => {
       });
     }
 
-    // Calculate discount from confirmed pre-enrollment payment
+    // Calculate discount
     const { data: confirmedPrePayment } = await serviceClient
       .from("payments")
       .select("amount")
@@ -186,21 +261,16 @@ serve(async (req) => {
     const originalFee = course.enrollment_fee || 0;
     const preEnrollmentDiscount = confirmedPrePayment?.amount ? Number(confirmedPrePayment.amount) : 0;
     
-    // Use force_amount if provided, otherwise calculate
     let finalAmount: number;
     if (force_amount && force_amount > 0) {
-      finalAmount = Math.max(force_amount, 5); // Minimum R$ 5.00
+      finalAmount = Math.max(force_amount, 5);
     } else {
       finalAmount = Math.max(originalFee - preEnrollmentDiscount, 5);
     }
 
-    console.log("💰 Cálculo do valor:");
-    console.log(`   Original fee: R$ ${originalFee}`);
-    console.log(`   Pre-enrollment discount: R$ ${preEnrollmentDiscount}`);
-    console.log(`   Force amount: ${force_amount || 'N/A'}`);
-    console.log(`   Final amount: R$ ${finalAmount}`);
+    console.log(`💰 Valor: Original R$ ${originalFee} - Desconto R$ ${preEnrollmentDiscount} = Final R$ ${finalAmount}`);
 
-    // Cancel any existing pending payments for this enrollment
+    // Cancel existing pending payments
     const { data: existingPayments } = await serviceClient
       .from("payments")
       .select("id")
@@ -218,124 +288,108 @@ serve(async (req) => {
         .in("status", ["pending", "waiting"]);
     }
 
-    // Helper functions
-    const cleanPhone = (phone: string | null): string => {
-      if (!phone) return "11999999999";
-      const cleaned = phone.replace(/\D/g, "");
-      return (cleaned.length >= 10 && cleaned.length <= 11) ? cleaned : "11999999999";
+    // Prepare customer data
+    const customerData = {
+      name: truncate(preEnrollment.full_name, 120) || "Nome não informado",
+      cpfCnpj: cleanCPF(preEnrollment.cpf),
+      email: preEnrollment.email || "email@exemplo.com",
+      phone: cleanPhone(preEnrollment.whatsapp),
+      postalCode: cleanPostalCode(preEnrollment.postal_code),
+      address: truncate(preEnrollment.address, 120) || "Rua não informada",
+      addressNumber: preEnrollment.address_number || "S/N",
+      province: truncate(preEnrollment.state, 30) || "SP",
     };
 
-    const cleanPostalCode = (postalCode: string | null): string => {
-      if (!postalCode) return "01310200";
-      const cleaned = postalCode.replace(/\D/g, "");
-      return cleaned.length === 8 ? cleaned : "01310200";
-    };
+    // Validate CPF
+    if (!customerData.cpfCnpj || customerData.cpfCnpj.length !== 11) {
+      return new Response(JSON.stringify({ 
+        error: "CPF inválido ou não informado" 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    const cleanCPF = (cpf: string | null): string => {
-      if (!cpf) return "00000000000";
-      const cleaned = cpf.replace(/\D/g, "");
-      return cleaned.length === 11 ? cleaned : "00000000000";
-    };
+    // Get or create Asaas customer
+    const { id: customerId, error: customerError } = await getOrCreateAsaasCustomer(
+      asaasApiKey,
+      asaasApiUrl,
+      customerData
+    );
 
-    const truncate = (str: string, max: number): string => {
-      const trimmed = str.trim();
-      return trimmed.length <= max ? trimmed : trimmed.substring(0, max);
-    };
+    if (!customerId) {
+      return new Response(JSON.stringify({ 
+        error: "Erro ao criar cliente no Asaas",
+        details: customerError
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    // Build checkout data
-    const origin = req.headers.get("origin") || "https://6be1b209-32ae-497f-88c1-5af12f9e3bfe.lovableproject.com";
+    // Calculate due date
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 7);
+    const dueDateString = dueDate.toISOString().split('T')[0];
 
-    // Matrícula com desconto: TODOS os métodos em produção
-    const allowedBillingTypes = environment === "production" 
-      ? ["CREDIT_CARD", "PIX", "BOLETO"] 
-      : ["PIX"]; // Sandbox = só PIX para evitar erros
+    // Billing type: UNDEFINED in production (all methods), PIX in sandbox
+    const billingType = environment === "production" ? "UNDEFINED" : "PIX";
 
-    console.log(`🔄 Tipo: MATRÍCULA COM DESCONTO | Ambiente: ${environment} | billingTypes: ${JSON.stringify(allowedBillingTypes)}`);
-
-    const checkoutData = {
-      billingTypes: allowedBillingTypes,
-      chargeTypes: ["DETACHED"],
-      minutesToExpire: 60,
+    // Create payment
+    const paymentData = {
+      customer: customerId,
+      billingType: billingType,
+      value: finalAmount,
+      dueDate: dueDateString,
+      description: `Matrícula com desconto - ${truncate(course.name, 50)}`,
       externalReference: enrollment_id,
-      value: finalAmount, // CORRIGIDO: value vai no ROOT, não no item
-      callback: {
-        successUrl: `${origin}/student/enrollments?payment_success=true`,
-        cancelUrl: `${origin}/student/enrollments?payment_cancelled=true`,
-        expiredUrl: `${origin}/student/enrollments?payment_expired=true`,
-      },
-      items: [{
-        externalReference: enrollment_id,
-        description: "Matricula",
-        name: "Licenca Capacitacao",
-        // CORRIGIDO: Removido quantity e value - não são válidos na API de Checkouts
-      }],
-      customerData: {
-        name: truncate(preEnrollment.full_name || "Nome não informado", 30),
-        cpfCnpj: cleanCPF(preEnrollment.cpf),
-        email: preEnrollment.email || "email@exemplo.com",
-        phone: cleanPhone(preEnrollment.whatsapp),
-        address: truncate(preEnrollment.address || "Rua não informada", 60),
-        addressNumber: preEnrollment.address_number || "S/N",
-        postalCode: cleanPostalCode(preEnrollment.postal_code),
-        province: truncate(preEnrollment.state || "SP", 30),
-        city: truncate(preEnrollment.city || "São Paulo", 40),
-      },
+      postalService: false,
     };
 
-    console.log("📤 Dados do checkout:", JSON.stringify(checkoutData, null, 2));
+    console.log("📤 Payment payload:", JSON.stringify(paymentData));
 
-    // Call Asaas API - CORRIGIDO: URL de sandbox
-    const asaasApiUrl = environment === "production"
-      ? "https://api.asaas.com/v3/checkouts"
-      : "https://api-sandbox.asaas.com/v3/checkouts";
-
-    console.log(`🔄 Chamando Asaas API (${environment})...`);
-
-    let asaasResponse = await fetch(asaasApiUrl, {
+    let paymentResponse = await fetch(`${asaasApiUrl}/payments`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         access_token: asaasApiKey,
       },
-      body: JSON.stringify(checkoutData),
+      body: JSON.stringify(paymentData),
     });
 
-    let responseText = await asaasResponse.text();
-    console.log("📊 Asaas Response:", asaasResponse.status, responseText);
+    let responseText = await paymentResponse.text();
+    console.log("📊 Asaas Response:", paymentResponse.status, responseText);
 
-    // FALLBACK: Se erro de billingTypes, tentar novamente só com PIX
-    if (!asaasResponse.ok && responseText.toLowerCase().includes("billingtypes")) {
-      console.log("⚠️ Erro de billingTypes detectado. Tentando fallback para PIX...");
+    // Fallback to PIX if UNDEFINED fails
+    if (!paymentResponse.ok && billingType === "UNDEFINED") {
+      console.log("⚠️ Fallback para PIX...");
+      paymentData.billingType = "PIX";
       
-      checkoutData.billingTypes = ["PIX"];
-      
-      asaasResponse = await fetch(asaasApiUrl, {
+      paymentResponse = await fetch(`${asaasApiUrl}/payments`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           access_token: asaasApiKey,
         },
-        body: JSON.stringify(checkoutData),
+        body: JSON.stringify(paymentData),
       });
       
-      responseText = await asaasResponse.text();
-      console.log("📊 Fallback Response:", asaasResponse.status, responseText);
+      responseText = await paymentResponse.text();
+      console.log("📊 Fallback Response:", paymentResponse.status, responseText);
     }
 
-    if (!asaasResponse.ok) {
-      console.error("❌ Asaas API error:", responseText);
+    if (!paymentResponse.ok) {
       return new Response(JSON.stringify({ 
-        error: "Falha ao criar checkout", 
+        error: "Falha ao criar pagamento", 
         details: responseText 
       }), {
-        // Preserve upstream status code to make debugging and handling easier.
-        status: asaasResponse.status,
+        status: paymentResponse.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const checkoutResult = JSON.parse(responseText);
-    console.log("✅ Checkout criado:", checkoutResult.id);
+    const paymentResult = JSON.parse(responseText);
+    console.log("✅ Payment criado:", paymentResult.id);
 
     // Store payment record
     const { error: paymentError } = await serviceClient
@@ -347,7 +401,7 @@ serve(async (req) => {
         currency: "BRL",
         status: "pending",
         kind: "enrollment",
-        asaas_payment_id: checkoutResult.id,
+        asaas_payment_id: paymentResult.id,
       });
 
     if (paymentError) {
@@ -358,18 +412,20 @@ serve(async (req) => {
     await serviceClient
       .from("enrollments")
       .update({ 
-        enrollment_payment_id: checkoutResult.id,
+        enrollment_payment_id: paymentResult.id,
         enrollment_amount: finalAmount
       })
       .eq("id", enrollment_id);
 
-    const checkoutUrl = checkoutResult.url ||
-      `https://${environment === "production" ? "asaas.com" : "sandbox.asaas.com"}/checkoutSession/show?id=${checkoutResult.id}`;
+    const invoiceUrl = paymentResult.invoiceUrl || 
+      `https://${environment === "production" ? "www.asaas.com" : "sandbox.asaas.com"}/i/${paymentResult.id}`;
 
     return new Response(
       JSON.stringify({
-        checkout_url: checkoutUrl,
-        checkout_id: checkoutResult.id,
+        checkout_url: invoiceUrl,
+        invoice_url: invoiceUrl,
+        payment_id: paymentResult.id,
+        checkout_id: paymentResult.id,
         original_fee: originalFee,
         discount: preEnrollmentDiscount,
         final_amount: finalAmount,

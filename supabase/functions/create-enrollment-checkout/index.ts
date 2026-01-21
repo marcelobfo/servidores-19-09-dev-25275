@@ -6,15 +6,131 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Helper functions
+const cleanCPF = (cpf: string | null): string => {
+  if (!cpf) return "";
+  return cpf.replace(/\D/g, "");
+};
+
+const cleanPhone = (phone: string | null): string => {
+  if (!phone) return "";
+  const cleaned = phone.replace(/\D/g, "");
+  return cleaned.length >= 10 && cleaned.length <= 11 ? cleaned : "";
+};
+
+const cleanPostalCode = (postalCode: string | null): string => {
+  if (!postalCode) return "";
+  const cleaned = postalCode.replace(/\D/g, "");
+  return cleaned.length === 8 ? cleaned : "";
+};
+
+const truncateName = (name: string | null | undefined, maxLength = 30): string => {
+  if (!name) return "";
+  const trimmed = name.trim();
+  return trimmed.length <= maxLength ? trimmed : trimmed.substring(0, maxLength);
+};
+
+const getValueWithFallback = (...values: (string | null | undefined)[]): string => {
+  for (const value of values) {
+    if (value && value.trim() !== "") {
+      return value.trim();
+    }
+  }
+  return "";
+};
+
+// Get or create Asaas customer
+async function getOrCreateAsaasCustomer(
+  asaasApiKey: string, 
+  asaasApiUrl: string,
+  customerData: {
+    name: string;
+    cpfCnpj: string;
+    email: string;
+    phone: string;
+    postalCode: string;
+    address: string;
+    addressNumber: string;
+    province: string;
+  }
+): Promise<{ id: string; error?: string }> {
+  console.log("🔍 Buscando/criando customer no Asaas...");
+  
+  // First, search for existing customer by CPF
+  if (customerData.cpfCnpj) {
+    try {
+      const searchUrl = `${asaasApiUrl}/customers?cpfCnpj=${customerData.cpfCnpj}`;
+      console.log("🔍 Buscando customer por CPF:", searchUrl);
+      
+      const searchResponse = await fetch(searchUrl, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          access_token: asaasApiKey,
+        },
+      });
+      
+      const searchResult = await searchResponse.json();
+      console.log("🔍 Resultado busca customer:", JSON.stringify(searchResult));
+      
+      if (searchResult.data && searchResult.data.length > 0) {
+        console.log("✅ Customer encontrado:", searchResult.data[0].id);
+        return { id: searchResult.data[0].id };
+      }
+    } catch (searchError) {
+      console.log("⚠️ Erro ao buscar customer (continuando para criar):", searchError);
+    }
+  }
+  
+  // Create new customer
+  console.log("📝 Criando novo customer no Asaas...");
+  
+  const createPayload = {
+    name: customerData.name || "Nome não informado",
+    cpfCnpj: customerData.cpfCnpj,
+    email: customerData.email,
+    phone: customerData.phone,
+    postalCode: customerData.postalCode,
+    address: customerData.address,
+    addressNumber: customerData.addressNumber || "S/N",
+    province: customerData.province,
+  };
+  
+  console.log("📤 Customer payload:", JSON.stringify(createPayload));
+  
+  try {
+    const createResponse = await fetch(`${asaasApiUrl}/customers`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        access_token: asaasApiKey,
+      },
+      body: JSON.stringify(createPayload),
+    });
+    
+    const createResult = await createResponse.json();
+    console.log("📊 Create customer response:", JSON.stringify(createResult));
+    
+    if (!createResponse.ok) {
+      console.error("❌ Erro ao criar customer:", createResult);
+      return { id: "", error: JSON.stringify(createResult) };
+    }
+    
+    console.log("✅ Customer criado:", createResult.id);
+    return { id: createResult.id };
+  } catch (createError) {
+    console.error("❌ Exception ao criar customer:", createError);
+    return { id: "", error: String(createError) };
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Initialize both clients - anon for auth check, service for data queries
   const supabaseClient = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_ANON_KEY") ?? "");
-
   const serviceClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
@@ -22,199 +138,113 @@ serve(async (req) => {
   );
 
   try {
-    console.log("🚀 Edge function started");
+    console.log("🚀 Edge function started - Using /v3/payments API");
 
-    // Parse the request body - accept both pre_enrollment_id and enrollment_id
+    // Parse request body
     const body = await req.json();
     console.log("📦 Request body:", JSON.stringify(body));
 
     const { pre_enrollment_id, enrollment_id, force_recalculate, override_amount } = body;
 
     if (!pre_enrollment_id) {
-      console.error("Missing pre_enrollment_id in request");
       return new Response(JSON.stringify({ error: "pre_enrollment_id is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     
-    // Se force_recalculate=true, forçar recriação do checkout para aplicar desconto
     const forceRecalculate = force_recalculate === true;
-    if (forceRecalculate) {
-      console.log("🔄 force_recalculate=true - Forçando recálculo do checkout com desconto");
-    }
-
-    // Se override_amount foi passado, usar esse valor diretamente (não calcular)
-    // Aceita number OU string numérica (ex: "380", "380.00")
     const overrideAmountNumber = typeof override_amount === "number" ? override_amount : Number(override_amount);
     const hasOverrideAmount = Number.isFinite(overrideAmountNumber) && overrideAmountNumber > 0;
-    if (hasOverrideAmount) {
-      console.log(`💵 override_amount=${override_amount} (parsed=${overrideAmountNumber}) - Usando valor direto sem cálculo dinâmico`);
-    }
-
-    // Determine if this is for pre-enrollment or enrollment
     const isEnrollmentCheckout = !!enrollment_id;
+
     console.log(`Processing ${isEnrollmentCheckout ? "enrollment" : "pre-enrollment"} checkout`);
-    console.log(`Pre-enrollment ID: ${pre_enrollment_id}${enrollment_id ? `, Enrollment ID: ${enrollment_id}` : ""}`);
 
-    // Check if user is authenticated
+    // Authenticate user
     const authHeader = req.headers.get("Authorization");
-    console.log("🔐 Authorization header present:", !!authHeader);
-    console.log("🔐 Authorization header prefix:", authHeader?.substring(0, 15) || "null");
-
     if (!authHeader) {
-      console.error("❌ No authorization header provided");
       return new Response(JSON.stringify({ error: "Authentication required" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Robust token extraction - handles "Bearer", "bearer", extra spaces
     const headerLower = authHeader.toLowerCase();
     if (!headerLower.startsWith("bearer ")) {
-      console.error("❌ Malformed Authorization header - does not start with 'Bearer '");
-      console.error("Header starts with:", authHeader.substring(0, 20));
-      return new Response(
-        JSON.stringify({ 
-          error: "Malformed Authorization header",
-          hint: "Expected format: 'Bearer <token>'"
-        }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return new Response(JSON.stringify({ error: "Malformed Authorization header" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Extract token using split to handle any whitespace variations
     const parts = authHeader.split(/\s+/);
     const token = parts[1]?.trim();
     
     if (!token || token.split('.').length !== 3) {
-      console.error("❌ Invalid JWT format - token parts:", token?.split('.').length || 0);
-      return new Response(
-        JSON.stringify({ 
-          error: "Invalid token format",
-          hint: "JWT must have 3 parts separated by dots"
-        }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return new Response(JSON.stringify({ error: "Invalid token format" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    console.log("🔐 Token extracted - length:", token.length, "parts:", token.split('.').length);
-
-    // Validate JWT using getClaims() - works without active session lookup
-    // This validates the token locally and extracts claims without network call
     const { data: claimsData, error: authError } = await supabaseClient.auth.getClaims(token);
 
     if (authError || !claimsData?.claims) {
-      console.error("❌ getClaims error:", JSON.stringify(authError || { message: "No claims found" }));
-      return new Response(
-        JSON.stringify({
-          error: "Invalid authentication",
-          details: authError?.message || "Token validation failed",
-          code: (authError as any)?.code || "AUTH_ERROR",
-          hint: "Token may be expired or invalid"
-        }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return new Response(JSON.stringify({ error: "Invalid authentication", details: authError?.message }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Extract user ID from claims
     const userId = claimsData.claims.sub as string;
     if (!userId) {
-      console.error("❌ No user ID (sub) in token claims");
-      console.error("Claims received:", JSON.stringify(claimsData.claims));
-      return new Response(
-        JSON.stringify({ error: "Invalid token - no user ID" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return new Response(JSON.stringify({ error: "Invalid token - no user ID" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     console.log(`✅ Authenticated user: ${userId}`);
-    console.log(`✅ Token expires at: ${new Date((claimsData.claims.exp as number) * 1000).toISOString()}`);
-    
-    // Create a user-like object for compatibility with rest of code
     const user = { id: userId, email: claimsData.claims.email as string };
 
-    // Get payment settings using serviceClient to bypass RLS
-    console.log("💳 Fetching payment settings...");
+    // Get payment settings
     const { data: paymentSettings, error: settingsError } = await serviceClient
       .from("payment_settings")
       .select("environment, asaas_api_key_sandbox, asaas_api_key_production")
       .maybeSingle();
 
-    console.log("Payment settings result:", {
-      found: !!paymentSettings,
-      error: settingsError?.message,
-      environment: paymentSettings?.environment,
-    });
-
-    if (settingsError) {
-      console.error("Payment settings database error:", settingsError);
-      return new Response(
-        JSON.stringify({
-          error: "Erro ao buscar configurações de pagamento. Entre em contato com o suporte.",
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    if (!paymentSettings) {
-      console.error("Payment settings not configured - table is empty");
-      return new Response(
-        JSON.stringify({
-          error:
-            "Sistema de pagamento não configurado. O administrador precisa configurar as credenciais do Asaas primeiro.",
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    // Get the appropriate API key based on environment
-    // Normalize to avoid issues like "Produção", "PRODUCTION", etc.
-    const rawEnvironment = (paymentSettings.environment ?? "sandbox").toString().toLowerCase().trim();
-    const environment =
-      rawEnvironment === "production" ||
-      rawEnvironment === "prod" ||
-      rawEnvironment === "producao" ||
-      rawEnvironment === "produção"
-        ? "production"
-        : "sandbox";
-
-    const asaasApiKey =
-      environment === "production" ? paymentSettings.asaas_api_key_production : paymentSettings.asaas_api_key_sandbox;
-
-    if (!asaasApiKey) {
-      console.error(`Asaas API key not configured for environment: ${environment}`);
-      return new Response(JSON.stringify({ error: `API key not configured for ${environment} environment` }), {
+    if (settingsError || !paymentSettings) {
+      return new Response(JSON.stringify({ error: "Sistema de pagamento não configurado" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Get pre-enrollment data using service client to bypass RLS
-    console.log("📚 Fetching pre-enrollment:", pre_enrollment_id);
+    const rawEnvironment = (paymentSettings.environment ?? "sandbox").toString().toLowerCase().trim();
+    const environment =
+      rawEnvironment === "production" || rawEnvironment === "prod" || rawEnvironment === "producao" || rawEnvironment === "produção"
+        ? "production"
+        : "sandbox";
+
+    const asaasApiKey = environment === "production" 
+      ? paymentSettings.asaas_api_key_production 
+      : paymentSettings.asaas_api_key_sandbox;
+
+    if (!asaasApiKey) {
+      return new Response(JSON.stringify({ error: `API key not configured for ${environment}` }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const asaasApiUrl = environment === "production"
+      ? "https://api.asaas.com/v3"
+      : "https://api-sandbox.asaas.com/v3";
+
+    // Get pre-enrollment data
     const { data: preEnrollment, error: preEnrollmentError } = await serviceClient
       .from("pre_enrollments")
-      .select(
-        `
+      .select(`
         *,
         courses (
           name,
@@ -223,19 +253,26 @@ serve(async (req) => {
           enrollment_fee,
           discounted_enrollment_fee
         )
-      `,
-      )
+      `)
       .eq("id", pre_enrollment_id)
       .single();
 
-    console.log("Pre-enrollment fetch result:", {
-      found: !!preEnrollment,
-      error: preEnrollmentError?.message,
-    });
+    if (preEnrollmentError || !preEnrollment) {
+      return new Response(JSON.stringify({ error: "Pré-matrícula não encontrada" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    // Get enrollment data if enrollment_id is provided
+    if (preEnrollment.user_id !== user.id) {
+      return new Response(JSON.stringify({ error: "Acesso não autorizado à pré-matrícula" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Get enrollment if provided
     let enrollment = null;
-
     if (isEnrollmentCheckout) {
       const { data: enrollmentData, error: enrollmentError } = await serviceClient
         .from("enrollments")
@@ -244,19 +281,13 @@ serve(async (req) => {
         .single();
 
       if (enrollmentError || !enrollmentData) {
-        console.error("Enrollment query failed:", enrollmentError);
-        console.error("Enrollment ID:", enrollment_id);
         return new Response(JSON.stringify({ error: "Matrícula não encontrada" }), {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Validate ownership
       if (enrollmentData.user_id !== user.id) {
-        console.error(
-          `User ${user.id} attempted to access enrollment ${enrollment_id} owned by ${enrollmentData.user_id}`,
-        );
         return new Response(JSON.stringify({ error: "Acesso não autorizado à matrícula" }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -266,33 +297,16 @@ serve(async (req) => {
       enrollment = enrollmentData;
     }
 
-    // Get user profile data as fallback
-    const { data: userProfile } = await serviceClient.from("profiles").select("*").eq("user_id", user.id).single();
-
-    // Validate pre-enrollment exists BEFORE accessing its properties
-    if (preEnrollmentError || !preEnrollment) {
-      console.error("Pre-enrollment query failed:", preEnrollmentError);
-      console.error("Pre-enrollment ID:", pre_enrollment_id);
-      return new Response(JSON.stringify({ error: "Pré-matrícula não encontrada" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Validate ownership
-    if (preEnrollment.user_id !== user.id) {
-      console.error(
-        `User ${user.id} attempted to access pre-enrollment ${pre_enrollment_id} owned by ${preEnrollment.user_id}`,
-      );
-      return new Response(JSON.stringify({ error: "Acesso não autorizado à pré-matrícula" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Get user profile as fallback
+    const { data: userProfile } = await serviceClient
+      .from("profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
 
     console.log(`Pre-enrollment found for course: ${preEnrollment.courses?.name || "UNKNOWN"}`);
 
-    // ETAPA 1: Verificar se já existe um pagamento pendente
+    // Check for existing pending payment
     const checkoutKind = isEnrollmentCheckout ? "enrollment" : "pre_enrollment";
     let paymentQuery = serviceClient
       .from("payments")
@@ -309,922 +323,369 @@ serve(async (req) => {
 
     const { data: existingPayment } = await paymentQuery.maybeSingle();
 
-    // REGRA ANTI-REUSO INDEVIDO: Se override_amount foi passado, comparar com o checkout existente
+    // Calculate the checkout fee
+    let checkoutFee: number;
+    let checkoutReason: string = "standard";
+    let prePaidTotal = 0;
+
+    if (hasOverrideAmount) {
+      checkoutFee = overrideAmountNumber;
+      checkoutReason = "override_amount";
+      console.log(`💵 Using override_amount: R$ ${checkoutFee}`);
+    } else if (isEnrollmentCheckout) {
+      // Get confirmed pre-enrollment payment
+      const { data: confirmedPrePayment } = await serviceClient
+        .from("payments")
+        .select("amount")
+        .eq("pre_enrollment_id", pre_enrollment_id)
+        .eq("kind", "pre_enrollment")
+        .in("status", ["confirmed", "received"])
+        .maybeSingle();
+
+      prePaidTotal = confirmedPrePayment?.amount ? Number(confirmedPrePayment.amount) : 0;
+      const originalFee = preEnrollment.courses?.enrollment_fee || 0;
+      const discountedFee = preEnrollment.courses?.discounted_enrollment_fee || 0;
+
+      if (prePaidTotal > 0 && discountedFee > 0) {
+        checkoutFee = Math.min(discountedFee, originalFee - prePaidTotal);
+        checkoutReason = "discounted_enrollment";
+      } else if (prePaidTotal > 0) {
+        checkoutFee = Math.max(originalFee - prePaidTotal, 5);
+        checkoutReason = "pre_payment_credit";
+      } else {
+        checkoutFee = originalFee;
+        checkoutReason = "full_enrollment";
+      }
+
+      checkoutFee = Math.max(checkoutFee, 5); // Minimum R$ 5.00
+    } else {
+      checkoutFee = preEnrollment.courses?.pre_enrollment_fee || 0;
+      checkoutReason = "pre_enrollment";
+    }
+
+    console.log(`💰 Checkout fee: R$ ${checkoutFee} (reason: ${checkoutReason}, prePaidTotal: R$ ${prePaidTotal})`);
+
+    // Handle existing payment reuse or cancellation
     if (existingPayment && hasOverrideAmount) {
       const existingAmount = Number(existingPayment.amount || 0);
-      const tolerance = 0.5; // R$ 0,50 de tolerância
+      const tolerance = 0.5;
       
       if (Math.abs(existingAmount - overrideAmountNumber) > tolerance) {
-        console.log(`⚠️ ANTI-REUSO: Checkout existente R$ ${existingAmount} difere do override R$ ${overrideAmountNumber}`);
-        console.log(`📛 Cancelando checkout antigo ${existingPayment.id} para criar novo com valor correto...`);
-        
+        console.log(`⚠️ Cancelling old checkout with different amount`);
         await serviceClient
           .from("payments")
           .update({ status: 'cancelled' })
           .eq("id", existingPayment.id);
-        
-        // Não reutilizar - continuar para criar novo checkout
       } else {
-        // Valores iguais (dentro da tolerância), pode reutilizar
-        console.log(`✅ Checkout existente R$ ${existingAmount} corresponde ao override R$ ${overrideAmountNumber}, reutilizando...`);
-        const checkoutUrl = `https://${environment === "production" ? "asaas.com" : "sandbox.asaas.com"}/checkoutSession/show?id=${existingPayment.asaas_payment_id}`;
+        console.log(`✅ Reusing existing checkout with matching amount`);
+        const invoiceUrl = existingPayment.asaas_payment_id 
+          ? `https://${environment === "production" ? "www.asaas.com" : "sandbox.asaas.com"}/i/${existingPayment.asaas_payment_id}`
+          : null;
+        
         return new Response(
           JSON.stringify({
-            checkout_url: checkoutUrl,
+            checkout_url: invoiceUrl,
+            invoice_url: invoiceUrl,
             checkout_id: existingPayment.asaas_payment_id,
             reused: true,
             applied_amount: existingAmount,
-            override_received: override_amount,
-            override_parsed: overrideAmountNumber,
-            used_override: true,
           }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 200,
-          },
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
         );
       }
     } else if (existingPayment && !forceRecalculate) {
-      console.log("Found existing payment:", existingPayment.id);
-
-      // Para checkout de matrícula, verificar se há crédito de pré-matrícula que não foi aplicado
-      if (isEnrollmentCheckout) {
-        const { data: confirmedPrePayment } = await serviceClient
-          .from("payments")
-          .select("amount")
-          .eq("pre_enrollment_id", pre_enrollment_id)
-          .eq("kind", "pre_enrollment")
-          .in("status", ["confirmed", "received"])
-          .maybeSingle();
-
-        if (confirmedPrePayment?.amount) {
-          const prePaymentAmount = Number(confirmedPrePayment.amount);
-          const existingPaymentAmount = Number(existingPayment.amount);
-          const originalFee = preEnrollment.courses?.enrollment_fee || 0;
-          
-          // Se o checkout existente tem o valor cheio (sem desconto aplicado), cancelar e criar novo
-          if (existingPaymentAmount >= originalFee - 1) { // tolerância de R$ 1
-            console.log("⚠️ Checkout antigo encontrado com valor cheio, mas há crédito de pré-matrícula R$", prePaymentAmount);
-            console.log("📛 Cancelando checkout antigo e criando novo com desconto...");
-            
-            await serviceClient
-              .from("payments")
-              .update({ status: 'cancelled' })
-              .eq("id", existingPayment.id);
-            
-            // Não retornar - continuar para criar novo checkout com desconto
-          } else {
-            // Checkout já tem desconto aplicado, reutilizar
-            console.log("✅ Checkout existente já tem desconto aplicado, reutilizando...");
-            const checkoutUrl = `https://${environment === "production" ? "asaas.com" : "sandbox.asaas.com"}/checkoutSession/show?id=${existingPayment.asaas_payment_id}`;
-            return new Response(
-              JSON.stringify({
-                checkout_url: checkoutUrl,
-                checkout_id: existingPayment.asaas_payment_id,
-                reused: true,
-                applied_amount: existingPaymentAmount,
-              }),
-              {
-                headers: { ...corsHeaders, "Content-Type": "application/json" },
-                status: 200,
-              },
-            );
-          }
+      if (isEnrollmentCheckout && prePaidTotal > 0) {
+        const existingPaymentAmount = Number(existingPayment.amount);
+        const originalFee = preEnrollment.courses?.enrollment_fee || 0;
+        
+        if (existingPaymentAmount >= originalFee - 1) {
+          console.log("⚠️ Old checkout has full amount but discount should apply - cancelling");
+          await serviceClient
+            .from("payments")
+            .update({ status: 'cancelled' })
+            .eq("id", existingPayment.id);
         } else {
-          // Sem crédito de pré-matrícula, reutilizar checkout existente
-          console.log("Reusing existing payment (no pre-enrollment credit):", existingPayment.id);
-          const checkoutUrl = `https://${environment === "production" ? "asaas.com" : "sandbox.asaas.com"}/checkoutSession/show?id=${existingPayment.asaas_payment_id}`;
+          console.log("✅ Reusing existing discounted checkout");
+          const invoiceUrl = `https://${environment === "production" ? "www.asaas.com" : "sandbox.asaas.com"}/i/${existingPayment.asaas_payment_id}`;
           return new Response(
             JSON.stringify({
-              checkout_url: checkoutUrl,
+              checkout_url: invoiceUrl,
+              invoice_url: invoiceUrl,
               checkout_id: existingPayment.asaas_payment_id,
               reused: true,
-              applied_amount: Number(existingPayment.amount),
+              applied_amount: existingPaymentAmount,
             }),
-            {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-              status: 200,
-            },
+            { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
           );
         }
       } else {
-        // Checkout de pré-matrícula, reutilizar normalmente
-        console.log("Reusing existing pre-enrollment payment:", existingPayment.id);
-        const checkoutUrl = `https://${environment === "production" ? "asaas.com" : "sandbox.asaas.com"}/checkoutSession/show?id=${existingPayment.asaas_payment_id}`;
+        console.log("✅ Reusing existing payment");
+        const invoiceUrl = `https://${environment === "production" ? "www.asaas.com" : "sandbox.asaas.com"}/i/${existingPayment.asaas_payment_id}`;
         return new Response(
           JSON.stringify({
-            checkout_url: checkoutUrl,
+            checkout_url: invoiceUrl,
+            invoice_url: invoiceUrl,
             checkout_id: existingPayment.asaas_payment_id,
             reused: true,
             applied_amount: Number(existingPayment.amount),
           }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 200,
-          },
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
         );
       }
     } else if (existingPayment && forceRecalculate) {
-      // Forçar recálculo - cancelar checkout antigo
-      console.log("🔄 force_recalculate=true - Cancelando checkout antigo:", existingPayment.id);
+      console.log("🔄 force_recalculate=true - Cancelling old checkout");
       await serviceClient
         .from("payments")
         .update({ status: 'cancelled' })
         .eq("id", existingPayment.id);
     }
 
-    // ETAPA 2: Validar dados do curso
-    if (!preEnrollment.courses) {
-      console.error("Course data not found for pre-enrollment:", pre_enrollment_id);
-      return new Response(
-        JSON.stringify({
-          error: "Dados do curso não encontrados. Entre em contato com o suporte.",
-        }),
-        {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
+    // Prepare customer data
+    const customerData = {
+      name: truncateName(getValueWithFallback(preEnrollment.full_name, userProfile?.full_name, "Nome não informado"), 120),
+      cpfCnpj: cleanCPF(getValueWithFallback(preEnrollment.cpf, userProfile?.cpf, null)),
+      email: getValueWithFallback(preEnrollment.email, userProfile?.email, "email@exemplo.com").substring(0, 80),
+      phone: cleanPhone(getValueWithFallback(preEnrollment.whatsapp, userProfile?.whatsapp, null)),
+      postalCode: cleanPostalCode(getValueWithFallback(preEnrollment.postal_code, userProfile?.postal_code, null)),
+      address: truncateName(getValueWithFallback(preEnrollment.address, userProfile?.address, "Rua não informada"), 120),
+      addressNumber: getValueWithFallback(preEnrollment.address_number, userProfile?.address_number, "S/N"),
+      province: truncateName(getValueWithFallback(preEnrollment.state, userProfile?.state, "SP"), 30),
+    };
 
-    // Determine which fee to use based on checkout type
-    const originalEnrollmentFee = preEnrollment.courses.enrollment_fee || 0;
-    const discountedFeeFromDB = preEnrollment.courses.discounted_enrollment_fee;
-    const preEnrollmentFeeDB = preEnrollment.courses.pre_enrollment_fee || 0;
-    
-    let checkoutFee = isEnrollmentCheckout
-      ? originalEnrollmentFee
-      : preEnrollmentFeeDB;
+    console.log("👤 Customer data:", JSON.stringify(customerData));
 
-    const feeType = isEnrollmentCheckout ? "matrícula" : "pré-matrícula";
-    let preEnrollmentDiscount = 0;
-
-    // ========== ESTRATÉGIA DE DESCONTO PARA MATRÍCULA ==========
-    // NOVA ABORDAGEM: Calcular AMBOS os candidatos e escolher o MENOR
-    // 1. candidateFromDB = discounted_enrollment_fee (se existir)
-    // 2. candidateFromPayments = original - soma_pagamentos_confirmados
-    // 3. Escolher o menor (mais favorável ao aluno)
-    // ============================================================
-    
-    // Variáveis para audit payload
-    let discountReason = "full_price";
-    let prePaidTotal = 0;
-    let candidateFromDB = 0;
-    let candidateFromPayments = 0;
-    
-    if (isEnrollmentCheckout) {
-      console.log("📊 ========== CÁLCULO DO DESCONTO DE MATRÍCULA ==========");
-      console.log(`   📋 VALOR ORIGINAL DA MATRÍCULA: R$ ${originalEnrollmentFee}`);
-      console.log(`   📋 VALOR COM DESCONTO (DB): R$ ${discountedFeeFromDB ?? 'NÃO DEFINIDO'}`);
-      console.log(`   📋 TAXA DE PRÉ-MATRÍCULA: R$ ${preEnrollmentFeeDB}`);
-      console.log(`   📋 Status pré-matrícula: ${preEnrollment.status}`);
-      console.log(`   📋 Aprovação manual: ${preEnrollment.manual_approval}`);
-      
-      const preEnrollmentConfirmed = preEnrollment.status === 'payment_confirmed' || 
-                                      preEnrollment.status === 'enrolled' ||
-                                      preEnrollment.status === 'waiting_organ_approval';
-      
-      // PASSO 1: Calcular candidato do banco (se disponível)
-      if (discountedFeeFromDB && discountedFeeFromDB > 0 && preEnrollmentConfirmed) {
-        candidateFromDB = Math.max(discountedFeeFromDB, 5);
-        console.log(`   💾 Candidato do banco: R$ ${candidateFromDB}`);
-      }
-      
-      // PASSO 2: SEMPRE buscar pagamentos confirmados na tabela payments
-      console.log("🔍 Buscando pagamentos de pré-matrícula confirmados na tabela payments...");
-      
-      let { data: confirmedPayments, error: paymentsError } = await serviceClient
-        .from("payments")
-        .select("amount, status, created_at")
-        .eq("pre_enrollment_id", pre_enrollment_id)
-        .eq("kind", "pre_enrollment")
-        .in("status", ["confirmed", "received"]);
-
-      if (paymentsError) {
-        console.error("❌ Erro ao buscar pagamentos:", paymentsError);
-      }
-
-      prePaidTotal = confirmedPayments?.reduce(
-        (sum, p) => sum + Number(p.amount || 0),
-        0
-      ) ?? 0;
-
-      console.log(`   💳 Pagamentos encontrados: ${confirmedPayments?.length || 0}`);
-      confirmedPayments?.forEach((p, i) => {
-        console.log(`      [${i+1}] R$ ${p.amount} - status: ${p.status} - data: ${p.created_at}`);
+    // Validate required customer fields
+    if (!customerData.cpfCnpj || customerData.cpfCnpj.length !== 11) {
+      return new Response(JSON.stringify({ 
+        error: "CPF inválido ou não informado",
+        details: "O CPF deve ter 11 dígitos numéricos"
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-      console.log(`   💰 TOTAL PRÉ PAGO (payments table): R$ ${prePaidTotal}`);
-
-      // AUTO-HEAL para aprovações manuais sem registro de pagamento
-      if (
-        prePaidTotal === 0 &&
-        preEnrollment.manual_approval === true &&
-        preEnrollmentConfirmed &&
-        preEnrollmentFeeDB > 0
-      ) {
-        console.log("🔧 AUTO-HEAL: Aprovação manual detectada sem registro de pagamento.");
-        
-        const { data: existingHeal } = await serviceClient
-          .from("payments")
-          .select("id")
-          .eq("pre_enrollment_id", pre_enrollment_id)
-          .eq("kind", "pre_enrollment")
-          .in("status", ["confirmed", "received"])
-          .maybeSingle();
-
-        if (!existingHeal) {
-          const { data: healedPayment, error: healError } = await serviceClient
-            .from("payments")
-            .insert({
-              pre_enrollment_id: pre_enrollment_id,
-              amount: preEnrollmentFeeDB,
-              currency: "BRL",
-              status: "confirmed",
-              kind: "pre_enrollment",
-              asaas_payment_id: `autoheal_${pre_enrollment_id}_${Date.now()}`,
-              paid_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-          if (healError) {
-            console.error("❌ AUTO-HEAL: Falha ao criar pagamento:", healError);
-          } else {
-            console.log("✅ AUTO-HEAL: Pagamento criado:", healedPayment.id);
-            prePaidTotal = preEnrollmentFeeDB;
-          }
-        }
-      }
-      
-      // FALLBACK: Se pré-matrícula confirmada mas sem pagamento, usar taxa de pré-matrícula
-      if (prePaidTotal === 0 && preEnrollmentConfirmed && preEnrollmentFeeDB > 0) {
-        console.log("⚠️ FALLBACK: Pré-matrícula confirmada sem pagamento registrado.");
-        console.log(`   Usando taxa de pré-matrícula como crédito: R$ ${preEnrollmentFeeDB}`);
-        prePaidTotal = preEnrollmentFeeDB;
-      }
-
-      // Calcular candidato baseado em pagamentos
-      if (prePaidTotal > 0) {
-        candidateFromPayments = Math.max(originalEnrollmentFee - prePaidTotal, 5);
-        console.log(`   💳 Candidato dos pagamentos: R$ ${candidateFromPayments}`);
-      }
-
-      // PASSO 3: DECISÃO FINAL - escolher o MENOR valor válido
-      console.log("🎯 DECISÃO FINAL:");
-      console.log(`   📊 Candidato do banco: R$ ${candidateFromDB || 'N/A'}`);
-      console.log(`   📊 Candidato dos pagamentos: R$ ${candidateFromPayments || 'N/A'}`);
-      
-      if (candidateFromDB > 0 && candidateFromPayments > 0) {
-        // AMBOS disponíveis - escolher o MENOR (mais favorável)
-        if (candidateFromPayments <= candidateFromDB) {
-          checkoutFee = candidateFromPayments;
-          preEnrollmentDiscount = prePaidTotal;
-          discountReason = "payments_total";
-          console.log(`   ✅ ESCOLHIDO: Pagamentos (menor) - R$ ${checkoutFee}`);
-        } else {
-          checkoutFee = candidateFromDB;
-          preEnrollmentDiscount = originalEnrollmentFee - candidateFromDB;
-          discountReason = "db_discounted_fee";
-          console.log(`   ✅ ESCOLHIDO: Banco (menor) - R$ ${checkoutFee}`);
-        }
-      } else if (candidateFromPayments > 0) {
-        // Só pagamentos disponíveis
-        checkoutFee = candidateFromPayments;
-        preEnrollmentDiscount = prePaidTotal;
-        discountReason = "payments_total";
-        console.log(`   ✅ ESCOLHIDO: Pagamentos (único disponível) - R$ ${checkoutFee}`);
-      } else if (candidateFromDB > 0) {
-        // Só banco disponível
-        checkoutFee = candidateFromDB;
-        preEnrollmentDiscount = originalEnrollmentFee - candidateFromDB;
-        discountReason = "db_discounted_fee";
-        console.log(`   ✅ ESCOLHIDO: Banco (único disponível) - R$ ${checkoutFee}`);
-      } else {
-        // Nenhum desconto disponível
-        discountReason = "no_credit_full_price";
-        console.log("ℹ️ Nenhum crédito de pré-matrícula encontrado - cobrando valor cheio");
-      }
-      
-      console.log(`   ✂️ DESCONTO TOTAL: R$ ${preEnrollmentDiscount}`);
-      console.log(`   💵 VALOR FINAL: R$ ${checkoutFee}`);
-      console.log(`   📝 RAZÃO: ${discountReason}`);
-      console.log("📊 ========================================================");
     }
 
-    console.log(`Checkout fee for ${feeType}:`, checkoutFee);
+    // Get or create Asaas customer
+    const { id: customerId, error: customerError } = await getOrCreateAsaasCustomer(
+      asaasApiKey,
+      asaasApiUrl,
+      customerData
+    );
 
-    // ========== OVERRIDE AMOUNT (mantido para compatibilidade) ==========
-    if (hasOverrideAmount) {
-      console.log(`🔒 OVERRIDE: Substituindo checkoutFee de R$ ${checkoutFee} por R$ ${overrideAmountNumber}`);
-      checkoutFee = Math.max(overrideAmountNumber, 5);
-      console.log(`🔒 OVERRIDE: Valor final do checkout: R$ ${checkoutFee}`);
-    }
-    // ======================================================================
-
-    if (!checkoutFee || checkoutFee <= 0) {
-      console.error(`Course ${feeType} fee not configured:`, {
-        courseId: preEnrollment.course_id,
-        courseName: preEnrollment.courses.name,
-        pre_enrollment_fee: preEnrollment.courses.pre_enrollment_fee,
-        enrollment_fee: preEnrollment.courses.enrollment_fee,
-        fee: checkoutFee,
-        type: feeType,
-        isEnrollmentCheckout,
+    if (!customerId) {
+      return new Response(JSON.stringify({ 
+        error: "Erro ao criar cliente no Asaas",
+        details: customerError
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-      return new Response(
-        JSON.stringify({
-          error: `Taxa de ${feeType} não configurada para este curso. Entre em contato com o suporte.`,
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
     }
 
-    // Helper function to clean and validate phone number
-    const cleanPhone = (phone: string | null): string => {
-      if (!phone) return "11999999999"; // Valid São Paulo number as fallback
-      const cleaned = phone.replace(/\D/g, "");
+    // Calculate due date (7 days from now)
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 7);
+    const dueDateString = dueDate.toISOString().split('T')[0];
 
-      // Must have at least 10 digits (landline) or 11 digits (mobile)
-      if (cleaned.length >= 10 && cleaned.length <= 11) {
-        return cleaned;
-      }
+    // Build payment description
+    const courseName = preEnrollment.courses?.name || "Curso";
+    const paymentDescription = isEnrollmentCheckout 
+      ? `Matrícula - ${truncateName(courseName, 60)}`
+      : `Pré-Matrícula - ${truncateName(courseName, 60)}`;
 
-      return "11999999999"; // Valid São Paulo number as fallback
+    // Determine billing type
+    // Pre-enrollment: PIX only
+    // Enrollment: UNDEFINED (allows PIX, Boleto, Card) in production, PIX in sandbox
+    let billingType: string;
+    if (!isEnrollmentCheckout) {
+      billingType = "PIX"; // Pre-enrollment always PIX
+    } else if (environment === "production") {
+      billingType = "UNDEFINED"; // Allows all payment methods
+    } else {
+      billingType = "PIX"; // Sandbox = PIX only
+    }
+
+    console.log(`💳 Billing type: ${billingType} (environment: ${environment}, isEnrollment: ${isEnrollmentCheckout})`);
+
+    // Create payment using /v3/payments API
+    const paymentData = {
+      customer: customerId,
+      billingType: billingType,
+      value: checkoutFee,
+      dueDate: dueDateString,
+      description: paymentDescription,
+      externalReference: isEnrollmentCheckout ? enrollment_id : pre_enrollment_id,
+      postalService: false,
     };
 
-    // Helper function to clean and validate postal code
-    const cleanPostalCode = (postalCode: string | null): string => {
-      if (!postalCode) return "01310200"; // Valid São Paulo CEP as fallback
-      const cleaned = postalCode.replace(/\D/g, "");
+    console.log("📤 Payment payload:", JSON.stringify(paymentData));
 
-      // Must have exactly 8 digits
-      if (cleaned.length === 8) {
-        return cleaned;
-      }
-
-      return "01310200"; // Valid São Paulo CEP as fallback
-    };
-
-    // Helper function to clean CPF
-    const cleanCPF = (cpf: string | null): string => {
-      if (!cpf) return "00000000000";
-      const cleaned = cpf.replace(/\D/g, "");
-
-      // Must have exactly 11 digits
-      if (cleaned.length === 11) {
-        return cleaned;
-      }
-
-      return "00000000000";
-    };
-
-    // Helper function to truncate name to Asaas limit (SEM adicionar "...")
-    const truncateName = (name: string, maxLength: number = 30): string => {
-      const trimmed = name.trim(); // Remove espaços extras primeiro
-      if (trimmed.length <= maxLength) return trimmed;
-      return trimmed.substring(0, maxLength); // SEM os "..."
-    };
-
-    // Helper function to get value with fallback from profile
-    const getValueWithFallback = (preEnrollmentValue: any, profileValue: any, defaultValue: any) => {
-      return preEnrollmentValue || profileValue || defaultValue;
-    };
-
-    console.log("Preparing customer data with validation...");
-    console.log("Pre-enrollment data:", {
-      whatsapp: preEnrollment.whatsapp,
-      postal_code: preEnrollment.postal_code,
-      cpf: preEnrollment.cpf,
-      address: preEnrollment.address,
-      state: preEnrollment.state,
-      city: preEnrollment.city,
+    const paymentResponse = await fetch(`${asaasApiUrl}/payments`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        access_token: asaasApiKey,
+      },
+      body: JSON.stringify(paymentData),
     });
 
-    console.log(
-      "Profile data:",
-      userProfile
-        ? {
-            whatsapp: userProfile.whatsapp,
-            postal_code: userProfile.postal_code,
-            cpf: userProfile.cpf,
-            address: userProfile.address,
-            state: userProfile.state,
-            city: userProfile.city,
-          }
-        : "No profile data",
-    );
+    const paymentResponseText = await paymentResponse.text();
+    console.log("📊 Asaas Payment Response:", paymentResponse.status, paymentResponseText);
 
-    // Create Asaas checkout following official documentation
-    const origin = req.headers.get("origin") || "https://6be1b209-32ae-497f-88c1-5af12f9e3bfe.lovableproject.com";
-    console.log("🌐 Origin header:", origin);
-
-    const redirectPath = isEnrollmentCheckout ? "/student/enrollments" : "/student/pre-enrollments";
-    const courseName = "Licenca Capacitacao"; // Sempre fixo para Asaas
-    const itemDescription = isEnrollmentCheckout ? "Matricula" : "Pre-Matricula";
-
-    console.log("📝 Preparando dados do checkout...");
-    console.log("   Item description:", itemDescription);
-    console.log("   Course name:", preEnrollment.courses.name);
-    console.log("   Checkout fee:", checkoutFee);
-
-    // Pré-matrícula: SEMPRE apenas PIX
-    // Matrícula (valor cheio ou com desconto): TODOS os métodos em produção
-    const allowedBillingTypes = isEnrollmentCheckout
-      ? (environment === "production" 
-          ? ["CREDIT_CARD", "PIX", "BOLETO"] 
-          : ["PIX"]) // Sandbox = só PIX para evitar erros
-      : ["PIX"]; // Pré-matrícula = sempre PIX
-
-    console.log(`🔄 Tipo: ${isEnrollmentCheckout ? 'MATRÍCULA' : 'PRÉ-MATRÍCULA'} | Ambiente: ${environment} | billingTypes: ${JSON.stringify(allowedBillingTypes)}`);
-
-    const checkoutData = {
-      billingTypes: allowedBillingTypes,
-      chargeTypes: ["DETACHED"],
-      minutesToExpire: 60,
-      externalReference: isEnrollmentCheckout ? enrollment_id : pre_enrollment_id,
-      value: checkoutFee, // CORRIGIDO: value vai no ROOT, não no item
-      callback: {
-        successUrl: `${origin}${redirectPath}?payment_success=true`,
-        cancelUrl: `${origin}${redirectPath}?payment_cancelled=true`,
-        expiredUrl: `${origin}${redirectPath}?payment_expired=true`,
-      },
-      items: [
-        {
-          externalReference: isEnrollmentCheckout ? enrollment_id : pre_enrollment_id,
-          description: itemDescription, // Já é curto o suficiente ('Matricula' ou 'Pre-Matricula')
-          name: courseName, // Sempre 'Licenca Capacitacao' (20 caracteres)
-          // CORRIGIDO: Removido quantity e value do item - não são válidos na API de Checkouts
-        },
-      ],
-      customerData: {
-        name: truncateName(getValueWithFallback(preEnrollment.full_name, userProfile?.full_name, "Nome não informado")),
-        cpfCnpj: cleanCPF(getValueWithFallback(preEnrollment.cpf, userProfile?.cpf, null)),
-        email: getValueWithFallback(preEnrollment.email, userProfile?.email, "email@exemplo.com"),
-        phone: cleanPhone(getValueWithFallback(preEnrollment.whatsapp, userProfile?.whatsapp, null)),
-        address: truncateName(
-          getValueWithFallback(preEnrollment.address, userProfile?.address, "Rua não informada"),
-          60,
-        ),
-        addressNumber: getValueWithFallback(preEnrollment.address_number, userProfile?.address_number, "S/N"),
-        postalCode: cleanPostalCode(getValueWithFallback(preEnrollment.postal_code, userProfile?.postal_code, null)),
-        province: truncateName(getValueWithFallback(preEnrollment.state, userProfile?.state, "SP"), 30),
-        city: truncateName(getValueWithFallback(preEnrollment.city, userProfile?.city, "São Paulo"), 40),
-      },
-    };
-
-    console.log("=== VALIDAÇÃO DE LIMITES ASAAS ===");
-    console.log("items[0].name length:", checkoutData.items[0].name.length, "- Value:", checkoutData.items[0].name);
-    console.log(
-      "items[0].description length:",
-      checkoutData.items[0].description.length,
-      "- Value:",
-      checkoutData.items[0].description,
-    );
-    console.log(
-      "customerData.name length:",
-      checkoutData.customerData.name.length,
-      "- Value:",
-      checkoutData.customerData.name,
-    );
-    console.log(
-      "customerData.address length:",
-      checkoutData.customerData.address.length,
-      "- Value:",
-      checkoutData.customerData.address,
-    );
-    console.log(
-      "customerData.province length:",
-      checkoutData.customerData.province.length,
-      "- Value:",
-      checkoutData.customerData.province,
-    );
-    console.log(
-      "customerData.city length:",
-      checkoutData.customerData.city.length,
-      "- Value:",
-      checkoutData.customerData.city,
-    );
-    console.log("=================================");
-
-    console.log("📤 Dados completos do checkout:");
-    console.log(JSON.stringify(checkoutData, null, 2));
-
-    // ========================================
-    // VALIDAÇÃO COMPLETA ANTES DO ENVIO ASAAS
-    // ========================================
-    
-    const validateCheckoutData = (data: any): string[] => {
-      const errors: string[] = [];
+    if (!paymentResponse.ok) {
+      console.error("❌ Asaas API error:", paymentResponseText);
       
-      // Validar items[0]
-      if (data.items[0].name.length > 30) {
-        errors.push(`items[0].name excede 30 chars: "${data.items[0].name}" (${data.items[0].name.length} chars)`);
-      }
-      if (data.items[0].description.length > 30) {
-        errors.push(`items[0].description excede 30 chars: "${data.items[0].description}" (${data.items[0].description.length} chars)`);
-      }
-      
-      // Validar customerData - ASAAS EXIGE MÁXIMO DE 30 CHARS PARA TODOS OS CAMPOS "name"
-      if (data.customerData.name.length > 30) {
-        errors.push(`customerData.name excede 30 chars: "${data.customerData.name}" (${data.customerData.name.length} chars)`);
-      }
-      if (data.customerData.address.length > 60) {
-        errors.push(`customerData.address excede 60 chars: "${data.customerData.address}" (${data.customerData.address.length} chars)`);
-      }
-      if (data.customerData.province.length > 30) {
-        errors.push(`customerData.province excede 30 chars: "${data.customerData.province}" (${data.customerData.province.length} chars)`);
-      }
-      if (data.customerData.city.length > 40) {
-        errors.push(`customerData.city excede 40 chars: "${data.customerData.city}" (${data.customerData.city.length} chars)`);
-      }
-      if (data.customerData.cpfCnpj.length !== 11 && data.customerData.cpfCnpj.length !== 14) {
-        errors.push(`customerData.cpfCnpj deve ter 11 ou 14 dígitos: "${data.customerData.cpfCnpj}" (${data.customerData.cpfCnpj.length} chars)`);
-      }
-      if (data.customerData.postalCode.length !== 8) {
-        errors.push(`customerData.postalCode deve ter 8 dígitos: "${data.customerData.postalCode}" (${data.customerData.postalCode.length} chars)`);
-      }
-      if (data.customerData.phone.length < 10 || data.customerData.phone.length > 11) {
-        errors.push(`customerData.phone deve ter 10 ou 11 dígitos: "${data.customerData.phone}" (${data.customerData.phone.length} chars)`);
-      }
-      
-      return errors;
-    };
-    
-    console.log("=== VALIDAÇÃO FINAL ANTES DO ENVIO À ASAAS ===");
-    const validationErrors = validateCheckoutData(checkoutData);
-    
-    if (validationErrors.length > 0) {
-      console.error("❌ ERROS DE VALIDAÇÃO ENCONTRADOS:");
-      validationErrors.forEach((error, index) => {
-        console.error(`   ${index + 1}. ${error}`);
-      });
-      
-      // Aplicar correções automáticas
-      console.log("🔧 Aplicando correções automáticas...");
-      
-      if (checkoutData.items[0].name.length > 30) {
-        checkoutData.items[0].name = "Licenca Capacitacao";
-        console.log("   ✅ items[0].name corrigido para:", checkoutData.items[0].name);
-      }
-      
-      if (checkoutData.items[0].description.length > 30) {
-        checkoutData.items[0].description = checkoutData.items[0].description.substring(0, 30);
-        console.log("   ✅ items[0].description corrigido para:", checkoutData.items[0].description);
-      }
-      
-      if (checkoutData.customerData.name.length > 30) {
-        checkoutData.customerData.name = checkoutData.customerData.name.substring(0, 30);
-        console.log("   ✅ customerData.name corrigido para:", checkoutData.customerData.name);
-      }
-      
-      if (checkoutData.customerData.address.length > 60) {
-        checkoutData.customerData.address = checkoutData.customerData.address.substring(0, 60);
-        console.log("   ✅ customerData.address corrigido para:", checkoutData.customerData.address);
-      }
-      
-      if (checkoutData.customerData.province.length > 30) {
-        checkoutData.customerData.province = checkoutData.customerData.province.substring(0, 30);
-        console.log("   ✅ customerData.province corrigido para:", checkoutData.customerData.province);
-      }
-      
-      if (checkoutData.customerData.city.length > 40) {
-        checkoutData.customerData.city = checkoutData.customerData.city.substring(0, 40);
-        console.log("   ✅ customerData.city corrigido para:", checkoutData.customerData.city);
-      }
-      
-      // Re-validar após correções
-      const revalidationErrors = validateCheckoutData(checkoutData);
-      if (revalidationErrors.length > 0) {
-        console.error("❌ AINDA HÁ ERROS APÓS CORREÇÃO AUTOMÁTICA:");
-        revalidationErrors.forEach((error, index) => {
-          console.error(`   ${index + 1}. ${error}`);
-        });
+      // If UNDEFINED billing type fails, try PIX only
+      if (billingType === "UNDEFINED") {
+        console.log("⚠️ UNDEFINED billing type failed, trying PIX...");
         
-        return new Response(
-          JSON.stringify({
-            error: "Dados inválidos para checkout",
-            details: revalidationErrors,
-          }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
-      }
-    }
-    
-    console.log("✅ Todos os campos validados com sucesso!");
-    console.log("courseName usado:", courseName);
-    console.log("items[0].name:", checkoutData.items[0].name, `(${checkoutData.items[0].name.length} chars)`);
-    console.log("items[0].description:", checkoutData.items[0].description, `(${checkoutData.items[0].description.length} chars)`);
-    console.log("customerData.name:", checkoutData.customerData.name, `(${checkoutData.customerData.name.length} chars)`);
-    console.log("customerData.address:", checkoutData.customerData.address, `(${checkoutData.customerData.address.length} chars)`);
-    console.log("customerData.province:", checkoutData.customerData.province, `(${checkoutData.customerData.province.length} chars)`);
-    console.log("customerData.city:", checkoutData.customerData.city, `(${checkoutData.customerData.city.length} chars)`);
-    console.log("customerData.cpfCnpj:", checkoutData.customerData.cpfCnpj, `(${checkoutData.customerData.cpfCnpj.length} chars)`);
-    console.log("customerData.postalCode:", checkoutData.customerData.postalCode, `(${checkoutData.customerData.postalCode.length} chars)`);
-    console.log("customerData.phone:", checkoutData.customerData.phone, `(${checkoutData.customerData.phone.length} chars)`);
-    console.log("============================================");
-
-    // ✅ VALIDAÇÃO CRÍTICA FINAL - FORÇAR 30 CHARS PARA TODOS OS CAMPOS "name"
-    console.log("🔒 VALIDAÇÃO CRÍTICA FINAL - Garantindo limites Asaas...");
-    
-    // Forçar limite de 30 caracteres para TODOS os campos "name"
-    if (checkoutData.items[0].name.length > 30) {
-      console.error("❌ CRÍTICO: items[0].name ainda excede 30 chars!");
-      checkoutData.items[0].name = checkoutData.items[0].name.substring(0, 30);
-    }
-    
-    if (checkoutData.items[0].description.length > 30) {
-      console.error("❌ CRÍTICO: items[0].description ainda excede 30 chars!");
-      checkoutData.items[0].description = checkoutData.items[0].description.substring(0, 30);
-    }
-    
-    if (checkoutData.customerData.name.length > 30) {
-      console.error("❌ CRÍTICO: customerData.name ainda excede 30 chars!");
-      checkoutData.customerData.name = checkoutData.customerData.name.substring(0, 30);
-    }
-    
-    // Log final dos campos validados
-    console.log("✅ VALIDAÇÃO FINAL COMPLETA:");
-    console.log("   items[0].name:", checkoutData.items[0].name, `(${checkoutData.items[0].name.length} chars)`);
-    console.log("   items[0].description:", checkoutData.items[0].description, `(${checkoutData.items[0].description.length} chars)`);
-    console.log("   customerData.name:", checkoutData.customerData.name, `(${checkoutData.customerData.name.length} chars)`);
-    
-    // Garantir que NENHUM campo excede os limites
-    if (checkoutData.items[0].name.length > 30 || 
-        checkoutData.items[0].description.length > 30 || 
-        checkoutData.customerData.name.length > 30) {
-      console.error("❌ FALHA CRÍTICA: Campos ainda excedem limites após correção!");
-      return new Response(
-        JSON.stringify({
-          error: "Erro interno: não foi possível validar dados do checkout",
-          details: "Campos excedem limites da API Asaas"
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // Use the configured environment from settings - CORRIGIDO: URL de sandbox
-    const asaasApiUrl =
-      environment === "production"
-        ? "https://api.asaas.com/v3/checkouts"
-        : "https://api-sandbox.asaas.com/v3/checkouts";
-
-    console.log(`Using Asaas API URL: ${asaasApiUrl} (environment: ${environment})`);
-
-    let checkoutResult;
-    try {
-      console.log("🔄 Chamando API Asaas...");
-      
-      // Log COMPLETO do que está sendo enviado
-      const requestBody = JSON.stringify(checkoutData);
-      console.log("📤 REQUEST BODY COMPLETO:");
-      console.log(requestBody);
-      console.log("📊 TAMANHO DO REQUEST:", requestBody.length, "bytes");
-      
-      let asaasResponse = await fetch(asaasApiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          access_token: asaasApiKey,
-        },
-        body: requestBody,
-      });
-
-      let responseText = await asaasResponse.text();
-
-      console.log("📊 Asaas API Response Status:", asaasResponse.status);
-      console.log("📊 Asaas API Response Headers:", JSON.stringify(Object.fromEntries(asaasResponse.headers)));
-      console.log("📊 Asaas API Response Body:", responseText);
-
-      // FALLBACK: Se erro de billingTypes, tentar novamente só com PIX
-      if (!asaasResponse.ok && responseText.toLowerCase().includes("billingtypes")) {
-        console.log("⚠️ Erro de billingTypes detectado. Tentando fallback para PIX...");
+        paymentData.billingType = "PIX";
         
-        checkoutData.billingTypes = ["PIX"];
-        const fallbackBody = JSON.stringify(checkoutData);
-        
-        asaasResponse = await fetch(asaasApiUrl, {
+        const retryResponse = await fetch(`${asaasApiUrl}/payments`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             access_token: asaasApiKey,
           },
-          body: fallbackBody,
+          body: JSON.stringify(paymentData),
         });
-        
-        responseText = await asaasResponse.text();
-        console.log("📊 Fallback Response:", asaasResponse.status, responseText);
-      }
 
-      if (!asaasResponse.ok) {
-        console.error("❌ ASAAS API ERROR:");
-        console.error("   Status:", asaasResponse.status);
-        console.error("   Response:", responseText);
+        const retryResponseText = await retryResponse.text();
+        console.log("📊 Retry Response:", retryResponse.status, retryResponseText);
 
-        // Tentar parsear o erro para extrair detalhes
-        try {
-          const errorData = JSON.parse(responseText);
-          console.error("   Parsed Error:", JSON.stringify(errorData, null, 2));
-          console.error("❌ ASAAS API error:", JSON.stringify(errorData));
-          
-          if (errorData.errors) {
-            errorData.errors.forEach((err: any, index: number) => {
-              console.error(`   Error ${index + 1}:`, err);
-              console.error(`      Code: ${err.code}`);
-              console.error(`      Description: ${err.description}`);
-            });
-            
-            // Se o erro for sobre o campo "name", mostrar TODOS os campos "name" enviados
-            const hasNameError = errorData.errors.some((err: any) => 
-              err.description && err.description.includes('name')
-            );
-            
-            if (hasNameError) {
-              console.error("🔍 DETALHAMENTO DOS CAMPOS 'NAME' ENVIADOS:");
-              console.error("   items[0].name:", checkoutData.items[0].name, `(${checkoutData.items[0].name.length} chars)`);
-              console.error("   items[0].description:", checkoutData.items[0].description, `(${checkoutData.items[0].description.length} chars)`);
-              console.error("   customerData.name:", checkoutData.customerData.name, `(${checkoutData.customerData.name.length} chars)`);
-            }
-          }
-        } catch (parseError) {
-          console.error("   Could not parse error response");
-        }
-
-        return new Response(
-          JSON.stringify({
-            error: "Failed to create checkout",
-            details: responseText,
-            status: asaasResponse.status,
-          }),
-          {
-            // Preserve upstream status code to make debugging and handling easier.
-            status: asaasResponse.status,
+        if (!retryResponse.ok) {
+          return new Response(JSON.stringify({ 
+            error: "Falha ao criar pagamento",
+            details: retryResponseText,
+            status: retryResponse.status
+          }), {
+            status: retryResponse.status,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
-      }
-
-      checkoutResult = JSON.parse(responseText);
-      console.log("✅ Asaas checkout criado com sucesso:", checkoutResult.id);
-    } catch (error) {
-      console.error("💥 Exception ao chamar API Asaas:", error);
-      if (error instanceof Error) {
-        console.error("   Error name:", error.name);
-        console.error("   Error message:", error.message);
-        console.error("   Error stack:", error.stack);
-      }
-      throw error;
-    }
-    console.log("Asaas checkout response:", checkoutResult);
-
-    // ETAPA 3: Store checkout info in payments table with try-catch
-    try {
-      const paymentInsertData: any = {
-        pre_enrollment_id: pre_enrollment_id,
-        amount: checkoutFee,
-        currency: "BRL",
-        status: "pending",
-        kind: checkoutKind,
-        asaas_payment_id: checkoutResult.id,
-      };
-
-      if (isEnrollmentCheckout && enrollment_id) {
-        paymentInsertData.enrollment_id = enrollment_id;
-      }
-
-      const { data: newPayment, error: paymentError } = await serviceClient
-        .from("payments")
-        .insert(paymentInsertData)
-        .select()
-        .single();
-
-      if (paymentError) {
-        console.error("Error storing payment:", paymentError);
-        // Não falhar a requisição, apenas logar o erro
-        // O checkout do Asaas já foi criado com sucesso
-      } else {
-        console.log("Payment record created:", newPayment.id);
-
-        // Update enrollment with payment reference AND enrollment_amount if this is an enrollment checkout
-        if (isEnrollmentCheckout && enrollment_id) {
-          const updateData: any = { enrollment_payment_id: checkoutResult.id };
-          
-          // Persistir o valor final da matrícula (com desconto aplicado)
-          updateData.enrollment_amount = checkoutFee;
-          console.log(`💾 Persistindo enrollment_amount = R$ ${checkoutFee} na matrícula ${enrollment_id}`);
-          
-          const { error: updateError } = await serviceClient
-            .from("enrollments")
-            .update(updateData)
-            .eq("id", enrollment_id);
-
-          if (updateError) {
-            console.error("Error updating enrollment with payment ID and amount:", updateError);
-          } else {
-            console.log("✅ Enrollment atualizado com enrollment_amount:", checkoutFee);
-          }
+          });
         }
+
+        const retryResult = JSON.parse(retryResponseText);
+        console.log("✅ Payment created (retry):", retryResult.id);
+        
+        // Continue with retry result
+        return await processPaymentResult(retryResult, serviceClient, pre_enrollment_id, enrollment_id, isEnrollmentCheckout, checkoutFee, checkoutKind, checkoutReason, prePaidTotal, environment, corsHeaders);
       }
-    } catch (paymentInsertError) {
-      console.error("Exception storing payment:", paymentInsertError);
-      // Continuar mesmo com erro, pois o checkout já foi criado
-    }
 
-    // Construct checkout URL if not provided directly
-    const checkoutUrl =
-      checkoutResult.url ||
-      `https://${environment === "production" ? "asaas.com" : "sandbox.asaas.com"}/checkoutSession/show?id=${checkoutResult.id}`;
-
-    if (!checkoutResult.id) {
-      console.error("Asaas did not return checkout ID:", checkoutResult);
-      return new Response(JSON.stringify({ error: "Failed to create checkout - no ID returned" }), {
-        status: 500,
+      return new Response(JSON.stringify({ 
+        error: "Falha ao criar pagamento",
+        details: paymentResponseText,
+        status: paymentResponse.status
+      }), {
+        status: paymentResponse.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Calcular desconto aplicado para retornar ao frontend
-    const originalFee = isEnrollmentCheckout ? (preEnrollment.courses?.enrollment_fee || 0) : (preEnrollment.courses?.pre_enrollment_fee || 0);
-    const discountApplied = originalFee - checkoutFee;
+    const paymentResult = JSON.parse(paymentResponseText);
+    console.log("✅ Payment created:", paymentResult.id);
 
-    console.log("✅ RESPOSTA FINAL:");
-    console.log(`   applied_amount: R$ ${checkoutFee}`);
-    console.log(`   reason: ${discountReason}`);
-    console.log(`   pre_paid_total: R$ ${prePaidTotal}`);
-    console.log(`   candidate_from_db: R$ ${candidateFromDB}`);
-    console.log(`   candidate_from_payments: R$ ${candidateFromPayments}`);
+    return await processPaymentResult(paymentResult, serviceClient, pre_enrollment_id, enrollment_id, isEnrollmentCheckout, checkoutFee, checkoutKind, checkoutReason, prePaidTotal, environment, corsHeaders);
 
+  } catch (error: any) {
+    console.error("💥 Unexpected error:", error);
     return new Response(
       JSON.stringify({
-        checkout_url: checkoutUrl,
-        checkout_id: checkoutResult.id,
-        original_fee: originalFee,
-        discount: discountApplied > 0 ? discountApplied : 0,
-        final_amount: checkoutFee,
-        // AUDITORIA: Campos extras para debug/confirmação
-        applied_amount: checkoutFee,
-        reason: discountReason,
-        pre_paid_total: prePaidTotal,
-        candidate_from_db: candidateFromDB,
-        candidate_from_payments: candidateFromPayments,
-        discounted_fee_db: discountedFeeFromDB || null,
-        pre_enrollment_fee_db: preEnrollmentFeeDB,
-        override_received: override_amount,
-        override_parsed: overrideAmountNumber,
-        used_override: hasOverrideAmount,
-        reused: false,
+        error: "Internal server error",
+        message: error?.message || "Unknown error",
+        stack: error?.stack?.substring(0, 500),
       }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      },
-    );
-  } catch (error) {
-    console.error("💥 Unexpected error:", error);
-    
-    // Enhanced error logging for debugging
-    let errorMessage = "Internal server error";
-    let errorDetails = "Unknown error";
-    let errorStack = "";
-    
-    if (error instanceof Error) {
-      console.error("💥 Error name:", error.name);
-      console.error("💥 Error message:", error.message);
-      console.error("💥 Error stack:", error.stack);
-      errorMessage = error.message || errorMessage;
-      errorDetails = error.name || "Error";
-      errorStack = error.stack || "";
-    } else if (typeof error === "string") {
-      console.error("💥 Error string:", error);
-      errorMessage = error;
-    } else {
-      console.error("💥 Error object:", JSON.stringify(error));
-      try {
-        errorDetails = JSON.stringify(error);
-      } catch {
-        errorDetails = String(error);
-      }
-    }
-    
-    return new Response(
-      JSON.stringify({ 
-        error: errorMessage, 
-        details: errorDetails,
-        stack: errorStack.split('\n').slice(0, 5).join('\n'), // First 5 lines of stack
-        hint: "Check Edge Function logs for full details"
-      }), 
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });
+
+async function processPaymentResult(
+  paymentResult: any,
+  serviceClient: any,
+  pre_enrollment_id: string,
+  enrollment_id: string | null,
+  isEnrollmentCheckout: boolean,
+  checkoutFee: number,
+  checkoutKind: string,
+  checkoutReason: string,
+  prePaidTotal: number,
+  environment: string,
+  corsHeaders: Record<string, string>
+) {
+  // Store payment in database
+  try {
+    const paymentInsertData: any = {
+      pre_enrollment_id: pre_enrollment_id,
+      amount: checkoutFee,
+      currency: "BRL",
+      status: "pending",
+      kind: checkoutKind,
+      asaas_payment_id: paymentResult.id,
+    };
+
+    if (isEnrollmentCheckout && enrollment_id) {
+      paymentInsertData.enrollment_id = enrollment_id;
+    }
+
+    const { error: insertError } = await serviceClient
+      .from("payments")
+      .insert(paymentInsertData);
+
+    if (insertError) {
+      console.error("Error storing payment:", insertError);
+    } else {
+      console.log("✅ Payment stored in database");
+    }
+  } catch (dbError) {
+    console.error("DB error storing payment:", dbError);
+  }
+
+  // Update pre-enrollment or enrollment status
+  try {
+    if (isEnrollmentCheckout && enrollment_id) {
+      await serviceClient
+        .from("enrollments")
+        .update({
+          enrollment_payment_id: paymentResult.id,
+          enrollment_amount: checkoutFee,
+        })
+        .eq("id", enrollment_id);
+    } else {
+      await serviceClient
+        .from("pre_enrollments")
+        .update({ status: "waiting_payment" })
+        .eq("id", pre_enrollment_id);
+    }
+  } catch (updateError) {
+    console.error("Error updating status:", updateError);
+  }
+
+  // Build invoice URL - Asaas provides invoiceUrl in the response
+  const invoiceUrl = paymentResult.invoiceUrl || 
+    `https://${environment === "production" ? "www.asaas.com" : "sandbox.asaas.com"}/i/${paymentResult.id}`;
+
+  console.log("🔗 Invoice URL:", invoiceUrl);
+
+  return new Response(
+    JSON.stringify({
+      checkout_url: invoiceUrl, // Keep for backwards compatibility
+      invoice_url: invoiceUrl,
+      payment_id: paymentResult.id,
+      checkout_id: paymentResult.id, // Keep for backwards compatibility
+      applied_amount: checkoutFee,
+      reason: checkoutReason,
+      pre_paid_total: prePaidTotal,
+      billing_type: paymentResult.billingType,
+      due_date: paymentResult.dueDate,
+      pix_qr_code_url: paymentResult.pixQrCodeUrl || null,
+      bank_slip_url: paymentResult.bankSlipUrl || null,
+    }),
+    {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    },
+  );
+}
