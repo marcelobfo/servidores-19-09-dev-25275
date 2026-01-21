@@ -215,7 +215,8 @@ export function EnrollmentsPage() {
     }
   };
 
-  // Função para checkout com desconto - passa override_amount diretamente para a Edge Function
+  // Função para checkout com desconto
+  // REGRA: o BACKEND calcula e aplica o desconto; o front não envia valor.
   const handleGenerateDiscountedCheckout = async (enrollment: Enrollment, finalAmount: number) => {
     try {
       setGeneratingDiscountedPayment(true);
@@ -223,14 +224,13 @@ export function EnrollmentsPage() {
       console.log('💰 [DISCOUNTED-CHECKOUT] Gerando checkout com desconto DIRETO');
       console.log('📋 Enrollment ID:', enrollment.id);
       console.log('📋 Pre-Enrollment ID:', enrollment.pre_enrollments?.id);
-      console.log('💵 override_amount (valor pré-calculado):', finalAmount);
+      console.log('💵 Valor exibido (front):', finalAmount);
 
-      // Usa create-enrollment-checkout com override_amount para forçar o valor direto
+      // Usa create-enrollment-checkout e força recálculo (servidor aplica desconto)
       const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
         body: {
           pre_enrollment_id: enrollment.pre_enrollments?.id,
           enrollment_id: enrollment.id,
-          override_amount: finalAmount, // FORÇA O VALOR COM DESCONTO
           force_recalculate: true
         }
       });
