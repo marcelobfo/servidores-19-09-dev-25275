@@ -117,7 +117,16 @@ serve(async (req) => {
       });
     }
 
-    const environment = paymentSettings.environment || "sandbox";
+    // Normalize to avoid issues like "Produção", "PRODUCTION", etc.
+    const rawEnvironment = (paymentSettings.environment ?? "sandbox").toString().toLowerCase().trim();
+    const environment =
+      rawEnvironment === "production" ||
+      rawEnvironment === "prod" ||
+      rawEnvironment === "producao" ||
+      rawEnvironment === "produção"
+        ? "production"
+        : "sandbox";
+
     const asaasApiKey = environment === "production" 
       ? paymentSettings.asaas_api_key_production 
       : paymentSettings.asaas_api_key_sandbox;
@@ -299,7 +308,8 @@ serve(async (req) => {
         error: "Falha ao criar checkout", 
         details: responseText 
       }), {
-        status: 500,
+        // Preserve upstream status code to make debugging and handling easier.
+        status: asaasResponse.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
