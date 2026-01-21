@@ -73,22 +73,16 @@ serve(async (req) => {
     const token = authHeader.replace("Bearer ", "");
     console.log("Token extracted:", token.substring(0, 20) + "...");
 
-    // Create a client with the user's auth header for proper JWT validation
-    const authClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    // Validate JWT using getClaims() - works without active session lookup
+    // This validates the token locally and extracts claims without network call
+    const { data: claimsData, error: authError } = await supabaseClient.auth.getClaims(token);
 
-    // Verify the user using getUser() - the client extracts JWT from the Authorization header
-    const { data: { user }, error: authError } = await authClient.auth.getUser();
-
-    if (authError) {
-      console.error("Authentication error:", authError.message);
+    if (authError || !claimsData?.claims) {
+      console.error("Authentication error:", authError?.message || "No claims found");
       return new Response(
         JSON.stringify({
           error: "Invalid authentication",
-          details: authError.message,
+          details: authError?.message || "Token validation failed",
         }),
         {
           status: 401,
@@ -97,15 +91,23 @@ serve(async (req) => {
       );
     }
 
-    if (!user) {
-      console.error("No user found in token");
-      return new Response(JSON.stringify({ error: "Invalid authentication - no user found" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // Extract user ID from claims
+    const userId = claimsData.claims.sub as string;
+    if (!userId) {
+      console.error("No user ID (sub) in token claims");
+      return new Response(
+        JSON.stringify({ error: "Invalid token - no user ID" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    console.log(`✅ Authenticated user: ${user.id}`);
+    console.log(`✅ Authenticated user: ${userId}`);
+    
+    // Create a user-like object for compatibility with rest of code
+    const user = { id: userId, email: claimsData.claims.email as string };
 
     // Get payment settings using serviceClient to bypass RLS
     console.log("💳 Fetching payment settings...");
