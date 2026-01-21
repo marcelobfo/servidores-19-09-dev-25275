@@ -256,6 +256,8 @@ serve(async (req) => {
       billingTypes: allowedBillingTypes,
       chargeTypes: ["DETACHED"],
       minutesToExpire: 60,
+      externalReference: enrollment_id,
+      value: finalAmount, // CORRIGIDO: value vai no ROOT, não no item
       callback: {
         successUrl: `${origin}/student/enrollments?payment_success=true`,
         cancelUrl: `${origin}/student/enrollments?payment_cancelled=true`,
@@ -265,8 +267,7 @@ serve(async (req) => {
         externalReference: enrollment_id,
         description: "Matricula",
         name: "Licenca Capacitacao",
-        quantity: 1,
-        value: finalAmount,
+        // CORRIGIDO: Removido quantity e value - não são válidos na API de Checkouts
       }],
       customerData: {
         name: truncate(preEnrollment.full_name || "Nome não informado", 30),
