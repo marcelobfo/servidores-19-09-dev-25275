@@ -970,11 +970,11 @@ serve(async (req) => {
       );
     }
 
-    // Use the configured environment from settings
+    // Use the configured environment from settings - CORRIGIDO: URL de sandbox
     const asaasApiUrl =
       environment === "production"
         ? "https://api.asaas.com/v3/checkouts"
-        : "https://sandbox.asaas.com/api/v3/checkouts";
+        : "https://api-sandbox.asaas.com/v3/checkouts";
 
     console.log(`Using Asaas API URL: ${asaasApiUrl} (environment: ${environment})`);
 
@@ -988,7 +988,7 @@ serve(async (req) => {
       console.log(requestBody);
       console.log("📊 TAMANHO DO REQUEST:", requestBody.length, "bytes");
       
-      const asaasResponse = await fetch(asaasApiUrl, {
+      let asaasResponse = await fetch(asaasApiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -997,11 +997,31 @@ serve(async (req) => {
         body: requestBody,
       });
 
-      const responseText = await asaasResponse.text();
+      let responseText = await asaasResponse.text();
 
       console.log("📊 Asaas API Response Status:", asaasResponse.status);
       console.log("📊 Asaas API Response Headers:", JSON.stringify(Object.fromEntries(asaasResponse.headers)));
       console.log("📊 Asaas API Response Body:", responseText);
+
+      // FALLBACK: Se erro de billingTypes, tentar novamente só com PIX
+      if (!asaasResponse.ok && responseText.toLowerCase().includes("billingtypes")) {
+        console.log("⚠️ Erro de billingTypes detectado. Tentando fallback para PIX...");
+        
+        checkoutData.billingTypes = ["PIX"];
+        const fallbackBody = JSON.stringify(checkoutData);
+        
+        asaasResponse = await fetch(asaasApiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            access_token: asaasApiKey,
+          },
+          body: fallbackBody,
+        });
+        
+        responseText = await asaasResponse.text();
+        console.log("📊 Fallback Response:", asaasResponse.status, responseText);
+      }
 
       if (!asaasResponse.ok) {
         console.error("❌ ASAAS API ERROR:");
