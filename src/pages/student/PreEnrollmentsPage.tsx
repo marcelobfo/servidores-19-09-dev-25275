@@ -709,13 +709,30 @@ export function PreEnrollmentsPage() {
         throw new Error(checkoutData?.error || 'Nenhum checkout_url retornado');
       }
 
-      // Sucesso - abrir checkout
+      // Sucesso - abrir checkout com audit log completo
+      const auditReason = checkoutData?.reason || 'unknown';
+      const prePaidTotal = checkoutData?.pre_paid_total || 0;
+      const candidateFromDB = checkoutData?.candidate_from_db || 0;
+      const candidateFromPayments = checkoutData?.candidate_from_payments || 0;
+      
       console.log(`✅ [ENROLLMENT-DISCOUNT] Checkout com desconto criado com sucesso!`);
       console.log(`   🔗 URL: ${checkoutUrl}`);
       console.log(`   💰 Valor aplicado: R$ ${appliedAmount}`);
+      console.log(`   📝 Razão: ${auditReason}`);
+      console.log(`   💳 Total pré-pago (payments): R$ ${prePaidTotal}`);
+      console.log(`   💾 Candidato DB: R$ ${candidateFromDB}`);
+      console.log(`   💳 Candidato Payments: R$ ${candidateFromPayments}`);
       console.log(`   🔄 Reutilizado: ${checkoutData?.reused ? 'Sim' : 'Não'}`);
       
-      toast.success(`Checkout com desconto criado (R$ ${Number(appliedAmount).toFixed(2)})! Redirecionando...`);
+      // Toast informativo com razão do desconto
+      const reasonText = auditReason === 'payments_total' 
+        ? '(crédito via pagamentos)' 
+        : auditReason === 'db_discounted_fee' 
+          ? '(valor pré-configurado)'
+          : auditReason === 'no_credit_full_price'
+            ? '(sem crédito encontrado)'
+            : '';
+      toast.success(`Checkout: R$ ${Number(appliedAmount).toFixed(2)} ${reasonText}`);
       
       // Tentar abrir em nova aba, senão redirecionar
       const newWindow = window.open(checkoutUrl, '_blank');
