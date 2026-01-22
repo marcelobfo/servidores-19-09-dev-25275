@@ -80,6 +80,53 @@ const EnrollmentsPage = () => {
     fetchSettings();
   }, []);
 
+  // Realtime subscription for automatic updates
+  useEffect(() => {
+    console.log('🔔 [REALTIME-ADMIN] Inscrevendo para atualizações de pré-matrículas e pagamentos');
+
+    const channel = supabase
+      .channel('admin-enrollments-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pre_enrollments'
+        },
+        (payload) => {
+          console.log('🔔 [REALTIME-ADMIN] Pré-matrícula atualizada:', payload);
+          fetchEnrollments();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'payments'
+        },
+        (payload) => {
+          console.log('🔔 [REALTIME-ADMIN] Pagamento atualizado:', payload);
+          const newStatus = (payload.new as any)?.status;
+          if (newStatus === 'confirmed' || newStatus === 'received') {
+            toast({
+              title: "Pagamento confirmado",
+              description: "Um pagamento foi confirmado. Lista atualizada."
+            });
+          }
+          fetchEnrollments();
+        }
+      )
+      .subscribe((status) => {
+        console.log('🔔 [REALTIME-ADMIN] Status da subscription:', status);
+      });
+
+    return () => {
+      console.log('🔔 [REALTIME-ADMIN] Removendo subscription');
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const fetchSettings = async () => {
     try {
       const { data, error } = await supabase
