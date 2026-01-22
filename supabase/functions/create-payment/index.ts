@@ -7,6 +7,10 @@ const truncateString = (str: string, maxLength: number): string => {
   return str.length > maxLength ? str.substring(0, maxLength) : str;
 };
 
+// Default Asaas URLs
+const DEFAULT_SANDBOX_URL = "https://api-sandbox.asaas.com/v3";
+const DEFAULT_PRODUCTION_URL = "https://api.asaas.com/v3";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -215,7 +219,12 @@ serve(async (req) => {
       throw new Error("Sistema de pagamentos está desabilitado.");
     }
 
-    console.log("Payment settings loaded:", { enabled: paymentSettings.enabled });
+    // Determine Asaas Base URL based on environment
+    const asaasBaseUrl = paymentSettings.environment === "production"
+      ? (paymentSettings.asaas_base_url_production || DEFAULT_PRODUCTION_URL)
+      : (paymentSettings.asaas_base_url_sandbox || DEFAULT_SANDBOX_URL);
+
+    console.log("Payment settings loaded:", { enabled: paymentSettings.enabled, environment: paymentSettings.environment, baseUrl: asaasBaseUrl });
 
     // Get pre-enrollment data
     const { data: preEnrollment, error: enrollmentError } = await supabaseClient
@@ -340,7 +349,7 @@ serve(async (req) => {
     console.log("Creating customer with data:", customerData);
 
     console.log("Making request to Asaas API - Create Customer");
-    const customerResponse = await fetch("https://api.asaas.com/v3/customers", {
+    const customerResponse = await fetch(`${asaasBaseUrl}/customers`, {
       method: "POST",
       headers: {
         access_token: apiKey,
@@ -405,7 +414,7 @@ serve(async (req) => {
     console.log("Creating payment with data:", paymentData);
 
     console.log("Making request to Asaas API - Create Payment");
-    const paymentResponse = await fetch("https://api.asaas.com/v3/payments", {
+    const paymentResponse = await fetch(`${asaasBaseUrl}/payments`, {
       method: "POST",
       headers: {
         access_token: apiKey,
@@ -454,7 +463,7 @@ serve(async (req) => {
     // Get PIX QR Code
     console.log("Making request to Asaas API - Get PIX QR Code for payment:", payment.id);
 
-    const qrCodeResponse = await fetch(`https://api.asaas.com/v3/payments/${payment.id}/pixQrCode`, {
+    const qrCodeResponse = await fetch(`${asaasBaseUrl}/payments/${payment.id}/pixQrCode`, {
       headers: {
         access_token: apiKey,
       },
