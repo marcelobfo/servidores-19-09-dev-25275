@@ -258,7 +258,7 @@ serve(async (req) => {
       });
     }
 
-    // Calculate discount
+    // Calculate discount - FIXED: Consider manual_approval as fallback
     const { data: confirmedPrePayment } = await serviceClient
       .from("payments")
       .select("amount")
@@ -268,11 +268,39 @@ serve(async (req) => {
       .maybeSingle();
 
     const originalFee = course.enrollment_fee || 0;
-    const preEnrollmentDiscount = confirmedPrePayment?.amount ? Number(confirmedPrePayment.amount) : 0;
+    const creditFromPayments = confirmedPrePayment?.amount ? Number(confirmedPrePayment.amount) : 0;
+    
+    // Get pre_enrollment_fee for manual approval fallback
+    const { data: courseWithFee } = await serviceClient
+      .from("courses")
+      .select("pre_enrollment_fee, discounted_enrollment_fee")
+      .eq("id", course.id)
+      .single();
+    
+    const preEnrollmentFee = courseWithFee?.pre_enrollment_fee || 0;
+    const discountedFeeFromDB = courseWithFee?.discounted_enrollment_fee || 0;
+    
+    // FIXED: Check for manual_approval flag in pre_enrollments
+    const { data: fullPreEnrollment } = await serviceClient
+      .from("pre_enrollments")
+      .select("manual_approval")
+      .eq("id", preEnrollment.id)
+      .single();
+    
+    const isManuallyApproved = fullPreEnrollment?.manual_approval === true;
+    const inferredCredit = isManuallyApproved && creditFromPayments === 0 ? preEnrollmentFee : 0;
+    const preEnrollmentDiscount = creditFromPayments + inferredCredit;
+    
+    console.log(`📊 Discount calculation: creditFromPayments=${creditFromPayments}, inferredCredit=${inferredCredit}, total=${preEnrollmentDiscount}, manual_approval=${isManuallyApproved}`);
     
     let finalAmount: number;
     if (force_amount && force_amount > 0) {
       finalAmount = Math.max(force_amount, 5);
+    } else if (preEnrollmentDiscount > 0) {
+      finalAmount = Math.max(originalFee - preEnrollmentDiscount, 5);
+    } else if (discountedFeeFromDB > 0 && discountedFeeFromDB < originalFee) {
+      // FIXED: Also apply discount if discounted_fee is set in database, even without payment
+      finalAmount = discountedFeeFromDB;
     } else {
       finalAmount = Math.max(originalFee - preEnrollmentDiscount, 5);
     }

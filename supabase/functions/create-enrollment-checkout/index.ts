@@ -353,9 +353,20 @@ serve(async (req) => {
         .in("status", ["confirmed", "received"])
         .maybeSingle();
 
-      prePaidTotal = confirmedPrePayment?.amount ? Number(confirmedPrePayment.amount) : 0;
+      // FIXED: Check for manual_approval as fallback for discount (like frontend does)
+      const creditFromPayments = confirmedPrePayment?.amount ? Number(confirmedPrePayment.amount) : 0;
+      const preEnrollmentFee = preEnrollment.courses?.pre_enrollment_fee || 0;
+      
+      // If manual_approval is true but no payment exists, infer credit from pre_enrollment_fee
+      const isManuallyApproved = preEnrollment.manual_approval === true;
+      const inferredCredit = isManuallyApproved && creditFromPayments === 0 ? preEnrollmentFee : 0;
+      
+      prePaidTotal = creditFromPayments + inferredCredit;
+      
       const originalFee = preEnrollment.courses?.enrollment_fee || 0;
       const discountedFee = preEnrollment.courses?.discounted_enrollment_fee || 0;
+
+      console.log(`📊 Discount calculation: creditFromPayments=${creditFromPayments}, inferredCredit=${inferredCredit}, prePaidTotal=${prePaidTotal}, manual_approval=${isManuallyApproved}`);
 
       if (prePaidTotal > 0 && discountedFee > 0) {
         checkoutFee = Math.min(discountedFee, originalFee - prePaidTotal);
@@ -363,6 +374,10 @@ serve(async (req) => {
       } else if (prePaidTotal > 0) {
         checkoutFee = Math.max(originalFee - prePaidTotal, 5);
         checkoutReason = "pre_payment_credit";
+      } else if (discountedFee > 0 && discountedFee < originalFee) {
+        // FIXED: Also apply discount if discounted_fee is set in database, even without payment
+        checkoutFee = discountedFee;
+        checkoutReason = "discounted_fee_preset";
       } else {
         checkoutFee = originalFee;
         checkoutReason = "full_enrollment";
