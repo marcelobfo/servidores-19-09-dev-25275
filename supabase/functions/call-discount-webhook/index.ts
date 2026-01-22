@@ -84,19 +84,30 @@ Deno.serve(async (req) => {
 
     console.log("🔗 [DISCOUNT-WEBHOOK-PROXY] Chamando webhook:", webhookUrl);
 
-    // Fetch Asaas settings
+    // Fetch Asaas settings - FIXED: Use correct column names
     const { data: paymentSettings } = await supabase
       .from("payment_settings")
-      .select("asaas_environment, asaas_api_key, asaas_sandbox_api_key")
+      .select("environment, asaas_api_key_sandbox, asaas_api_key_production, asaas_base_url_sandbox, asaas_base_url_production")
       .maybeSingle();
 
-    const asaasEnvironment = paymentSettings?.asaas_environment || 'sandbox';
+    // FIXED: Normalize environment value
+    const rawEnvironment = (paymentSettings?.environment ?? "sandbox").toString().toLowerCase().trim();
+    const asaasEnvironment = 
+      rawEnvironment === "production" || rawEnvironment === "prod" || rawEnvironment === "producao"
+        ? "production" 
+        : "sandbox";
+    
     const asaasApiKey = asaasEnvironment === 'production'
-      ? paymentSettings?.asaas_api_key
-      : paymentSettings?.asaas_sandbox_api_key;
+      ? paymentSettings?.asaas_api_key_production
+      : paymentSettings?.asaas_api_key_sandbox;
+    
+    // FIXED: Use dynamic URLs from database with fallback
+    const DEFAULT_SANDBOX_URL = 'https://api-sandbox.asaas.com/v3';
+    const DEFAULT_PRODUCTION_URL = 'https://api.asaas.com/v3';
+    
     const asaasBaseUrl = asaasEnvironment === 'production'
-      ? 'https://api.asaas.com/'
-      : 'https://api-sandbox.asaas.com/';
+      ? (paymentSettings?.asaas_base_url_production || DEFAULT_PRODUCTION_URL)
+      : (paymentSettings?.asaas_base_url_sandbox || DEFAULT_SANDBOX_URL);
 
     console.log("🔑 [DISCOUNT-WEBHOOK-PROXY] Asaas Environment:", asaasEnvironment);
     console.log("🌐 [DISCOUNT-WEBHOOK-PROXY] Asaas Base URL:", asaasBaseUrl);
