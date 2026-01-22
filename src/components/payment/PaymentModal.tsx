@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +47,45 @@ export function PaymentModal({
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [studentEmail, setStudentEmail] = useState<string>('');
   const { toast } = useToast();
+
+  // Realtime subscription for automatic payment status updates
+  useEffect(() => {
+    if (!paymentData?.id || !isOpen) return;
+
+    console.log('🔔 [REALTIME] Inscrevendo para atualizações do pagamento:', paymentData.id);
+
+    const channel = supabase
+      .channel(`payment-${paymentData.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'payments',
+          filter: `id=eq.${paymentData.id}`
+        },
+        (payload) => {
+          console.log('🔔 [REALTIME] Pagamento atualizado:', payload.new);
+          const newStatus = (payload.new as any).status;
+          if (newStatus === 'confirmed' || newStatus === 'received') {
+            toast({
+              title: "Pagamento confirmado!",
+              description: "Seu pagamento foi processado com sucesso."
+            });
+            onPaymentSuccess();
+            onClose();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('🔔 [REALTIME] Status da subscription:', status);
+      });
+
+    return () => {
+      console.log('🔔 [REALTIME] Removendo subscription do pagamento');
+      supabase.removeChannel(channel);
+    };
+  }, [paymentData?.id, isOpen, onPaymentSuccess, onClose, toast]);
 
   useEffect(() => {
     if (isOpen && !paymentData) {
@@ -104,6 +143,18 @@ export function PaymentModal({
       if (!preEnrollmentId || !amount || amount <= 0) {
         throw new Error('Dados de pagamento inválidos. Verifique se todos os dados obrigatórios estão preenchidos.');
       }
+
+      // Refresh session before calling Edge Function to prevent "Auth session missing" error
+      console.log('🔄 [PAYMENT] Renovando sessão antes de criar pagamento...');
+      const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) {
+        console.error('❌ [PAYMENT] Erro ao renovar sessão:', refreshError);
+        throw new Error('Sessão expirada. Por favor, faça login novamente.');
+      }
+      if (!session) {
+        throw new Error('Sessão inválida. Por favor, faça login novamente.');
+      }
+      console.log('✅ [PAYMENT] Sessão renovada com sucesso');
 
       let enrollmentIdToSend = enrollmentId;
       

@@ -83,6 +83,54 @@ export function EnrollmentsPage() {
     }
   }, [user]);
 
+  // Realtime subscription for automatic enrollment status updates
+  useEffect(() => {
+    if (!user) return;
+
+    console.log('🔔 [REALTIME] Inscrevendo para atualizações de matrículas do usuário:', user.id);
+
+    const channel = supabase
+      .channel('enrollments-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'enrollments',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('🔔 [REALTIME] Matrícula atualizada:', payload);
+          // Recarregar lista quando houver mudança
+          fetchEnrollments();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'payments'
+        },
+        (payload) => {
+          console.log('🔔 [REALTIME] Pagamento atualizado:', payload);
+          const newStatus = (payload.new as any).status;
+          if (newStatus === 'confirmed' || newStatus === 'received') {
+            toast.success('Pagamento confirmado! Atualizando lista...');
+            fetchEnrollments();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('🔔 [REALTIME] Status da subscription:', status);
+      });
+
+    return () => {
+      console.log('🔔 [REALTIME] Removendo subscription de matrículas');
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   // Buscar informações de desconto para matrículas pendentes
   // REGRA DE OURO: Somar TODOS os pagamentos confirmados, não só o último
   const fetchDiscountInfo = async (enrollmentsList: Enrollment[]) => {
@@ -178,6 +226,15 @@ export function EnrollmentsPage() {
       console.log('📋 Pre-Enrollment ID:', enrollment.pre_enrollments?.id);
       console.log('💰 Valor:', enrollment.courses.enrollment_fee);
 
+      // Refresh session before calling Edge Function
+      console.log('🔄 [ENROLLMENT-CHECKOUT] Renovando sessão...');
+      const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !session) {
+        toast.error('Sessão expirada. Por favor, faça login novamente.');
+        return;
+      }
+      console.log('✅ [ENROLLMENT-CHECKOUT] Sessão renovada');
+
       const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
         body: {
           pre_enrollment_id: enrollment.pre_enrollments?.id,
@@ -225,6 +282,15 @@ export function EnrollmentsPage() {
       console.log('📋 Enrollment ID:', enrollment.id);
       console.log('📋 Pre-Enrollment ID:', enrollment.pre_enrollments?.id);
       console.log('💵 Valor exibido (front):', finalAmount);
+
+      // Refresh session before calling Edge Function
+      console.log('🔄 [DISCOUNTED-CHECKOUT] Renovando sessão...');
+      const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !session) {
+        toast.error('Sessão expirada. Por favor, faça login novamente.');
+        return;
+      }
+      console.log('✅ [DISCOUNTED-CHECKOUT] Sessão renovada');
 
       // Usa create-enrollment-checkout e força recálculo (servidor aplica desconto)
       const { data, error } = await supabase.functions.invoke('create-enrollment-checkout', {
