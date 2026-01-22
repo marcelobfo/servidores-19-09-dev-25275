@@ -847,25 +847,52 @@ const renderCourseContent = (
     return yPosition;
   }
   
-  // Strip HTML tags and decode entities
+  // Strip HTML tags and decode entities - FIXED ORDER: decode first, then strip
   const stripHtml = (html: string): string => {
-    // Create a temporary div to parse HTML
-    const temp = html
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n\n')
-      .replace(/<\/li>/gi, '\n')
-      .replace(/<li>/gi, '• ')
-      .replace(/<\/h[1-6]>/gi, '\n\n')
-      .replace(/<[^>]+>/g, '')
+    // 1. FIRST: Decode HTML entities (this must come before tag removal!)
+    let decoded = html
       .replace(/&nbsp;/g, ' ')
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-    return temp;
+      .replace(/&#39;/g, "'");
+    
+    // 2. Use DOMParser for robust HTML parsing (works in browser context)
+    try {
+      const doc = new DOMParser().parseFromString(decoded, 'text/html');
+      
+      // Preserve line breaks from block elements
+      doc.querySelectorAll('br').forEach(el => el.replaceWith('\n'));
+      doc.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6').forEach(el => {
+        el.insertAdjacentText('afterend', '\n\n');
+      });
+      doc.querySelectorAll('li').forEach(el => {
+        el.insertAdjacentText('beforebegin', '• ');
+        el.insertAdjacentText('afterend', '\n');
+      });
+      
+      // Extract clean text
+      const text = doc.body.textContent || '';
+      
+      // Clean up excessive whitespace
+      return text
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/[ \t]+/g, ' ')
+        .trim();
+    } catch {
+      // Fallback to regex if DOMParser fails
+      return decoded
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<\/li>/gi, '\n')
+        .replace(/<li>/gi, '• ')
+        .replace(/<\/h[1-6]>/gi, '\n\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/[ \t]+/g, ' ')
+        .trim();
+    }
   };
   
   const plainText = stripHtml(courseContent);
