@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AuthGuard } from "@/components/auth/AuthGuard";
+import { SessionExpiredHandler } from "@/components/auth/SessionExpiredHandler";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/Footer";
 import { CookieConsent } from "@/components/CookieConsent";
@@ -51,6 +52,7 @@ const App = () => (
           <Sonner />
           <CookieConsent />
           <BrowserRouter>
+            <SessionExpiredHandler />
             <Routes>
               {/* Public routes with header and footer */}
               <Route path="/" element={
