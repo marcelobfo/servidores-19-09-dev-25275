@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { StatusFilter } from "@/components/student/filters/StatusFilter";
 import { SearchFilter } from "@/components/student/filters/SearchFilter";
 import { SortOptions } from "@/components/student/filters/SortOptions";
-import { Clock, CheckCircle, XCircle, DollarSign, FileText, Calendar, Download, Mail, Receipt } from "lucide-react";
+import { Clock, CheckCircle, XCircle, DollarSign, FileText, Calendar, Download, Mail, Receipt, QrCode } from "lucide-react";
 import { toast } from "sonner";
-
+import { PaymentModal } from "@/components/payment/PaymentModal";
 interface OrganType {
   id: string;
   name: string;
@@ -82,6 +82,8 @@ export function PreEnrollmentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("created_at_desc");
   const [preEnrollmentPayments, setPreEnrollmentPayments] = useState<Record<string, number>>({});
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPreEnrollment, setSelectedPreEnrollment] = useState<PreEnrollment | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -998,12 +1000,15 @@ export function PreEnrollmentsPage() {
                         Pague a taxa de pré-matrícula para prosseguir com sua solicitação.
                       </p>
                       <Button
-                        onClick={() => handlePreEnrollmentPayment(preEnrollment)}
+                        onClick={() => {
+                          setSelectedPreEnrollment(preEnrollment);
+                          setShowPaymentModal(true);
+                        }}
                         size="sm"
                         className="flex items-center gap-2"
                       >
-                        <DollarSign className="h-4 w-4" />
-                        Pagar Taxa - R$ {preEnrollment.courses.pre_enrollment_fee}
+                        <QrCode className="h-4 w-4" />
+                        Pagar Taxa via PIX - R$ {preEnrollment.courses.pre_enrollment_fee}
                       </Button>
                     </div>
                   )}
@@ -1017,11 +1022,20 @@ export function PreEnrollmentsPage() {
                             Pagamento pendente
                           </p>
                           <p className="text-sm text-orange-700 dark:text-orange-300 mb-2">
-                            Verifique seu e-mail <strong>{preEnrollment.email}</strong> para acessar o link de pagamento.
+                            Use o QR Code PIX abaixo ou verifique seu e-mail <strong>{preEnrollment.email}</strong>.
                           </p>
-                          <p className="text-xs text-orange-600 dark:text-orange-400">
-                            O link de pagamento também foi enviado por e-mail e é válido por 60 minutos.
-                          </p>
+                          <Button
+                            onClick={() => {
+                              setSelectedPreEnrollment(preEnrollment);
+                              setShowPaymentModal(true);
+                            }}
+                            size="sm"
+                            variant="outline"
+                            className="flex items-center gap-2 mt-2"
+                          >
+                            <QrCode className="h-4 w-4" />
+                            Ver QR Code PIX
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -1176,6 +1190,26 @@ export function PreEnrollmentsPage() {
         </div>
       )}
 
+      {/* Payment Modal for pre-enrollment fee */}
+      {showPaymentModal && selectedPreEnrollment && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setSelectedPreEnrollment(null);
+          }}
+          preEnrollmentId={selectedPreEnrollment.id}
+          courseName={selectedPreEnrollment.courses.name}
+          amount={selectedPreEnrollment.courses.pre_enrollment_fee || 0}
+          kind="pre_enrollment"
+          onPaymentSuccess={() => {
+            setShowPaymentModal(false);
+            setSelectedPreEnrollment(null);
+            fetchPreEnrollments();
+            toast.success("Pagamento confirmado!");
+          }}
+        />
+      )}
     </div>
   );
 }

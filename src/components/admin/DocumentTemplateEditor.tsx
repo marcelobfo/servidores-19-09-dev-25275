@@ -62,6 +62,18 @@ import {
   HeaderLayout,
   ImageSource,
 } from "@/types/document-templates";
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+
+// ReactQuill modules for basic formatting
+const quillModules = {
+  toolbar: [
+    ['bold', 'italic', 'underline'],
+    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+    [{ 'align': [] }],
+    ['clean']
+  ]
+};
 
 interface DocumentTemplateEditorProps {
   template: DocumentTemplate;
@@ -651,17 +663,22 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
                               </div>
                             )}
 
-                            {/* Text content for title and paragraph */}
+                            {/* Text content for title and paragraph - Rich Text Editor */}
                             {(block.type === 'title' || block.type === 'paragraph') && (
                               <div>
-                                <Label className="text-xs">Texto</Label>
-                                <Textarea
-                                  value={block.config.text || ''}
-                                  onChange={(e) => updateBlock(block.id, { text: e.target.value })}
-                                  rows={block.type === 'paragraph' ? 4 : 1}
-                                  className="text-sm"
-                                  placeholder="Use variáveis como {{student_name}}"
-                                />
+                                <Label className="text-xs mb-2 block">Texto (Editor Rico)</Label>
+                                <div className="border rounded-md overflow-hidden">
+                                  <ReactQuill
+                                    theme="snow"
+                                    value={block.config.text || ''}
+                                    onChange={(value) => updateBlock(block.id, { text: value })}
+                                    modules={quillModules}
+                                    placeholder="Use variáveis como {{student_name}}"
+                                  />
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Use variáveis como {'{{student_name}}'} que serão substituídas automaticamente.
+                                </p>
                               </div>
                             )}
 
@@ -730,6 +747,75 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
                                 />
                               </div>
                             </div>
+
+                            {/* Table formatting settings */}
+                            {(block.type === 'table' || block.type === 'modules_table' || block.type === 'cronograma_table') && (
+                              <div className="space-y-3 border-t pt-3 mt-3">
+                                <Label className="text-xs font-semibold">Formatação da Tabela</Label>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <Label className="text-xs">Cor da Borda</Label>
+                                    <Input
+                                      type="color"
+                                      value={block.config.tableBorderColor || '#E5E7EB'}
+                                      onChange={(e) => updateBlock(block.id, { tableBorderColor: e.target.value })}
+                                      className="h-9 p-1"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Espessura Borda</Label>
+                                    <Input
+                                      type="number"
+                                      value={block.config.tableBorderWidth || 1}
+                                      onChange={(e) => updateBlock(block.id, { tableBorderWidth: Number(e.target.value) })}
+                                      min={0}
+                                      max={5}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <Label className="text-xs">Cor Fundo Cabeçalho</Label>
+                                    <Input
+                                      type="color"
+                                      value={block.config.tableHeaderBgColor || '#F3F4F6'}
+                                      onChange={(e) => updateBlock(block.id, { tableHeaderBgColor: e.target.value })}
+                                      className="h-9 p-1"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Cor Texto Cabeçalho</Label>
+                                    <Input
+                                      type="color"
+                                      value={block.config.tableHeaderTextColor || '#111827'}
+                                      onChange={(e) => updateBlock(block.id, { tableHeaderTextColor: e.target.value })}
+                                      className="h-9 p-1"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <Label className="text-xs">Cor Linhas Alternadas</Label>
+                                    <Input
+                                      type="color"
+                                      value={block.config.tableRowAlternateColor || '#FAFAFA'}
+                                      onChange={(e) => updateBlock(block.id, { tableRowAlternateColor: e.target.value })}
+                                      className="h-9 p-1"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Padding Células (px)</Label>
+                                    <Input
+                                      type="number"
+                                      value={block.config.tableCellPadding || 8}
+                                      onChange={(e) => updateBlock(block.id, { tableCellPadding: Number(e.target.value) })}
+                                      min={2}
+                                      max={20}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
 
                             {/* QR Code settings */}
                             {block.type === 'qrcode' && (

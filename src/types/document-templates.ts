@@ -54,6 +54,14 @@ export interface ContentBlockConfig {
   columns?: Array<{ header: string; field: string; width: number }>;
   dataSource?: 'modules' | 'cronograma' | 'custom';
   
+  // Table formatting
+  tableBorderColor?: string;
+  tableBorderWidth?: number;
+  tableHeaderBgColor?: string;
+  tableHeaderTextColor?: string;
+  tableRowAlternateColor?: string;
+  tableCellPadding?: number;
+  
   // Image settings
   imageField?: 'logo' | 'signature' | 'custom';
   imageUrl?: string;
