@@ -468,7 +468,7 @@ const PreEnrollmentPage = () => {
       title: "Pagamento confirmado!",
       description: "Sua pré-matrícula foi registrada e está sendo processada."
     });
-    navigate("/student");
+    navigate("/student/pre-enrollments");
   };
 
   const durationOptions = [
