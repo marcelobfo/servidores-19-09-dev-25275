@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { getActiveTemplate, generatePdfFromTemplate } from './dynamicPdfGenerator';
 
 interface SystemSettings {
   institution_name: string;
@@ -36,6 +37,75 @@ interface PreEnrollment {
   email?: string;
   course: Course;
 }
+
+// Helper to format date for preview data
+const formatDateForPreview = (dateStr?: string): string => {
+  if (!dateStr) return 'a definir';
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('pt-BR');
+  } catch {
+    return dateStr;
+  }
+};
+
+// Helper to prepare preview data from enrollment
+const preparePreviewData = (enrollment: PreEnrollment, settings: SystemSettings, extraData?: any) => {
+  const effectiveHours = enrollment.course.effective_hours || enrollment.course.duration_hours || 390;
+  const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const today = new Date();
+  const formattedCurrentDate = `${today.getDate().toString().padStart(2, '0')} de ${months[today.getMonth()]} de ${today.getFullYear()}`;
+  
+  // Parse modules
+  let modules: Array<{ name: string; hours: number }> = [];
+  if (enrollment.course.modules) {
+    try {
+      const parsedModules = JSON.parse(enrollment.course.modules);
+      if (Array.isArray(parsedModules)) {
+        modules = parsedModules.map((m: any) => ({
+          name: m.name || m.nome || m.title || 'Módulo',
+          hours: m.hours || m.carga_horaria || 0
+        }));
+        
+        // Distribute hours proportionally if not defined
+        const totalHours = modules.reduce((sum, m) => sum + m.hours, 0);
+        if (totalHours === 0 && modules.length > 0) {
+          const hoursPerModule = Math.floor(effectiveHours / modules.length);
+          modules = modules.map((m, i) => ({
+            ...m,
+            hours: i === modules.length - 1 
+              ? effectiveHours - (hoursPerModule * (modules.length - 1))
+              : hoursPerModule
+          }));
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing modules:', e);
+    }
+  }
+
+  return {
+    student_name: enrollment.full_name.toUpperCase(),
+    student_cpf: formatCPF(enrollment.cpf || ''),
+    organization: enrollment.organization || '',
+    course_name: enrollment.course.name,
+    course_hours: enrollment.course.duration_hours,
+    effective_hours: effectiveHours,
+    start_date: formatDateForPreview(enrollment.course.start_date),
+    end_date: formatDateForPreview(enrollment.course.end_date),
+    current_date: formattedCurrentDate,
+    enrollment_fee: formatCurrency(enrollment.course.enrollment_fee || 0),
+    pre_enrollment_credit: extraData?.preEnrollmentCredit || '0,00',
+    final_amount: extraData?.finalAmount || formatCurrency(enrollment.course.enrollment_fee || 0),
+    pix_key: settings.pix_key || settings.institution_cnpj,
+    pix_holder_name: settings.pix_holder_name || '',
+    institution_name: settings.institution_name,
+    director_name: settings.director_name,
+    director_title: settings.director_title,
+    course_content: enrollment.course.description || '',
+    modules
+  };
+};
 
 // Helper function to load image from URL with timeout
 const loadImage = (url: string, timeout: number = 10000): Promise<HTMLImageElement> => {
@@ -187,6 +257,20 @@ export const generateEnrollmentDeclaration = async (
   enrollment: PreEnrollment,
   settings: SystemSettings
 ): Promise<Blob> => {
+  // Try to use saved default template first
+  try {
+    const template = await getActiveTemplate('declaration');
+    if (template) {
+      console.log('📄 Using saved default template for declaration');
+      const previewData = preparePreviewData(enrollment, settings);
+      return await generatePdfFromTemplate(template, previewData, settings);
+    }
+  } catch (error) {
+    console.warn('Could not load default template, falling back to hardcoded:', error);
+  }
+  
+  // Fallback to hardcoded generation
+  console.log('📄 Using fallback hardcoded template for declaration');
   const pdf = new jsPDF();
   
   let yPosition = await addHeader(pdf, settings);
@@ -266,6 +350,20 @@ export const generateStudyPlan = async (
   enrollment: PreEnrollment,
   settings: SystemSettings
 ): Promise<Blob> => {
+  // Try to use saved default template first
+  try {
+    const template = await getActiveTemplate('study_plan');
+    if (template) {
+      console.log('📄 Using saved default template for study_plan');
+      const previewData = preparePreviewData(enrollment, settings);
+      return await generatePdfFromTemplate(template, previewData, settings);
+    }
+  } catch (error) {
+    console.warn('Could not load default template, falling back to hardcoded:', error);
+  }
+  
+  // Fallback to hardcoded generation
+  console.log('📄 Using fallback hardcoded template for study_plan');
   const pdf = new jsPDF();
   
   let yPosition = await addHeader(pdf, settings);
@@ -569,6 +667,27 @@ export const generateQuote = async (
   preEnrollmentPaid: boolean = false,
   preEnrollmentAmount: number = 0
 ): Promise<Blob> => {
+  // Try to use saved default template first
+  try {
+    const template = await getActiveTemplate('quote');
+    if (template) {
+      console.log('📄 Using saved default template for quote');
+      const totalFee = enrollment.course.enrollment_fee || 0;
+      const paidAmount = preEnrollmentPaid ? preEnrollmentAmount : 0;
+      const remainingAmount = Math.max(totalFee - paidAmount, 0);
+      
+      const previewData = preparePreviewData(enrollment, settings, {
+        preEnrollmentCredit: formatCurrency(paidAmount),
+        finalAmount: formatCurrency(remainingAmount)
+      });
+      return await generatePdfFromTemplate(template, previewData, settings);
+    }
+  } catch (error) {
+    console.warn('Could not load default template, falling back to hardcoded:', error);
+  }
+  
+  // Fallback to hardcoded generation
+  console.log('📄 Using fallback hardcoded template for quote');
   const pdf = new jsPDF();
   
   let yPosition = await addHeader(pdf, settings);
