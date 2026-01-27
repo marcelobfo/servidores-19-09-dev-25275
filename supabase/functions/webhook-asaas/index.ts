@@ -123,28 +123,38 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // CRITICAL SECURITY: Validate webhook token from Asaas
-    const webhookToken = req.headers.get('asaas-access-token');
-    if (!webhookToken) {
-      console.error('Missing Asaas webhook token');
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized: Missing webhook token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Verify token against stored webhook token
+    // Fetch stored webhook token from payment_settings
     const { data: settings } = await supabaseClient
       .from('payment_settings')
       .select('asaas_webhook_token')
       .maybeSingle();
 
-    if (!settings?.asaas_webhook_token || settings.asaas_webhook_token !== webhookToken) {
-      console.error('Invalid Asaas webhook token');
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized: Invalid webhook token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    const webhookToken = req.headers.get('asaas-access-token');
+    const storedToken = settings?.asaas_webhook_token;
+
+    // SECURITY: Validate webhook token only if configured in database
+    if (storedToken && storedToken.trim() !== '') {
+      if (!webhookToken) {
+        console.error('❌ Missing Asaas webhook token - token is required because it is configured in payment_settings');
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized: Missing webhook token' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      if (webhookToken !== storedToken) {
+        console.error('❌ Invalid Asaas webhook token - token does not match configured value');
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized: Invalid webhook token' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.log('✅ Webhook authenticated with valid token');
+    } else {
+      // Token not configured - accept webhook but log security warning
+      console.warn('⚠️ SECURITY WARNING: Webhook token not configured in payment_settings. Accepting webhook without authentication.');
+      console.warn('⚠️ Para segurança máxima, configure "Token do Webhook" em Configurações de Pagamento e no painel do Asaas.');
     }
 
     const webhookData = await req.json();
