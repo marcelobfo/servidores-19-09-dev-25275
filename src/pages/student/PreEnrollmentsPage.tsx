@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,6 +77,7 @@ const sortOptions = [
 
 export function PreEnrollmentsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [preEnrollments, setPreEnrollments] = useState<PreEnrollment[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -1205,8 +1207,11 @@ export function PreEnrollmentsPage() {
           onPaymentSuccess={() => {
             setShowPaymentModal(false);
             setSelectedPreEnrollment(null);
-            fetchPreEnrollments();
-            toast.success("Pagamento confirmado!");
+            toast.success("Pagamento confirmado! Redirecionando...");
+            // Redirecionar imediatamente para a área do aluno mostrando a pré-matrícula ativa
+            navigate("/student/pre-enrollments", { replace: true });
+            // Forçar refresh da página para mostrar status atualizado
+            window.location.reload();
           }}
         />
       )}
