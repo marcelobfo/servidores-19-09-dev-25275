@@ -559,11 +559,16 @@ console.log(`💳 Billing type definido como: ${billingType}`); (environment: ${
       body: JSON.stringify(paymentData),
     });
 
-    const paymentResponseText = await paymentResponse.text();
-    console.log("📊 Asaas Payment Response:", paymentResponse.status, paymentResponseText);
+    // CORREÇÃO AQUI: Pegar como texto primeiro para validar
+const paymentResponseText = await paymentResponse.text();
 
-    if (!paymentResponse.ok) {
-      console.error("❌ Asaas API error:", paymentResponseText);
+if (!paymentResponse.ok) {
+  console.error("❌ Erro retornado pelo Asaas:", paymentResponseText);
+  throw new Error(`Asaas Erro (${paymentResponse.status}): ${paymentResponseText.substring(0, 100)}`);
+}
+
+// Agora sim, transforma em JSON com segurança
+const paymentResult = JSON.parse(paymentResponseText);
       
       // If UNDEFINED billing type fails, try PIX only
       if (billingType === "UNDEFINED") {
