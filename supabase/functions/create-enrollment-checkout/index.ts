@@ -533,7 +533,7 @@ if (!isEnrollmentCheckout) {
   billingType = "UNDEFINED"; 
 }
 
-console.log(`💳 Billing type definido como: ${billingType} (environment: ${environment}, isEnrollment: ${isEnrollmentCheckout})`);;
+    console.log(`💳 Billing type definido como: ${billingType} (environment: ${environment}, isEnrollment: ${isEnrollmentCheckout})`);
 
     // Create payment using /v3/payments API
     // IMPORTANT: Using "billingType" (singular) NOT "billingTypes" (plural)
