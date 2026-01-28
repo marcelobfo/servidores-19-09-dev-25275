@@ -133,24 +133,28 @@ export function PaymentModal({
 
       // AJUSTE 1: Enviar o billing_type dinâmico
       // Se for pré-matrícula: PIX. Se for matrícula: UNDEFINED (libera cartão/boleto)
+      // Localize este trecho dentro da sua função createPayment:
       const { data, error } = await supabase.functions.invoke("create-payment", {
         body: {
           pre_enrollment_id: preEnrollmentId,
           amount: amount,
-          kind,
+          kind: kind, // usa o kind que vem da prop
           enrollment_id: enrollmentIdToSend,
-          billing_type: kind === "pre_enrollment" ? "PIX" : "UNDEFINED",
+          // Se for enrollment, manda UNDEFINED para liberar cartão no Asaas
+          billing_type: kind === "enrollment" ? "UNDEFINED" : "PIX",
         },
       });
 
       if (error) throw error;
-      if (data.error) throw new Error(data.error);
 
-      // AJUSTE 2: Redirecionamento automático para Cartão de Crédito/Boleto
-      if (data.checkout_url && kind === "enrollment") {
+      // ADICIONE ESTA LÓGICA LOGO ABAIXO DO INVOKE:
+      if (data?.checkout_url && kind === "enrollment") {
+        // Se for matrícula completa e houver checkout_url, redireciona para o Asaas (Cartão/Boleto)
         window.location.href = data.checkout_url;
         return;
       }
+
+      // O restante do seu código (setPaymentData(data), etc) continua igual
 
       setPaymentData(data);
     } catch (error: any) {
