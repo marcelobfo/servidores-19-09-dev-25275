@@ -394,10 +394,13 @@ serve(async (req) => {
     console.log("Customer created:", customer.id);
 
     // Create payment in Asaas - SEMPRE usar nome fixo curto
+    // UNDEFINED permite todos os métodos (PIX, Boleto, Cartão)
     const courseName = "Licenca Capacitacao"; // Fixo - 20 caracteres
+    const billingType = kind === "pre_enrollment" ? "PIX" : "UNDEFINED";
+    
     const paymentData = {
       customer: customer.id,
-      billingType: "PIX",
+      billingType: billingType,
       value: parseFloat(finalAmount.toString()),
       dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0], // Tomorrow
       description: "Pagamento curso", // Fixo - 15 caracteres

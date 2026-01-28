@@ -533,7 +533,7 @@ if (!isEnrollmentCheckout) {
   billingType = "UNDEFINED"; 
 }
 
-console.log(`💳 Billing type definido como: ${billingType}`); (environment: ${environment}, isEnrollment: ${isEnrollmentCheckout})`);
+console.log(`💳 Billing type definido como: ${billingType} (environment: ${environment}, isEnrollment: ${isEnrollmentCheckout})`);;
 
     // Create payment using /v3/payments API
     // IMPORTANT: Using "billingType" (singular) NOT "billingTypes" (plural)
@@ -559,18 +559,14 @@ console.log(`💳 Billing type definido como: ${billingType}`); (environment: ${
       body: JSON.stringify(paymentData),
     });
 
-    // CORREÇÃO AQUI: Pegar como texto primeiro para validar
-const paymentResponseText = await paymentResponse.text();
+    // Get response as text first for validation
+    const paymentResponseText = await paymentResponse.text();
+    console.log("📊 Payment Response:", paymentResponse.status, paymentResponseText);
 
-if (!paymentResponse.ok) {
-  console.error("❌ Erro retornado pelo Asaas:", paymentResponseText);
-  throw new Error(`Asaas Erro (${paymentResponse.status}): ${paymentResponseText.substring(0, 100)}`);
-}
-
-// Agora sim, transforma em JSON com segurança
-const paymentResult = JSON.parse(paymentResponseText);
+    if (!paymentResponse.ok) {
+      console.error("❌ Erro retornado pelo Asaas:", paymentResponseText);
       
-      // If UNDEFINED billing type fails, try PIX only
+      // If UNDEFINED billing type fails, try PIX only as fallback
       if (billingType === "UNDEFINED") {
         console.log("⚠️ UNDEFINED billing type failed, trying PIX...");
         
@@ -600,12 +596,12 @@ const paymentResult = JSON.parse(paymentResponseText);
         }
 
         const retryResult = JSON.parse(retryResponseText);
-        console.log("✅ Payment created (retry):", retryResult.id);
+        console.log("✅ Payment created (retry with PIX):", retryResult.id);
         
-        // Continue with retry result
         return await processPaymentResult(retryResult, serviceClient, pre_enrollment_id, enrollment_id, isEnrollmentCheckout, checkoutFee, checkoutKind, checkoutReason, prePaidTotal, environment, corsHeaders);
       }
 
+      // No fallback possible - return error
       return new Response(JSON.stringify({ 
         error: "Falha ao criar pagamento",
         details: paymentResponseText,
@@ -616,6 +612,7 @@ const paymentResult = JSON.parse(paymentResponseText);
       });
     }
 
+    // Payment succeeded - parse and process
     const paymentResult = JSON.parse(paymentResponseText);
     console.log("✅ Payment created:", paymentResult.id);
 
