@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +43,7 @@ export function PaymentModal({
   kind = "pre_enrollment",
   enrollmentId,
 }: PaymentModalProps) {
+  const navigate = useNavigate();
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -71,9 +73,11 @@ export function PaymentModal({
           console.log('🔔 [REALTIME] Update recebido:', payload);
           const newStatus = (payload.new as any).status;
           if (newStatus === "confirmed" || newStatus === "received") {
-            toast({ title: "Pagamento confirmado!", description: "Seu pagamento foi processado com sucesso." });
+            toast({ title: "Pagamento confirmado!", description: "Redirecionando para suas matrículas..." });
             onPaymentSuccess();
             onClose();
+            // Redirect instantâneo para a página de matrículas
+            navigate("/student/enrollments");
           }
         },
       )
@@ -92,9 +96,11 @@ export function PaymentModal({
       
       if (data?.status === "received" || data?.status === "confirmed") {
         console.log('✅ [POLLING] Pagamento confirmado via polling!');
-        toast({ title: "Pagamento confirmado!", description: "Seu pagamento foi processado com sucesso." });
+        toast({ title: "Pagamento confirmado!", description: "Redirecionando para suas matrículas..." });
         onPaymentSuccess();
         onClose();
+        // Redirect instantâneo para a página de matrículas
+        navigate("/student/enrollments");
       }
     }, 5000);
 
@@ -102,7 +108,7 @@ export function PaymentModal({
       supabase.removeChannel(channel);
       clearInterval(pollingInterval);
     };
-  }, [paymentData?.id, isOpen, onPaymentSuccess, onClose, toast]);
+  }, [paymentData?.id, isOpen, onPaymentSuccess, onClose, toast, navigate]);
 
   useEffect(() => {
     if (isOpen && !paymentData) {
