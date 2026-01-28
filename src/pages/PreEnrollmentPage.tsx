@@ -45,7 +45,7 @@ const PreEnrollmentPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  
+
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingCourseDetails, setLoadingCourseDetails] = useState(false);
@@ -77,7 +77,7 @@ const PreEnrollmentPage = () => {
     license_end_date: "",
     license_duration: "",
     additional_info: "",
-    organ_type_id: ""
+    organ_type_id: "",
   });
 
   const [filteredCourses, setFilteredCourses] = useState<Course[]>([]);
@@ -100,7 +100,8 @@ const PreEnrollmentPage = () => {
     try {
       const { data, error } = await supabase
         .from("courses")
-        .select(`
+        .select(
+          `
           id,
           name,
           duration_hours,
@@ -110,7 +111,8 @@ const PreEnrollmentPage = () => {
           areas (
             name
           )
-        `)
+        `,
+        )
         .eq("id", courseId)
         .eq("published", true)
         .single();
@@ -120,7 +122,7 @@ const PreEnrollmentPage = () => {
         toast({
           title: "Erro",
           description: "Curso não encontrado ou não está disponível",
-          variant: "destructive"
+          variant: "destructive",
         });
         return;
       }
@@ -130,10 +132,10 @@ const PreEnrollmentPage = () => {
 
       // Auto-select license duration based on course duration_days
       if (data.duration_days) {
-        setFormData(prev => ({
+        setFormData((prev) => ({
           ...prev,
           course_id: courseId,
-          license_duration: data.duration_days.toString()
+          license_duration: data.duration_days.toString(),
         }));
       }
     } catch (error) {
@@ -173,12 +175,12 @@ const PreEnrollmentPage = () => {
       if (error) throw error;
       const types = (data as unknown as OrganType[]) || [];
       setOrganTypes(types);
-      
+
       // Set default to "Normal" type
-      const normalType = types.find(t => t.name === "Normal");
+      const normalType = types.find((t) => t.name === "Normal");
       if (normalType) {
         setSelectedOrganType(normalType);
-        setFormData(prev => ({ ...prev, organ_type_id: normalType.id }));
+        setFormData((prev) => ({ ...prev, organ_type_id: normalType.id }));
       }
     } catch (error) {
       console.error("Error fetching organ types:", error);
@@ -186,9 +188,9 @@ const PreEnrollmentPage = () => {
   };
 
   const handleOrganTypeChange = (organTypeId: string) => {
-    const organType = organTypes.find(t => t.id === organTypeId);
+    const organType = organTypes.find((t) => t.id === organTypeId);
     setSelectedOrganType(organType || null);
-    setFormData(prev => ({ ...prev, organ_type_id: organTypeId }));
+    setFormData((prev) => ({ ...prev, organ_type_id: organTypeId }));
   };
 
   // Calculate effective hours based on organ type multiplier
@@ -199,13 +201,13 @@ const PreEnrollmentPage = () => {
   // Calculate end date based on start date and duration
   const calculateEndDate = (startDate: string, duration: string) => {
     if (!startDate || !duration) return "";
-    
+
     const start = new Date(startDate);
     const days = parseInt(duration);
     const end = new Date(start);
     end.setDate(start.getDate() + days - 1); // Subtract 1 because the start day counts
-    
-    return end.toISOString().split('T')[0];
+
+    return end.toISOString().split("T")[0];
   };
 
   // Filter courses based on selected duration
@@ -214,7 +216,7 @@ const PreEnrollmentPage = () => {
       const duration = parseInt(formData.license_duration);
       const filtered = courses.filter((course) => {
         const courseDays = course.duration_days;
-        return typeof courseDays === 'number' && courseDays === duration;
+        return typeof courseDays === "number" && courseDays === duration;
       });
       setFilteredCourses(filtered);
     } else {
@@ -226,42 +228,38 @@ const PreEnrollmentPage = () => {
   useEffect(() => {
     if (formData.license_start_date && formData.license_duration) {
       const endDate = calculateEndDate(formData.license_start_date, formData.license_duration);
-      setFormData(prev => ({ ...prev, license_end_date: endDate }));
+      setFormData((prev) => ({ ...prev, license_end_date: endDate }));
     }
   }, [formData.license_start_date, formData.license_duration]);
 
   const formatCPF = (value: string) => {
     return value
-      .replace(/\D/g, '')
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d{1,2})/, '$1-$2')
-      .replace(/(-\d{2})\d+?$/, '$1');
+      .replace(/\D/g, "")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d{1,2})/, "$1-$2")
+      .replace(/(-\d{2})\d+?$/, "$1");
   };
 
   const formatWhatsApp = (value: string) => {
     return value
-      .replace(/\D/g, '')
-      .replace(/(\d{2})(\d)/, '($1) $2')
-      .replace(/(\d{5})(\d{1,4})/, '$1-$2')
-      .replace(/(-\d{4})\d+?$/, '$1');
+      .replace(/\D/g, "")
+      .replace(/(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{5})(\d{1,4})/, "$1-$2")
+      .replace(/(-\d{4})\d+?$/, "$1");
   };
 
   const formatCEP = (value: string) => {
     return value
-      .replace(/\D/g, '')
-      .replace(/(\d{5})(\d)/, '$1-$2')
-      .replace(/(-\d{3})\d+?$/, '$1');
+      .replace(/\D/g, "")
+      .replace(/(\d{5})(\d)/, "$1-$2")
+      .replace(/(-\d{3})\d+?$/, "$1");
   };
 
   const importFromProfile = async () => {
     setImporting(true);
     try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("user_id", user?.id)
-        .maybeSingle();
+      const { data, error } = await supabase.from("profiles").select("*").eq("user_id", user?.id).maybeSingle();
 
       if (error) {
         console.error("Error fetching profile:", error);
@@ -282,7 +280,7 @@ const PreEnrollmentPage = () => {
         return;
       }
 
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         full_name: data.full_name || prev.full_name,
         email: data.email || prev.email,
@@ -317,43 +315,42 @@ const PreEnrollmentPage = () => {
   const insertPreEnrollmentWithRetry = async (enrollmentData: any) => {
     try {
       // SEMPRE renovar sessão antes de inserir
-      console.log('🔄 Renovando sessão antes da inserção...');
-      const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
-      
+      console.log("🔄 Renovando sessão antes da inserção...");
+      const {
+        data: { session },
+        error: refreshError,
+      } = await supabase.auth.refreshSession();
+
       if (refreshError || !session) {
-        console.error('❌ Erro ao renovar sessão:', refreshError);
-        throw new Error('Falha ao renovar sessão: ' + refreshError?.message);
+        console.error("❌ Erro ao renovar sessão:", refreshError);
+        throw new Error("Falha ao renovar sessão: " + refreshError?.message);
       }
-      
-      console.log('✅ Sessão renovada com sucesso');
-      console.log('📋 Dados a inserir:', {
+
+      console.log("✅ Sessão renovada com sucesso");
+      console.log("📋 Dados a inserir:", {
         user_id: enrollmentData.user_id,
         course_id: enrollmentData.course_id,
         full_name: enrollmentData.full_name,
         session_exists: !!session,
-        token_preview: session?.access_token?.substring(0, 20) + '...'
+        token_preview: session?.access_token?.substring(0, 20) + "...",
       });
-      
+
       // Aguardar 300ms para garantir que o token está ativo
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
       // Inserir diretamente no banco
-      console.log('💾 Inserindo pre_enrollment no banco...');
-      const { data, error } = await supabase
-        .from('pre_enrollments')
-        .insert([enrollmentData])
-        .select()
-        .single();
-      
+      console.log("💾 Inserindo pre_enrollment no banco...");
+      const { data, error } = await supabase.from("pre_enrollments").insert([enrollmentData]).select().single();
+
       if (error) {
-        console.error('❌ Erro ao inserir:', error);
+        console.error("❌ Erro ao inserir:", error);
         throw error;
       }
-      
-      console.log('✅ Pre-enrollment criado:', data.id);
+
+      console.log("✅ Pre-enrollment criado:", data.id);
       return data;
     } catch (error) {
-      console.error('❌ Falha total ao criar pre-enrollment:', error);
+      console.error("❌ Falha total ao criar pre-enrollment:", error);
       throw error;
     }
   };
@@ -367,21 +364,13 @@ const PreEnrollmentPage = () => {
         toast({
           title: "Erro",
           description: "Você precisa estar logado para fazer uma pré-matrícula",
-          variant: "destructive"
+          variant: "destructive",
         });
-        navigate('/auth');
+        navigate("/auth");
         return;
       }
 
-      // Check if payment system is enabled
-      const { data: paymentSettings } = await supabase
-        .from('payment_settings')
-        .select('*')
-        .maybeSingle();
-
-      const isPaymentEnabled = paymentSettings?.enabled || false;
-
-      // Preparar dados do enrollment
+      // 1. Preparar os dados (mantendo sua lógica original)
       const enrollmentData = {
         user_id: user.id,
         course_id: formData.course_id,
@@ -402,61 +391,52 @@ const PreEnrollmentPage = () => {
         license_end_date: formData.license_end_date,
         additional_info: formData.additional_info,
         organ_type_id: formData.organ_type_id || null,
-        custom_hours: selectedOrganType && selectedCourseDetails 
-          ? getEffectiveHours(selectedCourseDetails.duration_hours)
-          : null
+        custom_hours:
+          selectedOrganType && selectedCourseDetails ? getEffectiveHours(selectedCourseDetails.duration_hours) : null,
       };
 
-      // Inserir via Edge Function
-      console.log('Criando pré-matrícula via Edge Function...');
+      // 2. CORREÇÃO VITAL: Primeiro salvamos no banco para garantir que temos o ID real
+      console.log("Salvando dados no banco de dados...");
       const preEnrollmentData = await insertPreEnrollmentWithRetry(enrollmentData);
-      console.log('✅ Pre-enrollment criado com sucesso:', preEnrollmentData.id);
-      
-      // Trigger webhook for enrollment creation
-      await triggerEnrollmentWebhook(preEnrollmentData.id, 'enrollment_created');
 
-      // Get course details and check for pre-enrollment fee
-      const { data: course, error: courseError } = await supabase
+      // 3. Pegamos o ID gerado pelo banco para evitar o erro 500 na Edge Function
+      const generatedId = preEnrollmentData.id;
+      console.log("ID Gerado:", generatedId);
+
+      // 4. Verificamos o curso novamente para garantir o valor da taxa
+      const { data: course } = await supabase
         .from("courses")
         .select("name, pre_enrollment_fee")
         .eq("id", formData.course_id)
         .single();
 
-      if (courseError) throw courseError;
+      const preEnrollmentFee = course?.pre_enrollment_fee || 0;
 
-      // Check if course has pre-enrollment fee
-      const preEnrollmentFee = course.pre_enrollment_fee || 0;
-      
       if (preEnrollmentFee > 0) {
-        // Update status to pending_payment for courses with pre-enrollment fee
-        const { error: updateError } = await supabase
-          .from("pre_enrollments")
-          .update({ status: 'pending_payment' })
-          .eq("id", preEnrollmentData.id);
+        // Atualizamos o status para pendente de pagamento
+        await supabase.from("pre_enrollments").update({ status: "pending_payment" }).eq("id", generatedId);
 
-        if (updateError) throw updateError;
-
-        // Show payment modal for pre-enrollment fee
-        setPreEnrollmentId(preEnrollmentData.id);
+        // DISPARAMOS O MODAL com o ID CORRETO
+        setPreEnrollmentId(generatedId); // Define o ID real vindo do banco
         setPaymentAmount(preEnrollmentFee);
-        setSelectedCourseName(course.name);
+        setSelectedCourseName(course?.name || "");
         setShowPaymentModal(true);
-        return;
-      }
 
-      // No payment required or payment disabled
-      toast({
-        title: "Sucesso",
-        description: "Pré-matrícula enviada com sucesso! Você receberá um retorno em breve."
-      });
-      navigate("/student");
+        // Webhook opcional
+        await triggerEnrollmentWebhook(generatedId, "enrollment_created");
+      } else {
+        toast({
+          title: "Sucesso",
+          description: "Pré-matrícula enviada com sucesso!",
+        });
+        navigate("/student");
+      }
     } catch (error: any) {
-      console.error('Erro no handleSubmit:', error);
-      
+      console.error("Erro detalhado:", error);
       toast({
         title: "Erro",
-        description: error.message || "Falha ao enviar pré-matrícula. Tente novamente.",
-        variant: "destructive"
+        description: error.message || "Falha ao processar matrícula.",
+        variant: "destructive",
       });
     } finally {
       setSubmitting(false);
@@ -466,7 +446,7 @@ const PreEnrollmentPage = () => {
   const handlePaymentSuccess = () => {
     toast({
       title: "Pagamento confirmado!",
-      description: "Sua pré-matrícula foi registrada e está sendo processada."
+      description: "Sua pré-matrícula foi registrada e está sendo processada.",
     });
     navigate("/student/pre-enrollments");
   };
@@ -477,7 +457,7 @@ const PreEnrollmentPage = () => {
     { value: "60", label: "60 dias" },
     { value: "45", label: "45 dias" },
     { value: "30", label: "30 dias" },
-    { value: "15", label: "15 dias" }
+    { value: "15", label: "15 dias" },
   ];
 
   return (
@@ -488,7 +468,6 @@ const PreEnrollmentPage = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-8">
-            
             {/* CURSO SELECIONADO */}
             {selectedCourseDetails && (
               <Card className="border-primary bg-primary/5">
@@ -501,19 +480,23 @@ const PreEnrollmentPage = () => {
                             {selectedCourseDetails.areas?.name || "Curso"}
                           </Badge>
                         </div>
-                        <h3 className="text-xl font-bold text-foreground mb-3">
-                          {selectedCourseDetails.name}
-                        </h3>
+                        <h3 className="text-xl font-bold text-foreground mb-3">{selectedCourseDetails.name}</h3>
                         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                           <div className="flex items-center gap-1">
                             <Clock className="h-4 w-4" />
                             <span>
                               {selectedOrganType && selectedOrganType.hours_multiplier !== 1 ? (
                                 <>
-                                  <span className="line-through text-muted-foreground/50">{selectedCourseDetails.duration_hours}h</span>
+                                  <span className="line-through text-muted-foreground/50">
+                                    {selectedCourseDetails.duration_hours}h
+                                  </span>
                                   {" → "}
-                                  <span className="font-semibold text-primary">{getEffectiveHours(selectedCourseDetails.duration_hours)}h</span>
-                                  <span className="ml-1 text-xs">({Math.round(selectedOrganType.hours_multiplier * 100)}%)</span>
+                                  <span className="font-semibold text-primary">
+                                    {getEffectiveHours(selectedCourseDetails.duration_hours)}h
+                                  </span>
+                                  <span className="ml-1 text-xs">
+                                    ({Math.round(selectedOrganType.hours_multiplier * 100)}%)
+                                  </span>
                                 </>
                               ) : (
                                 <>{selectedCourseDetails.duration_hours}h de carga horária</>
@@ -527,7 +510,10 @@ const PreEnrollmentPage = () => {
                             </div>
                           )}
                           {selectedOrganType && selectedOrganType.is_federal && (
-                            <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                            <Badge
+                              variant="outline"
+                              className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                            >
                               <Building2 className="h-3 w-3 mr-1" />
                               {selectedOrganType.name}
                             </Badge>
@@ -540,12 +526,7 @@ const PreEnrollmentPage = () => {
                           )}
                         </div>
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigate("/courses")}
-                      >
+                      <Button type="button" variant="outline" size="sm" onClick={() => navigate("/courses")}>
                         Trocar curso
                       </Button>
                     </div>
@@ -556,12 +537,10 @@ const PreEnrollmentPage = () => {
 
             {loadingCourseDetails && (
               <Alert>
-                <AlertDescription>
-                  Carregando informações do curso...
-                </AlertDescription>
+                <AlertDescription>Carregando informações do curso...</AlertDescription>
               </Alert>
             )}
-            
+
             {/* SEÇÃO 1 - AVISO DE PRIVACIDADE */}
             <Card className="border-primary/20">
               <CardHeader>
@@ -573,8 +552,11 @@ const PreEnrollmentPage = () => {
               <CardContent>
                 <Alert>
                   <AlertDescription>
-                    <strong>Antes de prosseguir, leia atentamente:</strong><br /><br />
-                    Respeitamos a sua privacidade conforme a Lei Geral de Proteção de Dados (13.709/2018)<br />
+                    <strong>Antes de prosseguir, leia atentamente:</strong>
+                    <br />
+                    <br />
+                    Respeitamos a sua privacidade conforme a Lei Geral de Proteção de Dados (13.709/2018)
+                    <br />
                     Os dados coletados serão usados exclusivamente para emissão de documentos para licença capacitação.
                   </AlertDescription>
                 </Alert>
@@ -664,7 +646,9 @@ const PreEnrollmentPage = () => {
                     <Label htmlFor="birth_date">Data de Nascimento *</Label>
                     <DateOfBirthPicker
                       value={formData.birth_date ? new Date(formData.birth_date) : undefined}
-                      onChange={(date) => setFormData({ ...formData, birth_date: date ? date.toISOString().split('T')[0] : "" })}
+                      onChange={(date) =>
+                        setFormData({ ...formData, birth_date: date ? date.toISOString().split("T")[0] : "" })
+                      }
                       placeholder="Selecione sua data de nascimento"
                     />
                   </div>
@@ -697,7 +681,10 @@ const PreEnrollmentPage = () => {
 
                   <div>
                     <Label htmlFor="state">Estado *</Label>
-                    <Select value={formData.state} onValueChange={(value) => setFormData({ ...formData, state: value })}>
+                    <Select
+                      value={formData.state}
+                      onValueChange={(value) => setFormData({ ...formData, state: value })}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione o estado" />
                       </SelectTrigger>
@@ -818,8 +805,8 @@ const PreEnrollmentPage = () => {
 
                 <div>
                   <Label>Quantos dias de duração? *</Label>
-                  <RadioGroup 
-                    value={formData.license_duration} 
+                  <RadioGroup
+                    value={formData.license_duration}
                     onValueChange={(value) => setFormData({ ...formData, license_duration: value, course_id: "" })}
                     className="mt-2"
                   >
@@ -855,14 +842,18 @@ const PreEnrollmentPage = () => {
                   </Alert>
                 ) : (
                   <div>
-                    <Label htmlFor="course_id">Cursos de {formData.license_duration} dias ({filteredCourses.length} opções) *</Label>
-                    <Select 
-                      value={formData.course_id} 
+                    <Label htmlFor="course_id">
+                      Cursos de {formData.license_duration} dias ({filteredCourses.length} opções) *
+                    </Label>
+                    <Select
+                      value={formData.course_id}
                       onValueChange={(value) => setFormData({ ...formData, course_id: value })}
                       disabled={!!selectedCourseDetails}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder={selectedCourseDetails ? selectedCourseDetails.name : "Selecione um curso"} />
+                        <SelectValue
+                          placeholder={selectedCourseDetails ? selectedCourseDetails.name : "Selecione um curso"}
+                        />
                       </SelectTrigger>
                       <SelectContent className="z-50">
                         {filteredCourses.map((course) => (
@@ -896,17 +887,16 @@ const PreEnrollmentPage = () => {
               <CardContent className="space-y-4">
                 <div>
                   <Label htmlFor="organ_type_id">Tipo de Órgão *</Label>
-                  <Select 
-                    value={formData.organ_type_id} 
-                    onValueChange={handleOrganTypeChange}
-                  >
+                  <Select value={formData.organ_type_id} onValueChange={handleOrganTypeChange}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione o tipo de órgão" />
                     </SelectTrigger>
                     <SelectContent className="z-50">
                       {organTypes.map((organType) => (
                         <SelectItem key={organType.id} value={organType.id}>
-                          {organType.name} {organType.is_federal && `(${Math.round(organType.hours_multiplier * 100)}% da carga horária)`}
+                          {organType.name}{" "}
+                          {organType.is_federal &&
+                            `(${Math.round(organType.hours_multiplier * 100)}% da carga horária)`}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -917,10 +907,15 @@ const PreEnrollmentPage = () => {
                   <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
                     <Building2 className="h-4 w-4 text-blue-600" />
                     <AlertDescription className="text-blue-800 dark:text-blue-200">
-                      <strong>Carga horária ajustada para órgão federal:</strong><br />
-                      {selectedCourseDetails.duration_hours}h × {Math.round(selectedOrganType.hours_multiplier * 100)}% = 
-                      <strong className="ml-1">{getEffectiveHours(selectedCourseDetails.duration_hours)}h</strong><br />
-                      <span className="text-sm">Esta carga horária será exibida em todos os documentos (certificado, declaração, plano de estudos).</span>
+                      <strong>Carga horária ajustada para órgão federal:</strong>
+                      <br />
+                      {selectedCourseDetails.duration_hours}h × {Math.round(selectedOrganType.hours_multiplier * 100)}%
+                      =<strong className="ml-1">{getEffectiveHours(selectedCourseDetails.duration_hours)}h</strong>
+                      <br />
+                      <span className="text-sm">
+                        Esta carga horária será exibida em todos os documentos (certificado, declaração, plano de
+                        estudos).
+                      </span>
                     </AlertDescription>
                   </Alert>
                 )}
@@ -938,7 +933,8 @@ const PreEnrollmentPage = () => {
               <CardContent>
                 <Alert>
                   <AlertDescription>
-                    <strong>A taxa de matrícula deve ser paga pelo link:</strong> Taxa de Matrícula<br />
+                    <strong>A taxa de matrícula deve ser paga pelo link:</strong> Taxa de Matrícula
+                    <br />
                     Envie o comprovante de pagamento via WhatsApp para receber os documentos.
                   </AlertDescription>
                 </Alert>
