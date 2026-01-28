@@ -86,6 +86,7 @@ export function PreEnrollmentsPage() {
   const [preEnrollmentPayments, setPreEnrollmentPayments] = useState<Record<string, number>>({});
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedPreEnrollment, setSelectedPreEnrollment] = useState<PreEnrollment | null>(null);
+  const [completedEnrollmentIds, setCompletedEnrollmentIds] = useState<Set<string>>(new Set());
 
   // Realtime subscription para atualização automática
   useEffect(() => {
@@ -156,10 +157,39 @@ export function PreEnrollmentsPage() {
       )
       .subscribe();
 
+    // Subscrição para mudanças em enrollments (quando matrícula é paga - esconder da lista)
+    const enrollmentsChannel = supabase
+      .channel('enrollments-realtime-preenroll')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'enrollments',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log('🎓 [REALTIME] Mudança em enrollments detectada:', payload);
+          const newData = payload.new as any;
+          
+          // Se a matrícula foi paga, atualizar lista para esconder a pré-matrícula
+          if (newData?.status === 'active' && newData?.payment_status === 'paid' && newData?.pre_enrollment_id) {
+            console.log('✅ [REALTIME] Matrícula paga! Escondendo pré-matrícula:', newData.pre_enrollment_id);
+            setCompletedEnrollmentIds(prev => new Set(prev).add(newData.pre_enrollment_id));
+            toast.success('Matrícula confirmada!', {
+              icon: '🎉',
+              description: 'Acesse suas matrículas para ver o curso.',
+            });
+          }
+        }
+      )
+      .subscribe();
+
     // Cleanup ao desmontar
     return () => {
       supabase.removeChannel(paymentsChannel);
       supabase.removeChannel(preEnrollmentsChannel);
+      supabase.removeChannel(enrollmentsChannel);
     };
   }, [user]);
 
@@ -210,6 +240,22 @@ export function PreEnrollmentsPage() {
       // REGRA DE OURO: Somar TODOS os pagamentos confirmados, não só o último
       if (data && data.length > 0) {
         const preEnrollmentIds = data.map(p => p.id);
+        
+        // Buscar matrículas já pagas/ativas para esconder pré-matrículas finalizadas
+        const { data: completedEnrollments } = await supabase
+          .from('enrollments')
+          .select('pre_enrollment_id')
+          .eq('user_id', user?.id)
+          .eq('status', 'active')
+          .eq('payment_status', 'paid')
+          .in('pre_enrollment_id', preEnrollmentIds);
+        
+        if (completedEnrollments) {
+          const completedIds = new Set(completedEnrollments.map(e => e.pre_enrollment_id).filter(Boolean) as string[]);
+          console.log('✅ [PRE-ENROLLMENTS] Matrículas pagas (escondidas):', completedIds);
+          setCompletedEnrollmentIds(completedIds);
+        }
+        
         const { data: payments } = await supabase
           .from('payments')
           .select('pre_enrollment_id, amount')
@@ -864,6 +910,10 @@ export function PreEnrollmentsPage() {
 
   const filteredAndSortedPreEnrollments = preEnrollments
     .filter(preEnrollment => {
+      // Esconder pré-matrículas que já têm matrícula paga/ativa
+      if (completedEnrollmentIds.has(preEnrollment.id)) {
+        return false;
+      }
       if (statusFilter !== "all" && preEnrollment.status !== statusFilter) {
         return false;
       }
