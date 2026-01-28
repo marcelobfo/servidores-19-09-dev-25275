@@ -500,6 +500,7 @@ serve(async (req) => {
       });
 
       // Save payment without QR code - user can try again
+      console.log("💾 Salvando pagamento SEM QR code no banco...");
       const { data: dbPayment, error: dbError } = await supabaseClient
         .from("payments")
         .insert({
@@ -515,8 +516,9 @@ serve(async (req) => {
         .single();
 
       if (dbError) {
-        console.error("Database error:", dbError);
-        throw new Error("Failed to save payment");
+        console.error("❌ Erro ao salvar pagamento (sem QR) no banco:", dbError);
+        console.error("❌ Detalhes do erro:", JSON.stringify(dbError, null, 2));
+        throw new Error(`Erro ao registrar o pagamento no banco de dados: ${dbError.message || dbError.code || 'Erro desconhecido'}`);
       }
 
       // Update pre-enrollment status
@@ -536,6 +538,19 @@ serve(async (req) => {
     console.log("QR Code generated for payment:", payment.id);
 
     // Save payment to database with QR code
+    console.log("💾 Salvando pagamento no banco de dados...");
+    console.log("💾 Dados do insert:", {
+      pre_enrollment_id,
+      enrollment_id: enrollment_id || null,
+      kind,
+      asaas_payment_id: payment.id,
+      amount: finalAmount,
+      status: "pending",
+      has_qr_code: !!qrCodeData.encodedImage,
+      has_payload: !!qrCodeData.payload,
+      expiration_date: qrCodeData.expirationDate,
+    });
+    
     const { data: dbPayment, error: dbError } = await supabaseClient
       .from("payments")
       .insert({
@@ -553,9 +568,12 @@ serve(async (req) => {
       .single();
 
     if (dbError) {
-      console.error("Database error:", dbError);
-      throw new Error("Failed to save payment");
+      console.error("❌ Erro ao salvar pagamento no banco:", dbError);
+      console.error("❌ Detalhes do erro:", JSON.stringify(dbError, null, 2));
+      throw new Error(`Erro ao registrar o pagamento no banco de dados: ${dbError.message || dbError.code || 'Erro desconhecido'}`);
     }
+    
+    console.log("✅ Pagamento salvo no banco com sucesso:", dbPayment.id);
 
     // Update pre-enrollment status
     const { error: updateError } = await supabaseClient
