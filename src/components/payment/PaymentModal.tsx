@@ -50,10 +50,13 @@ export function PaymentModal({
   const [studentEmail, setStudentEmail] = useState<string>("");
   const { toast } = useToast();
 
-  // Realtime subscription
+  // Realtime subscription + Polling fallback para garantir atualização
   useEffect(() => {
     if (!paymentData?.id || !isOpen) return;
 
+    console.log('🔔 [REALTIME] Iniciando subscription para payment:', paymentData.id);
+
+    // Realtime subscription
     const channel = supabase
       .channel(`payment-${paymentData.id}`)
       .on(
@@ -65,6 +68,7 @@ export function PaymentModal({
           filter: `id=eq.${paymentData.id}`,
         },
         (payload) => {
+          console.log('🔔 [REALTIME] Update recebido:', payload);
           const newStatus = (payload.new as any).status;
           if (newStatus === "confirmed" || newStatus === "received") {
             toast({ title: "Pagamento confirmado!", description: "Seu pagamento foi processado com sucesso." });
@@ -73,10 +77,30 @@ export function PaymentModal({
           }
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('🔔 [REALTIME] Subscription status:', status);
+      });
+
+    // Polling fallback - verifica a cada 5 segundos
+    const pollingInterval = setInterval(async () => {
+      console.log('🔄 [POLLING] Verificando status do pagamento...');
+      const { data } = await supabase
+        .from("payments")
+        .select("status")
+        .eq("id", paymentData.id)
+        .single();
+      
+      if (data?.status === "received" || data?.status === "confirmed") {
+        console.log('✅ [POLLING] Pagamento confirmado via polling!');
+        toast({ title: "Pagamento confirmado!", description: "Seu pagamento foi processado com sucesso." });
+        onPaymentSuccess();
+        onClose();
+      }
+    }, 5000);
 
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(pollingInterval);
     };
   }, [paymentData?.id, isOpen, onPaymentSuccess, onClose, toast]);
 
