@@ -134,25 +134,31 @@ export function PaymentModal({
       // AJUSTE 1: Enviar o billing_type dinâmico
       // Se for pré-matrícula: PIX. Se for matrícula: UNDEFINED (libera cartão/boleto)
       // Localize este trecho dentro da sua função createPayment:
+      // Localize o invoke('create-enrollment-checkout' ou 'create-payment') e substitua por este:
       const { data, error } = await supabase.functions.invoke("create-payment", {
         body: {
           pre_enrollment_id: preEnrollmentId,
           amount: amount,
-          kind: kind, // usa o kind que vem da prop
+          kind: kind,
           enrollment_id: enrollmentIdToSend,
-          // Se for enrollment, manda UNDEFINED para liberar cartão no Asaas
+          // Garante que se for matrícula completa, abra o checkout multi-pagamento
           billing_type: kind === "enrollment" ? "UNDEFINED" : "PIX",
         },
       });
 
-      if (error) throw error;
-
-      // ADICIONE ESTA LÓGICA LOGO ABAIXO DO INVOKE:
-      if (data?.checkout_url && kind === "enrollment") {
-        // Se for matrícula completa e houver checkout_url, redireciona para o Asaas (Cartão/Boleto)
-        window.location.href = data.checkout_url;
-        return;
+      if (error) {
+        console.error("Erro na Edge Function:", error);
+        throw new Error("Falha na comunicação com o servidor de pagamentos.");
       }
+
+      // LÓGICA DE REDIRECIONAMENTO (O segredo para funcionar Cartão/Boleto)
+      if (data?.checkout_url && kind === "enrollment") {
+        toast({ title: "Redirecionando...", description: "Abrindo portal de pagamento seguro." });
+        window.location.href = data.checkout_url;
+        return; // Interrompe aqui para o usuário ir para o checkout
+      }
+
+      // O restante do seu código (setPaymentData, etc) continua abaixo...
 
       // O restante do seu código (setPaymentData(data), etc) continua igual
 
