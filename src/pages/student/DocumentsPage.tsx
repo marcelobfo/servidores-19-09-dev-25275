@@ -6,10 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SearchFilter } from "@/components/student/filters/SearchFilter";
 import { SortOptions } from "@/components/student/filters/SortOptions";
-import { FileText, Download, Calendar, BookOpen } from "lucide-react";
+import { FileText, Download, Calendar, BookOpen, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { generateDocument } from "@/lib/pdfGenerator";
-
+import { generateEnrollmentDeclaration, generateStudyPlan } from "@/lib/pdfGenerator";
 interface EnrollmentDeclaration {
   id: string;
   pre_enrollment_id: string;
@@ -188,12 +187,114 @@ export function DocumentsPage() {
     }
   };
 
+  // Busca dados completos da pré-matrícula para gerar documento com template
+  const fetchPreEnrollmentData = async (preEnrollmentId: string) => {
+    const { data: preEnrollment, error } = await supabase
+      .from("pre_enrollments")
+      .select(`
+        *,
+        courses (
+          name,
+          duration_hours,
+          duration_days,
+          modules,
+          description,
+          pre_enrollment_fee,
+          enrollment_fee
+        )
+      `)
+      .eq("id", preEnrollmentId)
+      .single();
+
+    if (error) throw error;
+
+    // Get organ type for effective hours calculation
+    let hoursMultiplier = 1;
+    const enrollmentData = preEnrollment as any;
+    if (enrollmentData?.organ_type_id) {
+      const { data: organType } = await supabase
+        .from('organ_types' as any)
+        .select('hours_multiplier')
+        .eq('id', enrollmentData.organ_type_id)
+        .single();
+      
+      if (organType) {
+        hoursMultiplier = (organType as any).hours_multiplier || 1;
+      }
+    }
+
+    // Get enrollment dates for the period
+    const { data: enrollment } = await supabase
+      .from('enrollments')
+      .select('enrollment_date')
+      .eq('pre_enrollment_id', preEnrollmentId)
+      .maybeSingle();
+
+    // Calculate dates
+    let startDate: string | undefined;
+    let endDate: string | undefined;
+    if (enrollment?.enrollment_date && preEnrollment.courses.duration_days) {
+      startDate = enrollment.enrollment_date;
+      const endDateObj = new Date(enrollment.enrollment_date);
+      endDateObj.setDate(endDateObj.getDate() + preEnrollment.courses.duration_days);
+      endDate = endDateObj.toISOString().split('T')[0];
+    }
+
+    const effectiveHours = enrollmentData.custom_hours || 
+      Math.round((preEnrollment.courses.duration_hours || 390) * hoursMultiplier);
+
+    return {
+      full_name: preEnrollment.full_name,
+      cpf: preEnrollment.cpf,
+      organization: preEnrollment.organization,
+      phone: preEnrollment.phone,
+      email: preEnrollment.email,
+      course: {
+        name: preEnrollment.courses.name,
+        duration_hours: preEnrollment.courses.duration_hours,
+        effective_hours: effectiveHours,
+        start_date: startDate,
+        end_date: endDate,
+        modules: preEnrollment.courses.modules,
+        description: preEnrollment.courses.description,
+        pre_enrollment_fee: preEnrollment.courses.pre_enrollment_fee,
+        enrollment_fee: preEnrollment.courses.enrollment_fee,
+      }
+    };
+  };
+
+  // Busca configurações do sistema
+  const fetchSystemSettings = async () => {
+    const { data, error } = await supabase
+      .from("system_settings")
+      .select("*")
+      .single();
+
+    if (error) throw error;
+    return data;
+  };
+
   const handleDownloadDeclaration = async (declaration: EnrollmentDeclaration) => {
     try {
-      await generateDocument(
-        declaration.content,
-        `declaracao-matricula-${declaration.pre_enrollments.courses.name.replace(/\s+/g, '-').toLowerCase()}.pdf`
-      );
+      toast.info("Gerando declaração com template atualizado...");
+      
+      const [enrollmentData, settings] = await Promise.all([
+        fetchPreEnrollmentData(declaration.pre_enrollment_id),
+        fetchSystemSettings()
+      ]);
+
+      const pdfBlob = await generateEnrollmentDeclaration(enrollmentData, settings);
+      
+      // Trigger download
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `declaracao-matricula-${declaration.pre_enrollments.courses.name.replace(/\s+/g, '-').toLowerCase()}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
       toast.success("Declaração baixada com sucesso!");
     } catch (error) {
       console.error("Error downloading declaration:", error);
@@ -203,10 +304,25 @@ export function DocumentsPage() {
 
   const handleDownloadStudyPlan = async (studyPlan: StudyPlan) => {
     try {
-      await generateDocument(
-        studyPlan.content,
-        `plano-estudos-${studyPlan.pre_enrollments.courses.name.replace(/\s+/g, '-').toLowerCase()}.pdf`
-      );
+      toast.info("Gerando plano de estudos com template atualizado...");
+      
+      const [enrollmentData, settings] = await Promise.all([
+        fetchPreEnrollmentData(studyPlan.pre_enrollment_id),
+        fetchSystemSettings()
+      ]);
+
+      const pdfBlob = await generateStudyPlan(enrollmentData, settings);
+      
+      // Trigger download
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `plano-estudos-${studyPlan.pre_enrollments.courses.name.replace(/\s+/g, '-').toLowerCase()}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
       toast.success("Plano de estudos baixado com sucesso!");
     } catch (error) {
       console.error("Error downloading study plan:", error);
