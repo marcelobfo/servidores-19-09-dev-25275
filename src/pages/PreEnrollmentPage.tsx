@@ -985,14 +985,14 @@ const PreEnrollmentPage = () => {
       </Card>
 
       <PaymentModal
-  isOpen={showPaymentModal}
-  onClose={() => setShowPaymentModal(false)}
-  preEnrollmentId={preEnrollmentId} // Certifique-se que este ID vem do 'saved.id' do handleSubmit
-  amount={paymentAmount}
-  courseName={selectedCourseName}
-  kind="pre_enrollment" // Force o tipo aqui para garantir o PIX nesta página
-  onPaymentSuccess={handlePaymentSuccess}
-/>
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        preEnrollmentId={preEnrollmentId}
+        courseName={selectedCourseName}
+        amount={paymentAmount}
+        onPaymentSuccess={handlePaymentSuccess}
+      />
+    </div>
   );
 };
 
