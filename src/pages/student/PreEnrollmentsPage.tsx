@@ -87,10 +87,80 @@ export function PreEnrollmentsPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedPreEnrollment, setSelectedPreEnrollment] = useState<PreEnrollment | null>(null);
 
+  // Realtime subscription para atualização automática
   useEffect(() => {
-    if (user) {
-      fetchPreEnrollments();
-    }
+    if (!user) return;
+
+    fetchPreEnrollments();
+
+    // Subscrição para mudanças em payments (quando pagamento é confirmado)
+    const paymentsChannel = supabase
+      .channel('payments-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'payments',
+        },
+        (payload) => {
+          console.log('💳 [REALTIME] Mudança em payments detectada:', payload);
+          // Recarregar dados quando um pagamento muda
+          fetchPreEnrollments();
+          
+          // Se o pagamento foi confirmado, mostrar toast
+          if (payload.new && (payload.new as any).status === 'confirmed') {
+            toast.success('Pagamento confirmado! Atualizando...', {
+              icon: '✅',
+            });
+          } else if (payload.new && (payload.new as any).status === 'received') {
+            toast.success('Pagamento recebido! Atualizando...', {
+              icon: '💰',
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    // Subscrição para mudanças em pre_enrollments (quando status muda)
+    const preEnrollmentsChannel = supabase
+      .channel('pre-enrollments-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'pre_enrollments',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log('📋 [REALTIME] Mudança em pre_enrollments detectada:', payload);
+          
+          // Atualizar estado local imediatamente
+          setPreEnrollments(prev => 
+            prev.map(pe => 
+              pe.id === (payload.new as any).id 
+                ? { ...pe, ...(payload.new as any) } 
+                : pe
+            )
+          );
+
+          // Se o status mudou para payment_confirmed
+          if ((payload.new as any).status === 'payment_confirmed' && (payload.old as any).status !== 'payment_confirmed') {
+            toast.success('Pagamento da pré-matrícula confirmado!', {
+              icon: '🎉',
+              description: 'Você já pode solicitar a matrícula.',
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup ao desmontar
+    return () => {
+      supabase.removeChannel(paymentsChannel);
+      supabase.removeChannel(preEnrollmentsChannel);
+    };
   }, [user]);
 
   const fetchPreEnrollments = async () => {
