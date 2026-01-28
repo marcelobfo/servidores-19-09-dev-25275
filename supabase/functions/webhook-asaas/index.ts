@@ -168,15 +168,62 @@ serve(async (req) => {
       return new Response('OK', { status: 200, headers: corsHeaders });
     }
 
-    // Find payment in our database
-    const { data: dbPayment, error: paymentError } = await supabaseClient
+    console.log('🔍 Buscando pagamento:', {
+      asaas_payment_id: payment.id,
+      externalReference: payment.externalReference
+    });
+
+    // Find payment in our database - first try by asaas_payment_id
+    let dbPayment = null;
+    let paymentError = null;
+
+    const { data: paymentByAsaasId, error: errorByAsaasId } = await supabaseClient
       .from('payments')
       .select('*, pre_enrollments(*)')
       .eq('asaas_payment_id', payment.id)
-      .single();
+      .maybeSingle();
 
-    if (paymentError) {
-      console.error('Payment not found:', paymentError);
+    if (paymentByAsaasId) {
+      dbPayment = paymentByAsaasId;
+      console.log('✅ Pagamento encontrado por asaas_payment_id');
+    } else if (payment.externalReference) {
+      // Try to find by externalReference (could be enrollment_id or pre_enrollment_id)
+      console.log('🔍 Tentando buscar por externalReference:', payment.externalReference);
+      
+      // First try as enrollment_id
+      const { data: paymentByEnrollmentId, error: errorByEnrollmentId } = await supabaseClient
+        .from('payments')
+        .select('*, pre_enrollments(*)')
+        .eq('enrollment_id', payment.externalReference)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (paymentByEnrollmentId) {
+        dbPayment = paymentByEnrollmentId;
+        console.log('✅ Pagamento encontrado por enrollment_id');
+      } else {
+        // Try as pre_enrollment_id
+        const { data: paymentByPreEnrollmentId, error: errorByPreEnrollmentId } = await supabaseClient
+          .from('payments')
+          .select('*, pre_enrollments(*)')
+          .eq('pre_enrollment_id', payment.externalReference)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (paymentByPreEnrollmentId) {
+          dbPayment = paymentByPreEnrollmentId;
+          console.log('✅ Pagamento encontrado por pre_enrollment_id');
+        }
+      }
+    }
+
+    if (!dbPayment) {
+      console.error('❌ Pagamento não encontrado no banco:', {
+        asaas_payment_id: payment.id,
+        externalReference: payment.externalReference
+      });
       return new Response('Payment not found', { status: 404, headers: corsHeaders });
     }
 
@@ -226,19 +273,25 @@ serve(async (req) => {
 
     // Check if this is an enrollment payment
     const isEnrollmentPayment = dbPayment.kind === 'enrollment';
+    console.log('📋 Tipo de pagamento:', {
+      kind: dbPayment.kind,
+      isEnrollmentPayment,
+      enrollment_id: dbPayment.enrollment_id,
+      pre_enrollment_id: dbPayment.pre_enrollment_id
+    });
 
-    // Update pre-enrollment status if payment was received/confirmed
-    if (updatePreEnrollmentStatus && !isEnrollmentPayment) {
+    // Update pre-enrollment status if payment was received/confirmed (for pre-enrollment payments)
+    if (updatePreEnrollmentStatus && !isEnrollmentPayment && dbPayment.pre_enrollment_id) {
       const { error: updatePreEnrollmentError } = await supabaseClient
         .from('pre_enrollments')
         .update({ status: 'payment_confirmed' })
         .eq('id', dbPayment.pre_enrollment_id);
 
       if (updatePreEnrollmentError) {
-        console.error('Error updating pre-enrollment:', updatePreEnrollmentError);
+        console.error('❌ Erro ao atualizar pre-enrollment:', updatePreEnrollmentError);
         // Don't throw here as payment update was successful
       } else {
-        console.log('Pre-enrollment status updated to payment_confirmed');
+        console.log('✅ Pre-enrollment status updated to payment_confirmed');
         
         // Trigger N8N webhook for payment confirmation
         await triggerN8NWebhook(supabaseClient, dbPayment.pre_enrollment_id, 'payment_confirmed', dbPayment.id);
@@ -247,7 +300,7 @@ serve(async (req) => {
 
     // Update enrollment status if this is an enrollment payment
     if (updatePreEnrollmentStatus && isEnrollmentPayment && dbPayment.enrollment_id) {
-      console.log('Updating enrollment payment status for:', dbPayment.enrollment_id);
+      console.log('🎓 Atualizando matrícula:', dbPayment.enrollment_id);
       
       const { error: updateEnrollmentError } = await supabaseClient
         .from('enrollments')
@@ -259,14 +312,43 @@ serve(async (req) => {
         .eq('id', dbPayment.enrollment_id);
 
       if (updateEnrollmentError) {
-        console.error('Error updating enrollment:', updateEnrollmentError);
+        console.error('❌ Erro ao atualizar matrícula:', updateEnrollmentError);
         // Don't throw here as payment update was successful
       } else {
-        console.log('Enrollment status updated to active with payment_status paid');
+        console.log('✅ Matrícula atualizada para active com payment_status paid');
       }
     }
 
-    console.log('Webhook processed successfully');
+    // If we have externalReference that matches enrollment pattern, also try direct update
+    if (updatePreEnrollmentStatus && payment.externalReference) {
+      // Check if the externalReference is an enrollment ID directly
+      const { data: enrollment } = await supabaseClient
+        .from('enrollments')
+        .select('id, status, payment_status')
+        .eq('id', payment.externalReference)
+        .maybeSingle();
+
+      if (enrollment && enrollment.payment_status !== 'paid') {
+        console.log('🔄 Atualizando matrícula via externalReference:', payment.externalReference);
+        
+        const { error: directUpdateError } = await supabaseClient
+          .from('enrollments')
+          .update({
+            payment_status: 'paid',
+            status: 'active',
+            enrollment_date: new Date().toISOString()
+          })
+          .eq('id', payment.externalReference);
+
+        if (directUpdateError) {
+          console.error('❌ Erro ao atualizar matrícula diretamente:', directUpdateError);
+        } else {
+          console.log('✅ Matrícula atualizada diretamente via externalReference');
+        }
+      }
+    }
+
+    console.log('✅ Webhook processado com sucesso');
 
     return new Response('OK', { 
       status: 200, 
@@ -274,7 +356,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Error in webhook-asaas function:', error);
+    console.error('❌ Erro no webhook-asaas:', error);
     return new Response('Internal Server Error', { 
       status: 500, 
       headers: corsHeaders 
