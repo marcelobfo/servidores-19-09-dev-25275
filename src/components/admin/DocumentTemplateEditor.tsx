@@ -88,6 +88,7 @@ const BLOCK_TYPE_CONFIG: Record<ContentBlockType, { label: string; icon: typeof 
   table: { label: 'Tabela', icon: Table },
   modules_table: { label: 'Tabela de Módulos', icon: Table },
   cronograma_table: { label: 'Cronograma', icon: Table },
+  quote_table: { label: 'Tabela de Orçamento', icon: Table },
   signature: { label: 'Assinatura', icon: PenTool },
   footer: { label: 'Rodapé', icon: LayoutGrid },
   image: { label: 'Imagem', icon: Image },
@@ -166,6 +167,7 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
         return { imageField: 'signature' as const, marginTop: 20 };
       case 'modules_table':
       case 'cronograma_table':
+      case 'quote_table':
         return { marginTop: 10 };
       case 'qrcode':
         return { width: 60, height: 60, marginTop: 20 };
@@ -749,7 +751,7 @@ export function DocumentTemplateEditor({ template, onSave, onCancel }: DocumentT
                             </div>
 
                             {/* Table formatting settings */}
-                            {(block.type === 'table' || block.type === 'modules_table' || block.type === 'cronograma_table') && (
+                            {(block.type === 'table' || block.type === 'modules_table' || block.type === 'cronograma_table' || block.type === 'quote_table') && (
                               <div className="space-y-3 border-t pt-3 mt-3">
                                 <Label className="text-xs font-semibold">Formatação da Tabela</Label>
                                 <div className="grid grid-cols-2 gap-2">

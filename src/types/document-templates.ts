@@ -14,6 +14,7 @@ export type ContentBlockType =
   | 'spacer'
   | 'modules_table'
   | 'cronograma_table'
+  | 'quote_table'
   | 'frame'
   | 'course_content';
 
@@ -194,30 +195,36 @@ export const TEMPLATE_VARIABLES: Record<DocumentTemplateType, Array<{ key: strin
   ],
 };
 
-// Default content blocks for each document type
+// Default content blocks for each document type - UPDATED based on real documents
 export const DEFAULT_CONTENT_BLOCKS: Record<DocumentTemplateType, ContentBlock[]> = {
   declaration: [
-    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true } },
-    { id: '2', type: 'title', order: 2, config: { text: 'DECLARAÇÃO DE MATRÍCULA', fontSize: 16, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 15 } },
+    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true, headerLayout: 'logo-left' as HeaderLayout } },
+    { id: '2', type: 'title', order: 2, config: { text: 'DECLARAÇÃO DE MATRÍCULA', fontSize: 16, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 20 } },
     { id: '3', type: 'paragraph', order: 3, config: { 
-      text: 'Declaramos que {{student_name}}, CPF: {{student_cpf}}, {{organization}}, está matriculada no curso de {{course_name}}. O curso será iniciado em {{start_date}} com término previsto para {{end_date}} e será realizado de forma não presencial, on-line com carga Horária de {{effective_hours}} horas e estará sob a supervisão de um tutor qualificado.',
+      text: 'Declaramos que <strong>{{student_name}}</strong>, CPF: {{student_cpf}}, {{organization}}, está matriculado(a) no curso de <strong>{{course_name}}</strong>.',
       fontSize: 11,
       align: 'justify' as const,
       marginTop: 20
     }},
-    { id: '4', type: 'paragraph', order: 4, config: { text: '{{current_date}}', fontSize: 11, align: 'left' as const, marginTop: 20 } },
-    { id: '5', type: 'signature', order: 5, config: { imageField: 'signature' as const, marginTop: 25 } },
-    { id: '6', type: 'footer', order: 6, config: { footerAlign: 'center' as const, footerText: 'E-commerce por {{institution_name}} © {{year}}. {{pix_holder_name}}/CNPJ: {{institution_cnpj}}. Whatsapp: {{institution_phone}} ou e-mail: {{institution_email}}' } },
+    { id: '4', type: 'paragraph', order: 4, config: { 
+      text: 'O curso será iniciado em <strong>{{start_date}}</strong> com término previsto para <strong>{{end_date}}</strong> e será realizado de forma não presencial (online), com carga horária de <strong>{{effective_hours}} horas</strong>, sob a supervisão de um tutor qualificado.',
+      fontSize: 11,
+      align: 'justify' as const,
+      marginTop: 10
+    }},
+    { id: '5', type: 'paragraph', order: 5, config: { text: '{{current_date}}', fontSize: 11, align: 'left' as const, marginTop: 25 } },
+    { id: '6', type: 'signature', order: 6, config: { imageField: 'signature' as const, marginTop: 30, signatureAlign: 'left' as BlockAlignment } },
+    { id: '7', type: 'footer', order: 7, config: { footerAlign: 'center' as const, footerText: 'E-commerce por {{institution_name}} © {{year}}. {{pix_holder_name}}/CNPJ: {{institution_cnpj}}. Whatsapp: {{institution_phone}} ou e-mail: {{institution_email}}' } },
   ],
   study_plan: [
-    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true } },
+    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true, headerLayout: 'logo-left' as HeaderLayout } },
     { id: '2', type: 'title', order: 2, config: { text: 'PLANO DE ESTUDOS', fontSize: 16, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 10 } },
-    { id: '3', type: 'paragraph', order: 3, config: { text: 'Curso: {{course_name}}', fontSize: 10, marginTop: 15 } },
-    { id: '4', type: 'paragraph', order: 4, config: { text: 'Instituição: {{organization}}', fontSize: 10, marginTop: 6 } },
-    { id: '5', type: 'paragraph', order: 5, config: { text: 'Servidor: {{student_name}}', fontSize: 10, marginTop: 6 } },
-    { id: '6', type: 'paragraph', order: 6, config: { text: 'Carga Horária: {{effective_hours}} horas', fontSize: 10, marginTop: 6 } },
-    { id: '7', type: 'paragraph', order: 7, config: { text: 'Período: {{start_date}} a {{end_date}}', fontSize: 10, marginTop: 6 } },
-    { id: '8', type: 'modules_table', order: 8, config: { marginTop: 12 } },
+    { id: '3', type: 'paragraph', order: 3, config: { text: '<strong>Curso:</strong> {{course_name}}', fontSize: 10, marginTop: 15 } },
+    { id: '4', type: 'paragraph', order: 4, config: { text: '<strong>Instituição:</strong> {{organization}}', fontSize: 10, marginTop: 5 } },
+    { id: '5', type: 'paragraph', order: 5, config: { text: '<strong>Servidor:</strong> {{student_name}}', fontSize: 10, marginTop: 5 } },
+    { id: '6', type: 'paragraph', order: 6, config: { text: '<strong>Carga Horária:</strong> {{effective_hours}} horas', fontSize: 10, marginTop: 5 } },
+    { id: '7', type: 'paragraph', order: 7, config: { text: '<strong>Período:</strong> {{start_date}} a {{end_date}}', fontSize: 10, marginTop: 5 } },
+    { id: '8', type: 'modules_table', order: 8, config: { marginTop: 15 } },
     { id: '9', type: 'title', order: 9, config: { text: 'Cronograma', fontSize: 12, fontWeight: 'bold' as const, align: 'left' as const, marginTop: 15 } },
     { id: '10', type: 'cronograma_table', order: 10, config: { marginTop: 8 } },
     { id: '11', type: 'title', order: 11, config: { text: 'CONTEÚDO PROGRAMÁTICO DO CURSO', fontSize: 12, fontWeight: 'bold' as const, align: 'left' as const, marginTop: 15 } },
@@ -225,38 +232,41 @@ export const DEFAULT_CONTENT_BLOCKS: Record<DocumentTemplateType, ContentBlock[]
     { id: '13', type: 'footer', order: 13, config: { footerAlign: 'center' as const } },
   ],
   quote: [
-    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true } },
+    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true, headerLayout: 'logo-left' as HeaderLayout } },
     { id: '2', type: 'title', order: 2, config: { text: 'ORÇAMENTO', fontSize: 16, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 15 } },
-    { id: '3', type: 'paragraph', order: 3, config: { text: 'Prezado(a) {{student_name}},', fontSize: 11, marginTop: 20 } },
-    { id: '4', type: 'paragraph', order: 4, config: { 
-      text: 'Segue orçamento para o curso {{course_name}} com carga horária de {{course_hours}} horas.',
-      fontSize: 11,
-      marginTop: 10
-    }},
-    { id: '5', type: 'paragraph', order: 5, config: { text: 'Licença capacitação: R$ {{enrollment_fee}}', fontSize: 11, fontWeight: 'bold' as const, marginTop: 15 } },
-    { id: '6', type: 'paragraph', order: 6, config: { text: 'Crédito de pré-matrícula: - R$ {{pre_enrollment_credit}}', fontSize: 11, marginTop: 6 } },
-    { id: '7', type: 'paragraph', order: 7, config: { text: 'Valor a pagar: R$ {{final_amount}}', fontSize: 11, fontWeight: 'bold' as const, marginTop: 6 } },
-    { id: '8', type: 'paragraph', order: 8, config: { 
-      text: 'Pagamento via PIX: {{pix_key}} ({{pix_holder_name}})',
+    { id: '3', type: 'paragraph', order: 3, config: { text: '<strong>Curso:</strong> {{course_name}}', fontSize: 10, marginTop: 15 } },
+    { id: '4', type: 'paragraph', order: 4, config: { text: '<strong>Instituição:</strong> {{organization}}', fontSize: 10, marginTop: 5 } },
+    { id: '5', type: 'paragraph', order: 5, config: { text: '<strong>Servidor:</strong> {{student_name}}', fontSize: 10, marginTop: 5 } },
+    { id: '6', type: 'paragraph', order: 6, config: { text: '<strong>Carga Horária:</strong> {{course_hours}} horas', fontSize: 10, marginTop: 5 } },
+    { id: '7', type: 'paragraph', order: 7, config: { text: '<strong>Período:</strong> {{start_date}} a {{end_date}}', fontSize: 10, marginTop: 5 } },
+    { id: '8', type: 'quote_table', order: 8, config: { marginTop: 15 }},
+    { id: '9', type: 'title', order: 9, config: { text: 'O pagamento pode ser realizado da seguinte forma:', fontSize: 11, fontWeight: 'bold' as const, align: 'left' as const, marginTop: 15 } },
+    { id: '10', type: 'paragraph', order: 10, config: { text: 'Pagamento a vista (transferência bancária ou PIX) – R$ {{final_amount}}', fontSize: 10, marginTop: 8 } },
+    { id: '11', type: 'paragraph', order: 11, config: { text: 'Pagamento no Boleto, podendo ser dividido em até 12 parcelas no cartão de crédito', fontSize: 10, marginTop: 5 } },
+    { id: '12', type: 'title', order: 12, config: { text: 'O que está incluso?', fontSize: 11, fontWeight: 'bold' as const, align: 'left' as const, marginTop: 15 } },
+    { id: '13', type: 'paragraph', order: 13, config: { 
+      text: '1. Carta de aceite no curso para apresentação ao órgão de lotação.\n2. Plano de estudos.\n3. Vídeo aulas.\n4. Livros em PDF para acompanhamento das disciplinas.\n5. Certificado.\n6. Toda a documentação facilitadora de aceite no órgão de origem.\n7. Suporte',
       fontSize: 10,
-      marginTop: 20
+      marginTop: 8
     }},
-    { id: '9', type: 'footer', order: 9, config: { footerAlign: 'center' as const } },
+    { id: '14', type: 'signature', order: 14, config: { imageField: 'signature' as const, marginTop: 25, signatureAlign: 'left' as BlockAlignment } },
+    { id: '15', type: 'footer', order: 15, config: { footerAlign: 'center' as const } },
   ],
   certificate: [
-    { id: '1', type: 'header', order: 1, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true } },
-    { id: '2', type: 'title', order: 2, config: { text: 'CERTIFICADO DE CONCLUSÃO', fontSize: 18, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 20 } },
-    { id: '3', type: 'paragraph', order: 3, config: { 
-      text: 'Certificamos que {{student_name}}, CPF: {{student_cpf}}, concluiu com êxito o curso de {{course_name}}, com carga horária de {{effective_hours}} horas.',
+    { id: '1', type: 'frame', order: 1, config: { frameStyle: 'classic' as FrameStyle, frameColor: '#1E40AF', frameWidth: 4 } },
+    { id: '2', type: 'header', order: 2, config: { imageField: 'logo' as const, showLogo: true, showInstitutionInfo: true, headerLayout: 'logo-above' as HeaderLayout, logoAlign: 'center' as BlockAlignment } },
+    { id: '3', type: 'title', order: 3, config: { text: 'CERTIFICADO', fontSize: 24, fontWeight: 'bold' as const, align: 'center' as const, marginTop: 20 } },
+    { id: '4', type: 'paragraph', order: 4, config: { 
+      text: 'Certificamos que <strong>{{student_name}}</strong> concluiu o Curso de <strong>{{course_name}}</strong> promovido pela {{institution_name}}, no período de {{start_date}} a {{completion_date}} com carga horária total de <strong>{{effective_hours}} horas</strong>.',
       fontSize: 12,
       align: 'center' as const,
-      marginTop: 30
+      marginTop: 25
     }},
-    { id: '4', type: 'paragraph', order: 4, config: { text: 'Data de conclusão: {{completion_date}}', fontSize: 11, align: 'center' as const, marginTop: 20 } },
-    { id: '5', type: 'qrcode', order: 5, config: { marginTop: 30, width: 60, height: 60 } },
-    { id: '6', type: 'paragraph', order: 6, config: { text: 'Código: {{certificate_code}}', fontSize: 9, align: 'center' as const, marginTop: 10 } },
-    { id: '7', type: 'signature', order: 7, config: { imageField: 'signature' as const, marginTop: 25 } },
-    { id: '8', type: 'footer', order: 8, config: { footerAlign: 'center' as const } },
+    { id: '5', type: 'paragraph', order: 5, config: { text: '{{current_date}}', fontSize: 11, align: 'center' as const, marginTop: 25 } },
+    { id: '6', type: 'signature', order: 6, config: { imageField: 'signature' as const, marginTop: 20, signatureAlign: 'center' as BlockAlignment } },
+    { id: '7', type: 'qrcode', order: 7, config: { marginTop: 15, width: 50, height: 50, qrcodeAlign: 'center' as BlockAlignment } },
+    { id: '8', type: 'paragraph', order: 8, config: { text: 'Código do Certificado: {{certificate_code}} · Verifique autenticidade em: {{verification_url}}', fontSize: 8, align: 'center' as const, marginTop: 5 } },
+    { id: '9', type: 'footer', order: 9, config: { footerAlign: 'center' as const } },
   ],
 };
 
