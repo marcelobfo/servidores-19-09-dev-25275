@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
 
-// Helper function to trigger N8N webhook
+// Helper function to trigger N8N webhook with enriched data
 const triggerN8NWebhook = async (
   supabaseClient: any, 
   enrollmentId: string, 
@@ -20,12 +20,12 @@ const triggerN8NWebhook = async (
       return;
     }
 
-    // Get enrollment details
+    // Get FULL enrollment details including all student data
     const { data: enrollment } = await supabaseClient
       .from('pre_enrollments')
       .select(`
         *,
-        course:courses(name)
+        course:courses(id, name, duration_hours)
       `)
       .eq('id', enrollmentId)
       .single();
@@ -50,6 +50,7 @@ const triggerN8NWebhook = async (
           asaas_payment_id: payment.asaas_payment_id,
           amount: payment.amount,
           currency: payment.currency,
+          billing_type: payment.billing_type || null,
           status: payment.status,
           paid_at: payment.paid_at,
           pix_qr_code: payment.pix_qr_code,
@@ -60,24 +61,53 @@ const triggerN8NWebhook = async (
       }
     }
 
+    // Build enriched payload with all student and course data
     const payload = {
       event: eventType,
       timestamp: new Date().toISOString(),
       enrollment: {
         id: enrollment.id,
+        // Student personal data
         student_name: enrollment.full_name,
         student_email: enrollment.email,
         student_phone: enrollment.phone || null,
         student_whatsapp: enrollment.whatsapp || null,
+        student_cpf: enrollment.cpf || null,
+        student_birth_date: enrollment.birth_date || null,
+        // Organization
+        organization: enrollment.organization || null,
+        // Address data
+        address: enrollment.address || null,
+        address_number: enrollment.address_number || null,
+        complement: enrollment.complement || null,
+        city: enrollment.city || null,
+        state: enrollment.state || null,
+        postal_code: enrollment.postal_code || null,
+        // Course data
+        course_id: enrollment.course?.id || enrollment.course_id || null,
         course_name: enrollment.course?.name || 'Unknown Course',
+        course_hours: enrollment.custom_hours || enrollment.course?.duration_hours || null,
+        // License dates
+        license_start_date: enrollment.license_start_date || null,
+        license_end_date: enrollment.license_end_date || null,
+        license_duration: enrollment.license_duration || null,
+        // Status and timestamps
         status: enrollment.status,
         created_at: enrollment.created_at,
         updated_at: enrollment.updated_at,
+        additional_info: enrollment.additional_info || null,
       },
       ...(paymentData && { payment: paymentData }),
     };
 
-    console.log('Triggering N8N webhook with payment data:', !!paymentData);
+    console.log('📤 Triggering N8N webhook with enriched data:', {
+      event: eventType,
+      enrollment_id: enrollmentId,
+      has_payment: !!paymentData,
+      student_name: enrollment.full_name,
+      student_cpf: enrollment.cpf ? '***' : null,
+      course_name: enrollment.course?.name
+    });
 
     const response = await fetch(settings.n8n_webhook_url, {
       method: 'POST',
@@ -293,7 +323,7 @@ serve(async (req) => {
       } else {
         console.log('✅ Pre-enrollment status updated to payment_confirmed');
         
-        // Trigger N8N webhook for payment confirmation
+        // Trigger N8N webhook for payment confirmation with enriched data
         await triggerN8NWebhook(supabaseClient, dbPayment.pre_enrollment_id, 'payment_confirmed', dbPayment.id);
       }
     }

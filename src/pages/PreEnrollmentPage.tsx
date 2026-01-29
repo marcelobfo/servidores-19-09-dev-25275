@@ -82,6 +82,11 @@ const PreEnrollmentPage = () => {
 
   const [filteredCourses, setFilteredCourses] = useState<Course[]>([]);
 
+  // Scroll to top quando a página carrega
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   useEffect(() => {
     fetchCourses();
     fetchOrganTypes();
