@@ -1,148 +1,213 @@
 
+# Plano de Melhorias: Scroll, Webhook e Confirmação de Pagamento
 
-## Plano: Corrigir Validação do Webhook Asaas
+## Resumo das Melhorias Solicitadas
 
-### Problema Identificado
+1. **Scroll para o topo ao clicar em "Inscrever-se"** - Quando o usuário clica no botão de inscrição, a página de pré-matrícula deve abrir já rolada para o topo do formulário.
 
-O webhook do Asaas está retornando erro **401 Unauthorized** porque a Edge Function exige um header `asaas-access-token` que **não está sendo enviado pelo Asaas**.
+2. **Enviar dados do aluno no webhook junto com o status de pagamento** - O webhook do Asaas deve incluir informações completas do estudante matriculado.
 
-O Asaas só envia esse header se você configurar um **Access Token** na tela de configuração de webhooks no painel do Asaas.
-
-### Situação Atual
-
-```
-Asaas envia webhook → Edge Function verifica header 'asaas-access-token'
-                                      ↓
-                     Header não existe → Retorna 401 "Missing webhook token"
-```
-
-### Solução Proposta
-
-Modificar a Edge Function `webhook-asaas` para tornar a validação do token **opcional mas recomendada**:
-
-1. **Se o token estiver configurado no banco** → Exige e valida o header
-2. **Se o token NÃO estiver configurado** → Aceita o webhook sem validação (com log de aviso)
-
-Isso permite que o sistema funcione imediatamente enquanto você configura o token no painel do Asaas para segurança máxima.
+3. **Melhorar a experiência de confirmação de pagamento** - Adicionar indicadores visuais claros de carregamento, confirmação e redirecionamento automático.
 
 ---
 
-### Modificações na Edge Function
+## 1. Scroll para o Topo da Página de Inscrição
 
-**Arquivo:** `supabase/functions/webhook-asaas/index.ts`
+### Problema Atual
+Quando o usuário clica em "Inscrever-se" ou "Fazer Pré-Matrícula", ele é redirecionado para a página de pré-matrícula, mas a página pode abrir em uma posição aleatória, especialmente se o usuário estava rolando antes.
 
-#### Lógica Atual (linhas 126-148):
-```typescript
-// Exige token sempre
-const webhookToken = req.headers.get('asaas-access-token');
-if (!webhookToken) {
-  return new Response(JSON.stringify({ error: 'Unauthorized: Missing webhook token' }), { status: 401 });
-}
-```
-
-#### Nova Lógica:
-```typescript
-// Buscar configurações primeiro
-const { data: settings } = await supabaseClient
-  .from('payment_settings')
-  .select('asaas_webhook_token')
-  .maybeSingle();
-
-const webhookToken = req.headers.get('asaas-access-token');
-const storedToken = settings?.asaas_webhook_token;
-
-// Se um token está configurado no banco, exigir validação
-if (storedToken && storedToken.trim() !== '') {
-  if (!webhookToken) {
-    console.error('Missing Asaas webhook token - token is required because it is configured');
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized: Missing webhook token' }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-  
-  if (webhookToken !== storedToken) {
-    console.error('Invalid Asaas webhook token');
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized: Invalid webhook token' }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-  
-  console.log('✅ Webhook authenticated with token');
-} else {
-  // Token não configurado - aceitar webhook mas avisar
-  console.warn('⚠️ SECURITY WARNING: Webhook token not configured in payment_settings. Accepting webhook without authentication.');
-  console.warn('⚠️ Configure "Token do Webhook" em Configurações de Pagamento para segurança máxima.');
-}
-```
-
----
-
-### Fluxo Após a Correção
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Asaas envia webhook                          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-        ┌─────────────────────────────────────┐
-        │ Token configurado no banco?         │
-        └─────────────────────────────────────┘
-              │                      │
-             SIM                    NÃO
-              │                      │
-              ▼                      ▼
-   ┌──────────────────┐    ┌──────────────────┐
-   │ Valida header    │    │ Aceita webhook   │
-   │ asaas-access-token│    │ (com log aviso)  │
-   └──────────────────┘    └──────────────────┘
-              │                      │
-              ▼                      │
-   ┌──────────────────┐              │
-   │ Token válido?    │              │
-   └──────────────────┘              │
-        │       │                    │
-       SIM     NÃO                   │
-        │       │                    │
-        │       ▼                    │
-        │   401 Unauthorized         │
-        │                            │
-        └────────┬───────────────────┘
-                 │
-                 ▼
-        ┌──────────────────────────┐
-        │ Processa pagamento       │
-        │ Atualiza status          │
-        │ Dispara N8N webhook      │
-        └──────────────────────────┘
-```
-
----
-
-### Configuração Recomendada no Asaas (Passo Futuro)
-
-Para segurança máxima, após a correção você pode:
-
-1. Acessar o painel do Asaas → **Configurações → Webhooks**
-2. Editar o webhook configurado
-3. Adicionar um **Access Token** (qualquer string segura, ex: `meu-token-seguro-123`)
-4. Copiar o mesmo token para **Configurações de Pagamento** no admin do sistema
-
----
+### Solução
+Adicionar `window.scrollTo(0, 0)` no carregamento inicial da página `PreEnrollmentPage.tsx`.
 
 ### Arquivos a Modificar
+- `src/pages/PreEnrollmentPage.tsx`
 
-| Arquivo | Ação |
-|---------|------|
-| `supabase/functions/webhook-asaas/index.ts` | Modificar validação de token para ser opcional |
+### Alterações
+```typescript
+// Adicionar useEffect no início do componente
+useEffect(() => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}, []);
+```
 
 ---
 
-### Resultado Esperado
+## 2. Enviar Dados do Aluno no Webhook
 
-1. **Imediato:** O webhook do Asaas será aceito e processará pagamentos normalmente
-2. **Logs:** Aviso de segurança aparecerá nos logs enquanto o token não estiver configurado
-3. **Futuro:** Quando você configurar o token no Asaas e no sistema, a validação será ativada automaticamente
+### Problema Atual
+O webhook `webhook-asaas` atualmente envia apenas dados básicos de pagamento e status. Os dados completos do estudante (telefone, CPF, endereço, organização, dados do curso) não são incluídos.
+
+### Solução
+Expandir o payload do N8N webhook para incluir informações completas do estudante, curso e matrícula.
+
+### Arquivos a Modificar
+- `supabase/functions/webhook-asaas/index.ts`
+
+### Dados Adicionais a Incluir no Payload
+
+```text
++----------------------------------+
+|        PAYLOAD EXPANDIDO         |
++----------------------------------+
+| event: "payment_confirmed"       |
+| timestamp: ISO date              |
++----------------------------------+
+| enrollment:                      |
+|   - id                           |
+|   - student_name                 |
+|   - student_email                |
+|   - student_phone                |
+|   - student_whatsapp             |
+|   - student_cpf          [NOVO]  |
+|   - student_birth_date   [NOVO]  |
+|   - organization         [NOVO]  |
+|   - address              [NOVO]  |
+|   - city                 [NOVO]  |
+|   - state                [NOVO]  |
+|   - postal_code          [NOVO]  |
+|   - course_id            [NOVO]  |
+|   - course_name                  |
+|   - course_hours         [NOVO]  |
+|   - license_start_date   [NOVO]  |
+|   - license_end_date     [NOVO]  |
+|   - status                       |
+|   - created_at                   |
+|   - updated_at                   |
++----------------------------------+
+| payment:                         |
+|   - id                           |
+|   - asaas_payment_id             |
+|   - amount                       |
+|   - billing_type         [NOVO]  |
+|   - status                       |
+|   - paid_at                      |
++----------------------------------+
+```
+
+### Alterações no webhook-asaas
+Expandir a função `triggerN8NWebhook` para buscar e incluir:
+- Dados completos do estudante (CPF, telefone, endereço)
+- Dados completos do curso (ID, carga horária)
+- Datas da licença
+- Tipo de cobrança do pagamento
+
+---
+
+## 3. Melhorar Experiência de Confirmação de Pagamento
+
+### Problema Atual
+- O usuário não tem feedback visual claro quando o pagamento está sendo processado
+- A transição entre "aguardando" e "confirmado" não é óbvia
+- O redirecionamento acontece, mas sem aviso prévio adequado
+
+### Solução
+Criar um fluxo visual de três estados:
+
+```text
+Estado 1: AGUARDANDO PAGAMENTO
++----------------------------------+
+|  [QR Code PIX / Código]          |
+|  "Aguardando confirmação..."     |
+|  [Indicador de verificação]      |
++----------------------------------+
+
+Estado 2: PAGAMENTO CONFIRMADO
++----------------------------------+
+|  [Ícone de Sucesso Animado]      |
+|  "Pagamento Confirmado!"         |
+|  "Redirecionando em 3s..."       |
+|  [Barra de progresso]            |
+|  [Botão: Ir para Matrículas]     |
++----------------------------------+
+
+Estado 3: REDIRECIONAMENTO
++----------------------------------+
+|  [Spinner]                       |
+|  "Carregando suas matrículas..." |
++----------------------------------+
+```
+
+### Arquivos a Modificar
+- `src/components/payment/PaymentModal.tsx`
+
+### Novos Estados e Componentes
+
+1. **Novo estado `paymentConfirmed`**: Boolean para controlar a transição visual
+2. **Countdown visual**: Timer de 3 segundos antes do redirecionamento
+3. **Animação de sucesso**: Ícone verde com animação de check
+4. **Botão manual**: "Ir para Minhas Matrículas" como fallback
+5. **Tela de carregamento pós-confirmação**: Spinner com mensagem durante redirecionamento
+
+### Fluxo Atualizado
+
+```text
+POLLING/REALTIME detecta status = 'received' ou 'confirmed'
+                    |
+                    v
+    +-----------------------------+
+    | paymentConfirmed = true     |
+    | Mostrar tela de sucesso     |
+    | Iniciar countdown de 3s     |
+    +-----------------------------+
+                    |
+                    v (após 3s OU clique no botão)
+    +-----------------------------+
+    | Mostrar "Carregando..."     |
+    | navigate("/student/...")    |
+    +-----------------------------+
+```
+
+---
+
+## Detalhes Técnicos
+
+### PaymentModal.tsx - Novos Estados
+```typescript
+const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+const [redirectCountdown, setRedirectCountdown] = useState(3);
+const [isRedirecting, setIsRedirecting] = useState(false);
+```
+
+### Lógica de Confirmação Melhorada
+```typescript
+// Quando pagamento é confirmado
+if (newStatus === "confirmed" || newStatus === "received") {
+  setPaymentConfirmed(true);
+  // Countdown de 3 segundos
+  let count = 3;
+  const countdownInterval = setInterval(() => {
+    count--;
+    setRedirectCountdown(count);
+    if (count <= 0) {
+      clearInterval(countdownInterval);
+      handleRedirect();
+    }
+  }, 1000);
+}
+```
+
+### UI de Confirmação
+- Ícone `CheckCircle` com animação de scale/pulse
+- Texto "Pagamento Confirmado!" em verde
+- Countdown: "Redirecionando em {n} segundos..."
+- Botão: "Ir para Minhas Matrículas agora"
+
+---
+
+## Ordem de Implementação
+
+1. **PreEnrollmentPage.tsx** - Scroll to top (mudança simples)
+2. **PaymentModal.tsx** - Estados visuais de confirmação (mudança de UI)
+3. **webhook-asaas/index.ts** - Dados expandidos do estudante (mudança de backend)
+
+---
+
+## Ações Necessárias Após Implementação
+
+Após as alterações, será necessário fazer deploy da Edge Function atualizada:
+
+```bash
+supabase link --project-ref lavqzqqfsdtduwphzehr
+supabase functions deploy webhook-asaas --no-verify-jwt
+```
 
