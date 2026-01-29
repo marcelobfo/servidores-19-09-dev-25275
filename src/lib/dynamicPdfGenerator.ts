@@ -166,11 +166,15 @@ const renderBlock = async (
       break;
 
     case 'modules_table':
-      yPosition = renderModulesTable(pdf, data, yPosition, margins.left, contentWidth);
+      yPosition = renderModulesTable(pdf, data, yPosition, margins.left, contentWidth, block);
       break;
 
     case 'cronograma_table':
-      yPosition = renderCronogramaTable(pdf, data, settings, yPosition, margins.left);
+      yPosition = renderCronogramaTable(pdf, data, settings, yPosition, margins.left, block);
+      break;
+
+    case 'quote_table':
+      yPosition = renderQuoteTable(pdf, data, yPosition, margins.left, contentWidth, block);
       break;
 
     case 'spacer':
@@ -573,6 +577,35 @@ const renderHeader = async (
   return yPosition + (logoLoaded ? logoHeight + 5 : 0);
 };
 
+// Helper function to strip HTML and extract clean text for PDF
+const stripHtmlForPdf = (html: string): string => {
+  // Decode HTML entities
+  let decoded = html
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  
+  // Preserve line breaks from block elements
+  decoded = decoded
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<li>/gi, '• ');
+  
+  // Remove all HTML tags (including <strong>, <em>, etc - jsPDF doesn't support inline formatting)
+  decoded = decoded.replace(/<[^>]+>/g, '');
+  
+  // Clean up excessive whitespace
+  return decoded
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+};
+
 // Render text (title or paragraph)
 const renderText = (
   pdf: jsPDF,
@@ -583,7 +616,8 @@ const renderText = (
   margins: { left: number; right: number },
   contentWidth: number
 ): number => {
-  const text = replaceVariables(block.config.text || '', data, settings);
+  const rawText = replaceVariables(block.config.text || '', data, settings);
+  const text = stripHtmlForPdf(rawText);
   const fontSize = block.config.fontSize || 11;
   const fontWeight = block.config.fontWeight || 'normal';
   const align = block.config.align || 'left';
@@ -724,112 +758,240 @@ const renderFooter = (pdf: jsPDF, block: ContentBlock, data: PreviewData, settin
   pdf.setTextColor(0, 0, 0);
 };
 
-// Render modules table
+// Render modules table with improved styling
 const renderModulesTable = (
   pdf: jsPDF,
   data: PreviewData,
   yPosition: number,
   marginLeft: number,
-  contentWidth: number
+  contentWidth: number,
+  block?: ContentBlock
 ): number => {
   const modules = data.modules || [];
   
+  // Table styling from block config or defaults
+  const borderColor = block?.config.tableBorderColor || '#000000';
+  const headerBgColor = block?.config.tableHeaderBgColor || '#E5E7EB';
+  const headerTextColor = block?.config.tableHeaderTextColor || '#000000';
+  const alternateColor = block?.config.tableRowAlternateColor || '#FAFAFA';
+  const borderWidth = block?.config.tableBorderWidth || 0.3;
+  
+  // Parse colors
+  const hexToRgb = (hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : { r: 0, g: 0, b: 0 };
+  };
+  
+  const border = hexToRgb(borderColor);
+  const headerBg = hexToRgb(headerBgColor);
+  const headerText = hexToRgb(headerTextColor);
+  const alternate = hexToRgb(alternateColor);
+  
+  const moduleColWidth = contentWidth - 50;
+  const hoursColWidth = 50;
+  const rowHeight = 8;
+  
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(9);
-
-  // Table header
-  pdf.setDrawColor(0, 0, 0);
-  pdf.setLineWidth(0.3);
-  pdf.rect(marginLeft, yPosition - 4, contentWidth - 40, 8);
-  pdf.rect(marginLeft + contentWidth - 40, yPosition - 4, 40, 8);
-  pdf.text('Módulos', marginLeft + 5, yPosition + 1);
-  pdf.text('Carga Horária (horas)', marginLeft + contentWidth - 38, yPosition + 1);
-
-  yPosition += 6;
+  pdf.setDrawColor(border.r, border.g, border.b);
+  pdf.setLineWidth(borderWidth);
+  
+  // Header row with background
+  pdf.setFillColor(headerBg.r, headerBg.g, headerBg.b);
+  pdf.rect(marginLeft, yPosition - 4, moduleColWidth, rowHeight, 'FD');
+  pdf.rect(marginLeft + moduleColWidth, yPosition - 4, hoursColWidth, rowHeight, 'FD');
+  
+  pdf.setTextColor(headerText.r, headerText.g, headerText.b);
+  pdf.text('Módulos', marginLeft + 3, yPosition + 1);
+  pdf.text('Carga Horária (horas)', marginLeft + moduleColWidth + 3, yPosition + 1);
+  
+  yPosition += rowHeight - 2;
   pdf.setFont('helvetica', 'normal');
-
+  pdf.setTextColor(0, 0, 0);
+  
   let totalHours = 0;
-  modules.forEach((module) => {
-    pdf.rect(marginLeft, yPosition - 4, contentWidth - 40, 8);
-    pdf.rect(marginLeft + contentWidth - 40, yPosition - 4, 40, 8);
-
-    const moduleName = module.name.length > 55 ? module.name.substring(0, 52) + '...' : module.name;
-    pdf.text(moduleName, marginLeft + 5, yPosition + 1);
-    pdf.text(`${module.hours}`, marginLeft + contentWidth - 20, yPosition + 1, { align: 'center' });
-
+  modules.forEach((module, index) => {
+    // Alternate row color
+    if (index % 2 === 1) {
+      pdf.setFillColor(alternate.r, alternate.g, alternate.b);
+      pdf.rect(marginLeft, yPosition - 4, moduleColWidth, rowHeight, 'FD');
+      pdf.rect(marginLeft + moduleColWidth, yPosition - 4, hoursColWidth, rowHeight, 'FD');
+    } else {
+      pdf.rect(marginLeft, yPosition - 4, moduleColWidth, rowHeight);
+      pdf.rect(marginLeft + moduleColWidth, yPosition - 4, hoursColWidth, rowHeight);
+    }
+    
+    const moduleName = module.name.length > 60 ? module.name.substring(0, 57) + '...' : module.name;
+    pdf.text(moduleName, marginLeft + 3, yPosition + 1);
+    pdf.text(`${module.hours}`, marginLeft + moduleColWidth + hoursColWidth / 2, yPosition + 1, { align: 'center' });
+    
     totalHours += module.hours;
-    yPosition += 6;
+    yPosition += rowHeight - 2;
   });
-
-  // Total row
+  
+  // Total row with bold styling
   pdf.setFont('helvetica', 'bold');
-  pdf.rect(marginLeft, yPosition - 4, contentWidth - 40, 8);
-  pdf.rect(marginLeft + contentWidth - 40, yPosition - 4, 40, 8);
-  pdf.text('TOTAL', marginLeft + 5, yPosition + 1);
-  pdf.text(`${data.effective_hours || totalHours}`, marginLeft + contentWidth - 20, yPosition + 1, { align: 'center' });
-
-  return yPosition + 10;
+  pdf.setFillColor(headerBg.r, headerBg.g, headerBg.b);
+  pdf.rect(marginLeft, yPosition - 4, moduleColWidth, rowHeight, 'FD');
+  pdf.rect(marginLeft + moduleColWidth, yPosition - 4, hoursColWidth, rowHeight, 'FD');
+  pdf.setTextColor(headerText.r, headerText.g, headerText.b);
+  pdf.text('TOTAL', marginLeft + 3, yPosition + 1);
+  pdf.text(`${data.effective_hours || totalHours}`, marginLeft + moduleColWidth + hoursColWidth / 2, yPosition + 1, { align: 'center' });
+  pdf.setTextColor(0, 0, 0);
+  
+  return yPosition + rowHeight + 5;
 };
 
-// Render cronograma table
+// Render cronograma table with improved layout
 const renderCronogramaTable = (
   pdf: jsPDF,
   data: PreviewData,
   settings: SystemSettings,
   yPosition: number,
-  marginLeft: number
+  marginLeft: number,
+  block?: ContentBlock
 ): number => {
-  const modules = data.modules || [];
+  // Table styling from block config or defaults
+  const borderColor = block?.config.tableBorderColor || '#000000';
+  const headerBgColor = block?.config.tableHeaderBgColor || '#E5E7EB';
+  const headerTextColor = block?.config.tableHeaderTextColor || '#000000';
+  const borderWidth = block?.config.tableBorderWidth || 0.3;
+  
+  const hexToRgb = (hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : { r: 0, g: 0, b: 0 };
+  };
+  
+  const border = hexToRgb(borderColor);
+  const headerBg = hexToRgb(headerBgColor);
+  const headerText = hexToRgb(headerTextColor);
   
   pdf.setFontSize(8);
+  pdf.setDrawColor(border.r, border.g, border.b);
+  pdf.setLineWidth(borderWidth);
   
-  const colWidths = [35, 25, 25, 65, 40];
+  // Column widths for the cronograma table - adjusted for better fit
+  const colWidths = [40, 25, 20, 55, 40];
   const headers = ['Data', 'Horário', 'CH Semanal', 'Atividade/Conteúdo', 'Local'];
+  const rowHeight = 8;
   let xPos = marginLeft;
-
+  
+  // Header row with background
   pdf.setFont('helvetica', 'bold');
+  pdf.setFillColor(headerBg.r, headerBg.g, headerBg.b);
+  pdf.setTextColor(headerText.r, headerText.g, headerText.b);
+  
   headers.forEach((header, i) => {
-    pdf.rect(xPos, yPosition - 4, colWidths[i], 8);
+    pdf.rect(xPos, yPosition - 4, colWidths[i], rowHeight, 'FD');
     pdf.text(header, xPos + 2, yPosition + 1);
     xPos += colWidths[i];
   });
-
-  yPosition += 6;
+  
+  yPosition += rowHeight - 2;
   pdf.setFont('helvetica', 'normal');
-
-  // Generate cronograma rows
-  const startDate = new Date(data.start_date.split('/').reverse().join('-') || Date.now());
-  const totalDays = 180; // Default 6 months
-  const daysPerModule = Math.floor(totalDays / Math.max(modules.length, 1));
-
-  modules.forEach((module, index) => {
-    const moduleStartDate = new Date(startDate);
-    moduleStartDate.setDate(startDate.getDate() + (index * daysPerModule));
-    const moduleEndDate = new Date(moduleStartDate);
-    moduleEndDate.setDate(moduleStartDate.getDate() + daysPerModule - 1);
-
-    const dateRange = `${moduleStartDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })} a ${moduleEndDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}`;
-    const weeklyHours = Math.round(module.hours / Math.ceil(daysPerModule / 7)) || 30;
-
-    xPos = marginLeft;
-    const rowData = [
-      dateRange,
-      '8:00 às 12:00',
-      weeklyHours.toString(),
-      module.name.substring(0, 35),
-      `Plataforma ${settings.institution_name.split(' ')[0]}`
-    ];
-
-    rowData.forEach((text, i) => {
-      pdf.rect(xPos, yPosition - 4, colWidths[i], 8);
-      pdf.text(text, xPos + 2, yPosition + 1);
-      xPos += colWidths[i];
-    });
-
-    yPosition += 6;
+  pdf.setTextColor(0, 0, 0);
+  
+  // Single cronograma row with period info - simplified
+  xPos = marginLeft;
+  const period = `${data.start_date} a ${data.end_date}`;
+  const weeklyHours = Math.round((data.effective_hours || 390) / 13); // Assuming ~13 weeks
+  
+  const rowData = [
+    period.length > 22 ? period.substring(0, 19) + '...' : period,
+    '8:00 às 12:00',
+    weeklyHours.toString(),
+    'Assistir vídeos, Fóruns, Avaliação',
+    `Plataforma ${(settings.institution_name || 'Infomar').split(' ')[0]}`
+  ];
+  
+  rowData.forEach((text, i) => {
+    pdf.rect(xPos, yPosition - 4, colWidths[i], rowHeight);
+    const truncatedText = text.length > Math.floor(colWidths[i] / 2) 
+      ? text.substring(0, Math.floor(colWidths[i] / 2) - 2) + '...' 
+      : text;
+    pdf.text(truncatedText, xPos + 2, yPosition + 1);
+    xPos += colWidths[i];
   });
+  
+  return yPosition + rowHeight + 5;
+};
 
-  return yPosition;
+// Render quote/budget table with pricing info
+const renderQuoteTable = (
+  pdf: jsPDF,
+  data: PreviewData,
+  yPosition: number,
+  marginLeft: number,
+  contentWidth: number,
+  block?: ContentBlock
+): number => {
+  // Table styling from block config or defaults
+  const borderColor = block?.config.tableBorderColor || '#000000';
+  const headerBgColor = block?.config.tableHeaderBgColor || '#E5E7EB';
+  const headerTextColor = block?.config.tableHeaderTextColor || '#000000';
+  const borderWidth = block?.config.tableBorderWidth || 0.3;
+  
+  const hexToRgb = (hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : { r: 0, g: 0, b: 0 };
+  };
+  
+  const border = hexToRgb(borderColor);
+  const headerBg = hexToRgb(headerBgColor);
+  const headerText = hexToRgb(headerTextColor);
+  
+  const descColWidth = contentWidth - 40;
+  const valueColWidth = 40;
+  const rowHeight = 8;
+  
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  pdf.setDrawColor(border.r, border.g, border.b);
+  pdf.setLineWidth(borderWidth);
+  
+  // Header row
+  pdf.setFillColor(headerBg.r, headerBg.g, headerBg.b);
+  pdf.rect(marginLeft, yPosition - 4, descColWidth, rowHeight, 'FD');
+  pdf.rect(marginLeft + descColWidth, yPosition - 4, valueColWidth, rowHeight, 'FD');
+  
+  pdf.setTextColor(headerText.r, headerText.g, headerText.b);
+  pdf.text('Módulos', marginLeft + 3, yPosition + 1);
+  pdf.text('Valor (Reais)', marginLeft + descColWidth + 3, yPosition + 1);
+  
+  yPosition += rowHeight - 2;
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(0, 0, 0);
+  
+  // Quote rows based on data
+  const quoteRows = [
+    { description: `1 curso de licença capacitação – ${data.end_date ? Math.round((new Date(data.end_date.split('/').reverse().join('-')).getTime() - new Date(data.start_date.split('/').reverse().join('-')).getTime()) / (1000 * 60 * 60 * 24)) : 90} dias`, value: data.enrollment_fee || '0,00' },
+    { description: 'Taxa de antecipação de documentos (paga)', value: data.pre_enrollment_credit || '0,00' },
+    { description: 'Valor restante a pagar', value: data.final_amount || '0,00' }
+  ];
+  
+  quoteRows.forEach((row, index) => {
+    pdf.rect(marginLeft, yPosition - 4, descColWidth, rowHeight);
+    pdf.rect(marginLeft + descColWidth, yPosition - 4, valueColWidth, rowHeight);
+    
+    pdf.text(row.description, marginLeft + 3, yPosition + 1);
+    pdf.text(row.value, marginLeft + descColWidth + 3, yPosition + 1);
+    
+    yPosition += rowHeight - 2;
+  });
+  
+  return yPosition + 5;
 };
 
 // Render course content (description) block
