@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Copy, CheckCircle, Clock, X, CreditCard, Mail, ExternalLink } from "lucide-react";
+import { Copy, CheckCircle, Clock, X, CreditCard, Mail, ExternalLink, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -29,7 +29,7 @@ interface PaymentData {
   pix_payload?: string;
   status: string;
   pix_expiration_date?: string;
-  checkout_url?: string; // Novo campo para Cartão/Boleto
+  checkout_url?: string;
   billing_type?: string;
 }
 
@@ -50,11 +50,64 @@ export function PaymentModal({
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [studentEmail, setStudentEmail] = useState<string>("");
+  
+  // Estados para confirmação visual
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [redirectCountdown, setRedirectCountdown] = useState(3);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
+
+  // Limpa o countdown ao desmontar
+  useEffect(() => {
+    return () => {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+      }
+    };
+  }, []);
+
+  // Handler para quando o pagamento é confirmado
+  const handlePaymentConfirmed = useCallback(() => {
+    if (paymentConfirmed) return; // Evita múltiplas execuções
+    
+    console.log('✅ Pagamento confirmado! Iniciando animação de sucesso...');
+    setPaymentConfirmed(true);
+    setRedirectCountdown(3);
+    
+    // Iniciar countdown de 3 segundos
+    let count = 3;
+    countdownRef.current = setInterval(() => {
+      count--;
+      setRedirectCountdown(count);
+      
+      if (count <= 0) {
+        if (countdownRef.current) {
+          clearInterval(countdownRef.current);
+        }
+        handleRedirect();
+      }
+    }, 1000);
+  }, [paymentConfirmed]);
+
+  // Redireciona para a página correta
+  const handleRedirect = useCallback(() => {
+    setIsRedirecting(true);
+    onPaymentSuccess();
+    onClose();
+    
+    // Redireciona baseado no tipo de pagamento
+    if (kind === "enrollment") {
+      navigate("/student/enrollments");
+    } else {
+      navigate("/student/pre-enrollments");
+    }
+  }, [kind, navigate, onPaymentSuccess, onClose]);
 
   // Realtime subscription + Polling fallback para garantir atualização
   useEffect(() => {
-    if (!paymentData?.id || !isOpen) return;
+    if (!paymentData?.id || !isOpen || paymentConfirmed) return;
 
     console.log('🔔 [REALTIME] Iniciando subscription para payment:', paymentData.id);
 
@@ -73,11 +126,7 @@ export function PaymentModal({
           console.log('🔔 [REALTIME] Update recebido:', payload);
           const newStatus = (payload.new as any).status;
           if (newStatus === "confirmed" || newStatus === "received") {
-            toast({ title: "Pagamento confirmado!", description: "Redirecionando para suas matrículas..." });
-            onPaymentSuccess();
-            onClose();
-            // Redirect instantâneo para a página de matrículas
-            navigate("/student/enrollments");
+            handlePaymentConfirmed();
           }
         },
       )
@@ -96,11 +145,7 @@ export function PaymentModal({
       
       if (data?.status === "received" || data?.status === "confirmed") {
         console.log('✅ [POLLING] Pagamento confirmado via polling!');
-        toast({ title: "Pagamento confirmado!", description: "Redirecionando para suas matrículas..." });
-        onPaymentSuccess();
-        onClose();
-        // Redirect instantâneo para a página de matrículas
-        navigate("/student/enrollments");
+        handlePaymentConfirmed();
       }
     }, 5000);
 
@@ -108,7 +153,7 @@ export function PaymentModal({
       supabase.removeChannel(channel);
       clearInterval(pollingInterval);
     };
-  }, [paymentData?.id, isOpen, onPaymentSuccess, onClose, toast, navigate]);
+  }, [paymentData?.id, isOpen, paymentConfirmed, handlePaymentConfirmed]);
 
   useEffect(() => {
     if (isOpen && !paymentData) {
@@ -128,13 +173,13 @@ export function PaymentModal({
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (paymentData && timeLeft > 0) {
+    if (paymentData && timeLeft > 0 && !paymentConfirmed) {
       interval = setInterval(() => {
         setTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [paymentData, timeLeft]);
+  }, [paymentData, timeLeft, paymentConfirmed]);
 
   useEffect(() => {
     if (paymentData?.pix_expiration_date) {
@@ -161,17 +206,12 @@ export function PaymentModal({
         if (data) enrollmentIdToSend = data.id;
       }
 
-      // AJUSTE 1: Enviar o billing_type dinâmico
-      // Se for pré-matrícula: PIX. Se for matrícula: UNDEFINED (libera cartão/boleto)
-      // Localize este trecho dentro da sua função createPayment:
-      // Localize o invoke('create-enrollment-checkout' ou 'create-payment') e substitua por este:
       const { data, error } = await supabase.functions.invoke("create-payment", {
         body: {
           pre_enrollment_id: preEnrollmentId,
           amount: amount,
           kind: kind,
           enrollment_id: enrollmentIdToSend,
-          // Garante que se for matrícula completa, abra o checkout multi-pagamento
           billing_type: kind === "enrollment" ? "UNDEFINED" : "PIX",
         },
       });
@@ -181,16 +221,12 @@ export function PaymentModal({
         throw new Error("Falha na comunicação com o servidor de pagamentos.");
       }
 
-      // LÓGICA DE REDIRECIONAMENTO (O segredo para funcionar Cartão/Boleto)
+      // LÓGICA DE REDIRECIONAMENTO para Cartão/Boleto
       if (data?.checkout_url && kind === "enrollment") {
         toast({ title: "Redirecionando...", description: "Abrindo portal de pagamento seguro." });
         window.location.href = data.checkout_url;
-        return; // Interrompe aqui para o usuário ir para o checkout
+        return;
       }
-
-      // O restante do seu código (setPaymentData, etc) continua abaixo...
-
-      // O restante do seu código (setPaymentData(data), etc) continua igual
 
       setPaymentData(data);
     } catch (error: any) {
@@ -215,10 +251,9 @@ export function PaymentModal({
     try {
       const { data } = await supabase.from("payments").select("status").eq("id", paymentData.id).single();
       if (data?.status === "received" || data?.status === "confirmed") {
-        onPaymentSuccess();
-        onClose();
+        handlePaymentConfirmed();
       } else {
-        toast({ title: "Aguardando pagamento" });
+        toast({ title: "Aguardando pagamento", description: "O pagamento ainda não foi confirmado." });
       }
     } finally {
       setCheckingStatus(false);
@@ -230,6 +265,68 @@ export function PaymentModal({
     const sec = seconds % 60;
     return `${min}:${sec.toString().padStart(2, "0")}`;
   };
+
+  // Tela de redirecionamento
+  if (isRedirecting) {
+    return (
+      <Dialog open={isOpen} onOpenChange={() => {}}>
+        <DialogContent className="max-w-md mx-auto">
+          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <p className="text-lg font-medium text-center">
+              Carregando suas {kind === "enrollment" ? "matrículas" : "pré-matrículas"}...
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Tela de pagamento confirmado com countdown
+  if (paymentConfirmed) {
+    return (
+      <Dialog open={isOpen} onOpenChange={() => {}}>
+        <DialogContent className="max-w-md mx-auto">
+          <div className="flex flex-col items-center justify-center py-8 space-y-6">
+            {/* Ícone de sucesso animado */}
+            <div className="relative">
+              <div className="absolute inset-0 animate-ping rounded-full bg-primary/40 opacity-25" />
+              <div className="relative rounded-full bg-primary p-4">
+                <CheckCircle className="h-12 w-12 text-primary-foreground" />
+              </div>
+            </div>
+
+            {/* Mensagem de sucesso */}
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-bold text-primary">
+                Pagamento Confirmado!
+              </h2>
+              <p className="text-muted-foreground">
+                Seu pagamento foi processado com sucesso.
+              </p>
+            </div>
+
+            {/* Countdown visual */}
+            <div className="text-center space-y-3 w-full">
+              <p className="text-sm text-muted-foreground">
+                Redirecionando em <span className="font-bold text-primary text-lg">{redirectCountdown}</span> segundos...
+              </p>
+              <Progress value={(redirectCountdown / 3) * 100} className="h-2" />
+            </div>
+
+            {/* Botão manual para redirecionamento imediato */}
+            <Button 
+              onClick={handleRedirect} 
+              size="lg" 
+              className="w-full"
+            >
+              {kind === "enrollment" ? "Ir para Minhas Matrículas" : "Ir para Minhas Pré-Matrículas"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -259,7 +356,7 @@ export function PaymentModal({
 
           {loading ? (
             <div className="flex flex-col items-center py-8 space-y-3">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">Preparando checkout...</p>
             </div>
           ) : paymentData?.pix_payload ? (
@@ -280,6 +377,15 @@ export function PaymentModal({
                   </Button>
                 </CardContent>
               </Card>
+              
+              {/* Indicador de verificação automática */}
+              <Alert className="border-primary/30 bg-primary/5">
+                <Clock className="h-4 w-4 text-primary" />
+                <AlertDescription className="text-foreground text-sm">
+                  Verificando pagamento automaticamente... Não feche esta janela.
+                </AlertDescription>
+              </Alert>
+              
               {timeLeft > 0 && (
                 <div className="text-center space-y-2">
                   <p className="text-xs text-muted-foreground">Expira em: {formatTime(timeLeft)}</p>
@@ -311,7 +417,14 @@ export function PaymentModal({
               className="w-full"
               variant={paymentData?.pix_payload ? "default" : "secondary"}
             >
-              {checkingStatus ? "Verificando..." : "Já realizei o pagamento"}
+              {checkingStatus ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Verificando...
+                </>
+              ) : (
+                "Já realizei o pagamento"
+              )}
             </Button>
             <Button variant="ghost" onClick={onClose} className="w-full">
               Voltar
