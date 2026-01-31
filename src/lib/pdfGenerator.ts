@@ -21,6 +21,7 @@ interface Course {
   name: string;
   duration_hours: number;
   effective_hours?: number;
+  weekly_hours?: number;
   start_date?: string;
   end_date?: string;
   modules?: string;
@@ -91,6 +92,7 @@ const preparePreviewData = (enrollment: PreEnrollment, settings: SystemSettings,
     course_name: enrollment.course.name,
     course_hours: enrollment.course.duration_hours,
     effective_hours: effectiveHours,
+    weekly_hours: enrollment.course.weekly_hours || 30, // NEW: Include weekly hours
     start_date: formatDateForPreview(enrollment.course.start_date),
     end_date: formatDateForPreview(enrollment.course.end_date),
     current_date: formattedCurrentDate,

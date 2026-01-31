@@ -16,6 +16,7 @@ interface OrganType {
   id: string;
   name: string;
   hours_multiplier: number;
+  weekly_hours: number;
   is_federal: boolean;
   created_at: string;
 }
@@ -31,6 +32,7 @@ const OrganTypesPage = () => {
   const [formData, setFormData] = useState({
     name: "",
     hours_multiplier: "1.0",
+    weekly_hours: "30",
     is_federal: false
   });
 
@@ -68,6 +70,7 @@ const OrganTypesPage = () => {
       const payload = {
         name: formData.name.trim(),
         hours_multiplier: parseFloat(formData.hours_multiplier),
+        weekly_hours: parseInt(formData.weekly_hours) || 30,
         is_federal: formData.is_federal
       };
 
@@ -107,6 +110,7 @@ const OrganTypesPage = () => {
     setFormData({
       name: organType.name,
       hours_multiplier: organType.hours_multiplier.toString(),
+      weekly_hours: (organType.weekly_hours || 30).toString(),
       is_federal: organType.is_federal
     });
     setDialogOpen(true);
@@ -144,7 +148,7 @@ const OrganTypesPage = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: "", hours_multiplier: "1.0", is_federal: false });
+    setFormData({ name: "", hours_multiplier: "1.0", weekly_hours: "30", is_federal: false });
     setEditingId(null);
     setDialogOpen(false);
   };
@@ -219,11 +223,37 @@ const OrganTypesPage = () => {
                 </p>
               </div>
 
+              <div>
+                <Label htmlFor="weekly_hours">Carga Horária Semanal (horas) *</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="weekly_hours"
+                    type="number"
+                    min="10"
+                    max="40"
+                    value={formData.weekly_hours}
+                    onChange={(e) => setFormData({ ...formData, weekly_hours: e.target.value })}
+                    className="w-24"
+                    required
+                  />
+                  <span className="text-muted-foreground">
+                    horas/semana
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Federais: 20h | Outros: 30h
+                </p>
+              </div>
+
               <div className="flex items-center space-x-2">
                 <Switch
                   id="is_federal"
                   checked={formData.is_federal}
-                  onCheckedChange={(checked) => setFormData({ ...formData, is_federal: checked })}
+                  onCheckedChange={(checked) => {
+                    // Auto-update weekly_hours when toggling federal
+                    const newWeeklyHours = checked ? "20" : "30";
+                    setFormData({ ...formData, is_federal: checked, weekly_hours: newWeeklyHours });
+                  }}
                 />
                 <Label htmlFor="is_federal">É órgão federal</Label>
               </div>
@@ -232,7 +262,7 @@ const OrganTypesPage = () => {
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    Órgãos federais possuem carga horária diferenciada nos certificados e declarações.
+                    Órgãos federais possuem carga horária semanal de 20h e multiplicador diferenciado.
                   </AlertDescription>
                 </Alert>
               )}
@@ -282,6 +312,7 @@ const OrganTypesPage = () => {
               <TableRow>
                 <TableHead>Nome</TableHead>
                 <TableHead className="text-center">Multiplicador</TableHead>
+                <TableHead className="text-center">CH Semanal</TableHead>
                 <TableHead className="text-center">Exemplo (390h)</TableHead>
                 <TableHead className="text-center">Federal</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
@@ -295,6 +326,11 @@ const OrganTypesPage = () => {
                     <Badge variant="outline" className="gap-1">
                       <Percent className="h-3 w-3" />
                       {getMultiplierPercentage(organType.hours_multiplier)}%
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="secondary">
+                      {organType.weekly_hours || 30}h/sem
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
