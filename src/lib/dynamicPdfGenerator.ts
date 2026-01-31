@@ -894,19 +894,19 @@ const renderCronogramaTable = (
   pdf.setLineWidth(borderWidth);
   
   // Column widths for 5 columns - centered on page
-  const colWidths = [40, 28, 28, 55, 35]; // Data, Horário, CH Semanal, Atividade, Local
+  const colWidths = [40, 22, 18, 60, 32]; // Data, Horário, CH Semanal, Atividade, Local
   const totalWidth = colWidths.reduce((a, b) => a + b, 0);
   const pageWidth = pdf.internal.pageSize.getWidth();
   const startX = (pageWidth - totalWidth) / 2; // Center the table
   
-  const rowHeight = 8;
-  const headerHeight = 10;
+  const rowHeight = 10; // Increased for multiline content
+  const headerHeight = 8;
   
   // Header row
   const headers = ['Data', 'Horário', 'CH Semanal', 'Atividade/Conteúdo', 'Local'];
   
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(8);
+  pdf.setFontSize(6); // Smaller font for headers
   pdf.setFillColor(headerBg.r, headerBg.g, headerBg.b);
   pdf.setTextColor(headerText.r, headerText.g, headerText.b);
   
@@ -922,32 +922,48 @@ const renderCronogramaTable = (
   // Data rows - one per module
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(0, 0, 0);
-  pdf.setFontSize(8);
+  pdf.setFontSize(6); // Smaller font for content
   
   const weeklyHours = data.weekly_hours || 30;
   const institutionName = (settings.institution_name || 'Infomar').split(' ')[0];
   const localText = `Plataforma ${institutionName}`;
-  const horarioText = '8:00 às 12:00';
+  // Two-line schedule: morning and afternoon
+  const horarioLine1 = '8:00 às 12:00';
+  const horarioLine2 = '14:00 às 16:00';
   
   const modules = data.modules || [];
   
   if (modules.length === 0) {
     // If no modules, show a single row with the course name
     xPos = startX;
-    const rowData = [
-      `${data.start_date} a ${data.end_date}`,
-      horarioText,
-      weeklyHours.toString(),
-      data.course_name || 'Curso',
-      localText
-    ];
+    const dateText = `${data.start_date} a ${data.end_date}`;
     
-    rowData.forEach((text, i) => {
-      pdf.rect(xPos, yPosition, colWidths[i], rowHeight);
-      const truncated = text.length > 35 ? text.substring(0, 32) + '...' : text;
-      pdf.text(truncated, xPos + colWidths[i] / 2, yPosition + rowHeight / 2 + 1, { align: 'center' });
-      xPos += colWidths[i];
-    });
+    // Draw cells
+    pdf.rect(xPos, yPosition, colWidths[0], rowHeight);
+    pdf.text(dateText, xPos + colWidths[0] / 2, yPosition + rowHeight / 2, { align: 'center' });
+    xPos += colWidths[0];
+    
+    // Horário - multiline
+    pdf.rect(xPos, yPosition, colWidths[1], rowHeight);
+    pdf.text(horarioLine1, xPos + colWidths[1] / 2, yPosition + 3, { align: 'center' });
+    pdf.text(horarioLine2, xPos + colWidths[1] / 2, yPosition + 7, { align: 'center' });
+    xPos += colWidths[1];
+    
+    // CH Semanal
+    pdf.rect(xPos, yPosition, colWidths[2], rowHeight);
+    pdf.text(weeklyHours.toString(), xPos + colWidths[2] / 2, yPosition + rowHeight / 2, { align: 'center' });
+    xPos += colWidths[2];
+    
+    // Atividade
+    pdf.rect(xPos, yPosition, colWidths[3], rowHeight);
+    const courseName = (data.course_name || 'Curso').toUpperCase();
+    const truncatedCourse = courseName.length > 40 ? courseName.substring(0, 37) + '...' : courseName;
+    pdf.text(truncatedCourse, xPos + colWidths[3] / 2, yPosition + rowHeight / 2, { align: 'center' });
+    xPos += colWidths[3];
+    
+    // Local
+    pdf.rect(xPos, yPosition, colWidths[4], rowHeight);
+    pdf.text(localText, xPos + colWidths[4] / 2, yPosition + rowHeight / 2, { align: 'center' });
     
     yPosition += rowHeight;
   } else {
@@ -962,22 +978,35 @@ const renderCronogramaTable = (
       const moduleEndDate = addDaysToDate(data.start_date, (index + 1) * daysPerModule - 1);
       
       const dateRange = `${moduleStartDate} a ${moduleEndDate}`;
-      const moduleName = module.name.length > 35 ? module.name.substring(0, 32) + '...' : module.name;
-      
-      const rowData = [
-        dateRange,
-        horarioText,
-        weeklyHours.toString(),
-        moduleName.toUpperCase(),
-        localText
-      ];
+      const moduleName = module.name.toUpperCase();
+      const truncatedModule = moduleName.length > 40 ? moduleName.substring(0, 37) + '...' : moduleName;
       
       xPos = startX;
-      rowData.forEach((text, i) => {
-        pdf.rect(xPos, yPosition, colWidths[i], rowHeight);
-        pdf.text(text, xPos + colWidths[i] / 2, yPosition + rowHeight / 2 + 1, { align: 'center' });
-        xPos += colWidths[i];
-      });
+      
+      // Data
+      pdf.rect(xPos, yPosition, colWidths[0], rowHeight);
+      pdf.text(dateRange, xPos + colWidths[0] / 2, yPosition + rowHeight / 2, { align: 'center' });
+      xPos += colWidths[0];
+      
+      // Horário - multiline
+      pdf.rect(xPos, yPosition, colWidths[1], rowHeight);
+      pdf.text(horarioLine1, xPos + colWidths[1] / 2, yPosition + 3, { align: 'center' });
+      pdf.text(horarioLine2, xPos + colWidths[1] / 2, yPosition + 7, { align: 'center' });
+      xPos += colWidths[1];
+      
+      // CH Semanal
+      pdf.rect(xPos, yPosition, colWidths[2], rowHeight);
+      pdf.text(weeklyHours.toString(), xPos + colWidths[2] / 2, yPosition + rowHeight / 2, { align: 'center' });
+      xPos += colWidths[2];
+      
+      // Atividade
+      pdf.rect(xPos, yPosition, colWidths[3], rowHeight);
+      pdf.text(truncatedModule, xPos + colWidths[3] / 2, yPosition + rowHeight / 2, { align: 'center' });
+      xPos += colWidths[3];
+      
+      // Local
+      pdf.rect(xPos, yPosition, colWidths[4], rowHeight);
+      pdf.text(localText, xPos + colWidths[4] / 2, yPosition + rowHeight / 2, { align: 'center' });
       
       yPosition += rowHeight;
     });
