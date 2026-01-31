@@ -711,14 +711,19 @@ const renderSignature = async (
   return yPosition + 20;
 };
 
-// Render footer
+// Render footer with proper margin respect
 const renderFooter = (pdf: jsPDF, block: ContentBlock, data: PreviewData, settings: SystemSettings): void => {
   const pageHeight = pdf.internal.pageSize.getHeight();
   const pageWidth = pdf.internal.pageSize.getWidth();
-  const footerY = pageHeight - 15;
+  const footerY = pageHeight - 12;
   const footerAlign = block.config.footerAlign || 'center';
+  
+  // Respect page margins - use 15mm on each side
+  const marginLeft = 15;
+  const marginRight = 15;
+  const maxWidth = pageWidth - marginLeft - marginRight;
 
-  pdf.setFontSize(7);
+  pdf.setFontSize(6);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(100, 100, 100);
 
@@ -742,18 +747,28 @@ const renderFooter = (pdf: jsPDF, block: ContentBlock, data: PreviewData, settin
 
   // Calculate x position based on alignment
   let xPosition: number;
+  let textAlign: 'left' | 'center' | 'right' = 'center';
   if (footerAlign === 'left') {
-    xPosition = 20;
+    xPosition = marginLeft;
+    textAlign = 'left';
   } else if (footerAlign === 'right') {
-    xPosition = pageWidth - 20;
+    xPosition = pageWidth - marginRight;
+    textAlign = 'right';
   } else {
     xPosition = pageWidth / 2;
+    textAlign = 'center';
   }
 
-  pdf.text(footerText, xPosition, footerY, { align: footerAlign as any });
+  // Split text into lines that fit within maxWidth
+  const lines = pdf.splitTextToSize(footerText, maxWidth);
   
+  lines.forEach((line: string, index: number) => {
+    pdf.text(line, xPosition, footerY + (index * 3.5), { align: textAlign });
+  });
+  
+  const websiteY = footerY + (lines.length * 3.5);
   if (settings.institution_website && !block.config.footerText) {
-    pdf.text(settings.institution_website, xPosition, footerY + 4, { align: footerAlign as any });
+    pdf.text(settings.institution_website, xPosition, websiteY, { align: textAlign });
   }
 
   pdf.setTextColor(0, 0, 0);
