@@ -915,14 +915,19 @@ const renderCronogramaTable = (
   
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(6); // Smaller font for headers
-  // Force white background for header (override any template config)
-  pdf.setFillColor(255, 255, 255);
-  pdf.setTextColor(0, 0, 0);
+  // Force white background and black border/text for header
+  pdf.setDrawColor(0, 0, 0); // Black border
+  pdf.setLineWidth(0.3);
+  pdf.setFillColor(255, 255, 255); // White background
+  pdf.setTextColor(0, 0, 0); // Black text
   
   let xPos = startX;
   headers.forEach((header, i) => {
-    // Draw cell with white fill and black border
-    pdf.rect(xPos, yPosition, colWidths[i], headerHeight, 'FD');
+    // Draw cell border only (no fill) then fill separately
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(xPos, yPosition, colWidths[i], headerHeight, 'F'); // Fill white first
+    pdf.setDrawColor(0, 0, 0);
+    pdf.rect(xPos, yPosition, colWidths[i], headerHeight, 'S'); // Then stroke border
     // Handle multiline headers
     const lines = header.split('\n');
     if (lines.length > 1) {
