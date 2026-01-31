@@ -847,7 +847,7 @@ const renderModulesTable = (
   return yPosition + rowHeight + 5;
 };
 
-// Render cronograma table with improved multiline layout matching reference document
+// Render cronograma table with one row per module, centered on page
 const renderCronogramaTable = (
   pdf: jsPDF,
   data: PreviewData,
@@ -858,7 +858,7 @@ const renderCronogramaTable = (
 ): number => {
   // Table styling from block config or defaults
   const borderColor = block?.config.tableBorderColor || '#000000';
-  const headerBgColor = block?.config.tableHeaderBgColor || '#E5E7EB';
+  const headerBgColor = block?.config.tableHeaderBgColor || '#FFFFFF';
   const headerTextColor = block?.config.tableHeaderTextColor || '#000000';
   const borderWidth = block?.config.tableBorderWidth || 0.3;
   
@@ -878,90 +878,132 @@ const renderCronogramaTable = (
   pdf.setDrawColor(border.r, border.g, border.b);
   pdf.setLineWidth(borderWidth);
   
-  // Column widths for the cronograma table - 5 columns totaling 180mm
-  const colWidths = [35, 28, 22, 55, 40]; // Data, Horário, CH Semanal, Atividade, Local
+  // Column widths for 5 columns - centered on page
+  const colWidths = [40, 28, 28, 55, 35]; // Data, Horário, CH Semanal, Atividade, Local
   const totalWidth = colWidths.reduce((a, b) => a + b, 0);
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const startX = (pageWidth - totalWidth) / 2; // Center the table
   
-  // Header with multiline text
-  const headerTexts = [
-    'Data',
-    'Horário',
-    ['Carga Horária', 'Semanal (horas)'],
-    ['Atividade/Conteúdo', 'a ser Desenvolvido'],
-    'Local'
-  ];
+  const rowHeight = 8;
+  const headerHeight = 10;
   
-  const headerHeight = 14; // Taller to accommodate multiline headers
-  let xPos = marginLeft;
+  // Header row
+  const headers = ['Data', 'Horário', 'CH Semanal', 'Atividade/Conteúdo', 'Local'];
   
-  // Draw header background
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(8);
   pdf.setFillColor(headerBg.r, headerBg.g, headerBg.b);
   pdf.setTextColor(headerText.r, headerText.g, headerText.b);
   
-  headerTexts.forEach((header, i) => {
+  let xPos = startX;
+  headers.forEach((header, i) => {
     pdf.rect(xPos, yPosition, colWidths[i], headerHeight, 'FD');
-    
-    if (Array.isArray(header)) {
-      // Multiline header - vertically centered
-      const lineHeight = 3.5;
-      const startY = yPosition + (headerHeight - (header.length * lineHeight)) / 2 + 2.5;
-      header.forEach((line, lineIndex) => {
-        pdf.text(line, xPos + 2, startY + (lineIndex * lineHeight));
-      });
-    } else {
-      // Single line header - vertically centered
-      pdf.text(header, xPos + 2, yPosition + headerHeight / 2 + 1);
-    }
+    pdf.text(header, xPos + colWidths[i] / 2, yPosition + headerHeight / 2 + 1, { align: 'center' });
     xPos += colWidths[i];
   });
   
   yPosition += headerHeight;
   
-  // Data row with multiline content
+  // Data rows - one per module
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(0, 0, 0);
   pdf.setFontSize(8);
   
-  // Dynamic data from pre-enrollment
   const weeklyHours = data.weekly_hours || 30;
   const institutionName = (settings.institution_name || 'Infomar').split(' ')[0];
+  const localText = `Plataforma ${institutionName}`;
+  const horarioText = '8:00 às 12:00';
   
-  // Row content with multiline support
-  const rowContents = [
-    // Data column
-    [data.start_date + ' a', data.end_date],
-    // Horário column  
-    ['8:00 às', '12:00', '', '14:00', 'às 16:00'],
-    // CH Semanal column
-    [weeklyHours.toString()],
-    // Atividade column
-    ['Assistir aos vídeos', '', 'Participação em', 'fóruns de discussão', '', 'Avaliação'],
-    // Local column
-    ['Plataforma', `${institutionName} Cursos`]
-  ];
+  const modules = data.modules || [];
   
-  // Calculate row height based on max lines
-  const maxLines = Math.max(...rowContents.map(c => c.length));
-  const lineHeight = 4;
-  const rowHeight = Math.max(maxLines * lineHeight, 32);
-  
-  xPos = marginLeft;
-  
-  rowContents.forEach((content, i) => {
-    pdf.rect(xPos, yPosition, colWidths[i], rowHeight);
+  if (modules.length === 0) {
+    // If no modules, show a single row with the course name
+    xPos = startX;
+    const rowData = [
+      `${data.start_date} a ${data.end_date}`,
+      horarioText,
+      weeklyHours.toString(),
+      data.course_name || 'Curso',
+      localText
+    ];
     
-    const startY = yPosition + 4;
-    content.forEach((line, lineIndex) => {
-      if (line) {
-        pdf.text(line, xPos + 2, startY + (lineIndex * lineHeight));
-      }
+    rowData.forEach((text, i) => {
+      pdf.rect(xPos, yPosition, colWidths[i], rowHeight);
+      const truncated = text.length > 35 ? text.substring(0, 32) + '...' : text;
+      pdf.text(truncated, xPos + colWidths[i] / 2, yPosition + rowHeight / 2 + 1, { align: 'center' });
+      xPos += colWidths[i];
     });
-    xPos += colWidths[i];
-  });
+    
+    yPosition += rowHeight;
+  } else {
+    // Calculate date ranges for each module
+    const totalDays = data.start_date && data.end_date ? 
+      calculateDaysBetween(data.start_date, data.end_date) : 90;
+    const daysPerModule = Math.floor(totalDays / modules.length);
+    
+    modules.forEach((module, index) => {
+      // Calculate date range for this module
+      const moduleStartDate = addDaysToDate(data.start_date, index * daysPerModule);
+      const moduleEndDate = addDaysToDate(data.start_date, (index + 1) * daysPerModule - 1);
+      
+      const dateRange = `${moduleStartDate} a ${moduleEndDate}`;
+      const moduleName = module.name.length > 35 ? module.name.substring(0, 32) + '...' : module.name;
+      
+      const rowData = [
+        dateRange,
+        horarioText,
+        weeklyHours.toString(),
+        moduleName.toUpperCase(),
+        localText
+      ];
+      
+      xPos = startX;
+      rowData.forEach((text, i) => {
+        pdf.rect(xPos, yPosition, colWidths[i], rowHeight);
+        pdf.text(text, xPos + colWidths[i] / 2, yPosition + rowHeight / 2 + 1, { align: 'center' });
+        xPos += colWidths[i];
+      });
+      
+      yPosition += rowHeight;
+    });
+  }
   
-  return yPosition + rowHeight + 5;
+  return yPosition + 5;
+};
+
+// Helper function to calculate days between two dates
+const calculateDaysBetween = (startDateStr: string, endDateStr: string): number => {
+  try {
+    const parseDate = (str: string) => {
+      const parts = str.split('/');
+      if (parts.length === 3) {
+        return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      }
+      return new Date(str);
+    };
+    const start = parseDate(startDateStr);
+    const end = parseDate(endDateStr);
+    return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  } catch {
+    return 90;
+  }
+};
+
+// Helper function to add days to a date and return formatted string
+const addDaysToDate = (dateStr: string, days: number): string => {
+  try {
+    const parts = dateStr.split('/');
+    let date: Date;
+    if (parts.length === 3) {
+      date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    } else {
+      date = new Date(dateStr);
+    }
+    date.setDate(date.getDate() + days);
+    return date.toLocaleDateString('pt-BR');
+  } catch {
+    return dateStr;
+  }
 };
 
 // Render quote/budget table with pricing info
