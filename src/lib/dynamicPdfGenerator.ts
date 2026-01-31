@@ -25,6 +25,7 @@ interface PreviewData {
   course_name: string;
   course_hours: number;
   effective_hours: number;
+  weekly_hours?: number; // Carga horária semanal (20h federal, 30h outros)
   start_date: string;
   end_date: string;
   current_date: string;
@@ -846,7 +847,7 @@ const renderModulesTable = (
   return yPosition + rowHeight + 5;
 };
 
-// Render cronograma table with improved layout
+// Render cronograma table with improved multiline layout matching reference document
 const renderCronogramaTable = (
   pdf: jsPDF,
   data: PreviewData,
@@ -874,50 +875,89 @@ const renderCronogramaTable = (
   const headerBg = hexToRgb(headerBgColor);
   const headerText = hexToRgb(headerTextColor);
   
-  pdf.setFontSize(8);
   pdf.setDrawColor(border.r, border.g, border.b);
   pdf.setLineWidth(borderWidth);
   
-  // Column widths for the cronograma table - adjusted for better fit
-  const colWidths = [40, 25, 20, 55, 40];
-  const headers = ['Data', 'Horário', 'CH Semanal', 'Atividade/Conteúdo', 'Local'];
-  const rowHeight = 8;
+  // Column widths for the cronograma table - 5 columns totaling 180mm
+  const colWidths = [35, 28, 22, 55, 40]; // Data, Horário, CH Semanal, Atividade, Local
+  const totalWidth = colWidths.reduce((a, b) => a + b, 0);
+  
+  // Header with multiline text
+  const headerTexts = [
+    'Data',
+    'Horário',
+    ['Carga Horária', 'Semanal (horas)'],
+    ['Atividade/Conteúdo', 'a ser Desenvolvido'],
+    'Local'
+  ];
+  
+  const headerHeight = 14; // Taller to accommodate multiline headers
   let xPos = marginLeft;
   
-  // Header row with background
+  // Draw header background
   pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(8);
   pdf.setFillColor(headerBg.r, headerBg.g, headerBg.b);
   pdf.setTextColor(headerText.r, headerText.g, headerText.b);
   
-  headers.forEach((header, i) => {
-    pdf.rect(xPos, yPosition - 4, colWidths[i], rowHeight, 'FD');
-    pdf.text(header, xPos + 2, yPosition + 1);
+  headerTexts.forEach((header, i) => {
+    pdf.rect(xPos, yPosition, colWidths[i], headerHeight, 'FD');
+    
+    if (Array.isArray(header)) {
+      // Multiline header - vertically centered
+      const lineHeight = 3.5;
+      const startY = yPosition + (headerHeight - (header.length * lineHeight)) / 2 + 2.5;
+      header.forEach((line, lineIndex) => {
+        pdf.text(line, xPos + 2, startY + (lineIndex * lineHeight));
+      });
+    } else {
+      // Single line header - vertically centered
+      pdf.text(header, xPos + 2, yPosition + headerHeight / 2 + 1);
+    }
     xPos += colWidths[i];
   });
   
-  yPosition += rowHeight - 2;
+  yPosition += headerHeight;
+  
+  // Data row with multiline content
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(0, 0, 0);
+  pdf.setFontSize(8);
   
-  // Single cronograma row with period info - simplified
-  xPos = marginLeft;
-  const period = `${data.start_date} a ${data.end_date}`;
-  const weeklyHours = Math.round((data.effective_hours || 390) / 13); // Assuming ~13 weeks
+  // Dynamic data from pre-enrollment
+  const weeklyHours = data.weekly_hours || 30;
+  const institutionName = (settings.institution_name || 'Infomar').split(' ')[0];
   
-  const rowData = [
-    period.length > 22 ? period.substring(0, 19) + '...' : period,
-    '8:00 às 12:00',
-    weeklyHours.toString(),
-    'Assistir vídeos, Fóruns, Avaliação',
-    `Plataforma ${(settings.institution_name || 'Infomar').split(' ')[0]}`
+  // Row content with multiline support
+  const rowContents = [
+    // Data column
+    [data.start_date + ' a', data.end_date],
+    // Horário column  
+    ['8:00 às', '12:00', '', '14:00', 'às 16:00'],
+    // CH Semanal column
+    [weeklyHours.toString()],
+    // Atividade column
+    ['Assistir aos vídeos', '', 'Participação em', 'fóruns de discussão', '', 'Avaliação'],
+    // Local column
+    ['Plataforma', `${institutionName} Cursos`]
   ];
   
-  rowData.forEach((text, i) => {
-    pdf.rect(xPos, yPosition - 4, colWidths[i], rowHeight);
-    const truncatedText = text.length > Math.floor(colWidths[i] / 2) 
-      ? text.substring(0, Math.floor(colWidths[i] / 2) - 2) + '...' 
-      : text;
-    pdf.text(truncatedText, xPos + 2, yPosition + 1);
+  // Calculate row height based on max lines
+  const maxLines = Math.max(...rowContents.map(c => c.length));
+  const lineHeight = 4;
+  const rowHeight = Math.max(maxLines * lineHeight, 32);
+  
+  xPos = marginLeft;
+  
+  rowContents.forEach((content, i) => {
+    pdf.rect(xPos, yPosition, colWidths[i], rowHeight);
+    
+    const startY = yPosition + 4;
+    content.forEach((line, lineIndex) => {
+      if (line) {
+        pdf.text(line, xPos + 2, startY + (lineIndex * lineHeight));
+      }
+    });
     xPos += colWidths[i];
   });
   

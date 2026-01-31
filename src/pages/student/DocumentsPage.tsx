@@ -208,18 +208,20 @@ export function DocumentsPage() {
 
     if (error) throw error;
 
-    // Get organ type for effective hours calculation
+    // Get organ type for effective hours calculation and weekly hours
     let hoursMultiplier = 1;
+    let weeklyHours = 30; // Default for non-federal
     const enrollmentData = preEnrollment as any;
     if (enrollmentData?.organ_type_id) {
       const { data: organType } = await supabase
         .from('organ_types' as any)
-        .select('hours_multiplier')
+        .select('hours_multiplier, weekly_hours')
         .eq('id', enrollmentData.organ_type_id)
         .single();
       
       if (organType) {
         hoursMultiplier = (organType as any).hours_multiplier || 1;
+        weeklyHours = (organType as any).weekly_hours || 30;
       }
     }
 
@@ -253,6 +255,7 @@ export function DocumentsPage() {
         name: preEnrollment.courses.name,
         duration_hours: preEnrollment.courses.duration_hours,
         effective_hours: effectiveHours,
+        weekly_hours: weeklyHours, // NEW: Include weekly hours from organ_type
         start_date: startDate,
         end_date: endDate,
         modules: preEnrollment.courses.modules,
