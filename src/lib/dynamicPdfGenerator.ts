@@ -809,54 +809,56 @@ const renderModulesTable = (
   
   const moduleColWidth = contentWidth - 50;
   const hoursColWidth = 50;
-  const rowHeight = 8;
+  const rowHeight = 7;
   
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(9);
   pdf.setDrawColor(border.r, border.g, border.b);
   pdf.setLineWidth(borderWidth);
   
-  // Header row with background
+  // Header row with background - use yPosition directly without offset
   pdf.setFillColor(headerBg.r, headerBg.g, headerBg.b);
-  pdf.rect(marginLeft, yPosition - 4, moduleColWidth, rowHeight, 'FD');
-  pdf.rect(marginLeft + moduleColWidth, yPosition - 4, hoursColWidth, rowHeight, 'FD');
+  pdf.rect(marginLeft, yPosition, moduleColWidth, rowHeight, 'FD');
+  pdf.rect(marginLeft + moduleColWidth, yPosition, hoursColWidth, rowHeight, 'FD');
   
   pdf.setTextColor(headerText.r, headerText.g, headerText.b);
-  pdf.text('Módulos', marginLeft + 3, yPosition + 1);
-  pdf.text('Carga Horária (horas)', marginLeft + moduleColWidth + 3, yPosition + 1);
+  pdf.text('Módulos', marginLeft + 3, yPosition + 5);
+  pdf.text('Carga Horária (horas)', marginLeft + moduleColWidth + 3, yPosition + 5);
   
-  yPosition += rowHeight - 2;
+  yPosition += rowHeight;
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(0, 0, 0);
   
   let totalHours = 0;
   modules.forEach((module, index) => {
-    // Alternate row color
+    // Alternate row color - consistent positioning
     if (index % 2 === 1) {
       pdf.setFillColor(alternate.r, alternate.g, alternate.b);
-      pdf.rect(marginLeft, yPosition - 4, moduleColWidth, rowHeight, 'FD');
-      pdf.rect(marginLeft + moduleColWidth, yPosition - 4, hoursColWidth, rowHeight, 'FD');
+      pdf.rect(marginLeft, yPosition, moduleColWidth, rowHeight, 'FD');
+      pdf.rect(marginLeft + moduleColWidth, yPosition, hoursColWidth, rowHeight, 'FD');
     } else {
-      pdf.rect(marginLeft, yPosition - 4, moduleColWidth, rowHeight);
-      pdf.rect(marginLeft + moduleColWidth, yPosition - 4, hoursColWidth, rowHeight);
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(marginLeft, yPosition, moduleColWidth, rowHeight, 'FD');
+      pdf.rect(marginLeft + moduleColWidth, yPosition, hoursColWidth, rowHeight, 'FD');
     }
     
+    pdf.setTextColor(0, 0, 0);
     const moduleName = module.name.length > 60 ? module.name.substring(0, 57) + '...' : module.name;
-    pdf.text(moduleName, marginLeft + 3, yPosition + 1);
-    pdf.text(`${module.hours}`, marginLeft + moduleColWidth + hoursColWidth / 2, yPosition + 1, { align: 'center' });
+    pdf.text(moduleName, marginLeft + 3, yPosition + 5);
+    pdf.text(`${module.hours}`, marginLeft + moduleColWidth + hoursColWidth / 2, yPosition + 5, { align: 'center' });
     
     totalHours += module.hours;
-    yPosition += rowHeight - 2;
+    yPosition += rowHeight;
   });
   
   // Total row with bold styling
   pdf.setFont('helvetica', 'bold');
   pdf.setFillColor(headerBg.r, headerBg.g, headerBg.b);
-  pdf.rect(marginLeft, yPosition - 4, moduleColWidth, rowHeight, 'FD');
-  pdf.rect(marginLeft + moduleColWidth, yPosition - 4, hoursColWidth, rowHeight, 'FD');
+  pdf.rect(marginLeft, yPosition, moduleColWidth, rowHeight, 'FD');
+  pdf.rect(marginLeft + moduleColWidth, yPosition, hoursColWidth, rowHeight, 'FD');
   pdf.setTextColor(headerText.r, headerText.g, headerText.b);
-  pdf.text('TOTAL', marginLeft + 3, yPosition + 1);
-  pdf.text(`${data.effective_hours || totalHours}`, marginLeft + moduleColWidth + hoursColWidth / 2, yPosition + 1, { align: 'center' });
+  pdf.text('TOTAL', marginLeft + 3, yPosition + 5);
+  pdf.text(`${data.effective_hours || totalHours}`, marginLeft + moduleColWidth + hoursColWidth / 2, yPosition + 5, { align: 'center' });
   pdf.setTextColor(0, 0, 0);
   
   return yPosition + rowHeight + 5;
@@ -913,11 +915,13 @@ const renderCronogramaTable = (
   
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(6); // Smaller font for headers
-  pdf.setFillColor(headerBg.r, headerBg.g, headerBg.b);
-  pdf.setTextColor(headerText.r, headerText.g, headerText.b);
+  // Force white background for header (override any template config)
+  pdf.setFillColor(255, 255, 255);
+  pdf.setTextColor(0, 0, 0);
   
   let xPos = startX;
   headers.forEach((header, i) => {
+    // Draw cell with white fill and black border
     pdf.rect(xPos, yPosition, colWidths[i], headerHeight, 'FD');
     // Handle multiline headers
     const lines = header.split('\n');
