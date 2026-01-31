@@ -900,10 +900,16 @@ const renderCronogramaTable = (
   const startX = (pageWidth - totalWidth) / 2; // Center the table
   
   const rowHeight = 10; // Increased for multiline content
-  const headerHeight = 8;
+  const headerHeight = 12; // Increased for multiline headers
   
-  // Header row
-  const headers = ['Data', 'Horário', 'CH Semanal', 'Atividade/Conteúdo', 'Local'];
+  // Header row with full titles
+  const headers = [
+    'Data', 
+    'Horário', 
+    'Carga Horária\nSemanal (em horas)', 
+    'Atividade/Conteúdo\na ser Desenvolvido', 
+    'Local'
+  ];
   
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(6); // Smaller font for headers
@@ -913,7 +919,14 @@ const renderCronogramaTable = (
   let xPos = startX;
   headers.forEach((header, i) => {
     pdf.rect(xPos, yPosition, colWidths[i], headerHeight, 'FD');
-    pdf.text(header, xPos + colWidths[i] / 2, yPosition + headerHeight / 2 + 1, { align: 'center' });
+    // Handle multiline headers
+    const lines = header.split('\n');
+    if (lines.length > 1) {
+      pdf.text(lines[0], xPos + colWidths[i] / 2, yPosition + 4, { align: 'center' });
+      pdf.text(lines[1], xPos + colWidths[i] / 2, yPosition + 8, { align: 'center' });
+    } else {
+      pdf.text(header, xPos + colWidths[i] / 2, yPosition + headerHeight / 2 + 1, { align: 'center' });
+    }
     xPos += colWidths[i];
   });
   
