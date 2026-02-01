@@ -1100,25 +1100,25 @@ const renderQuoteTable = (
   const headerBg = hexToRgb(headerBgColor);
   const headerText = hexToRgb(headerTextColor);
   
-  const descColWidth = contentWidth - 40;
-  const valueColWidth = 40;
-  const rowHeight = 8;
+  const descColWidth = contentWidth - 50;
+  const valueColWidth = 50;
+  const rowHeight = 7;
   
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(9);
   pdf.setDrawColor(border.r, border.g, border.b);
   pdf.setLineWidth(borderWidth);
   
-  // Header row
+  // Header row - use yPosition directly without offset
   pdf.setFillColor(headerBg.r, headerBg.g, headerBg.b);
-  pdf.rect(marginLeft, yPosition - 4, descColWidth, rowHeight, 'FD');
-  pdf.rect(marginLeft + descColWidth, yPosition - 4, valueColWidth, rowHeight, 'FD');
+  pdf.rect(marginLeft, yPosition, descColWidth, rowHeight, 'FD');
+  pdf.rect(marginLeft + descColWidth, yPosition, valueColWidth, rowHeight, 'FD');
   
   pdf.setTextColor(headerText.r, headerText.g, headerText.b);
-  pdf.text('Módulos', marginLeft + 3, yPosition + 1);
-  pdf.text('Valor (Reais)', marginLeft + descColWidth + 3, yPosition + 1);
+  pdf.text('Módulos', marginLeft + 3, yPosition + 5);
+  pdf.text('Valor (Reais)', marginLeft + descColWidth + 3, yPosition + 5);
   
-  yPosition += rowHeight - 2;
+  yPosition += rowHeight;
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(0, 0, 0);
   
@@ -1129,14 +1129,15 @@ const renderQuoteTable = (
     { description: 'Valor restante a pagar', value: data.final_amount || '0,00' }
   ];
   
-  quoteRows.forEach((row, index) => {
-    pdf.rect(marginLeft, yPosition - 4, descColWidth, rowHeight);
-    pdf.rect(marginLeft + descColWidth, yPosition - 4, valueColWidth, rowHeight);
+  quoteRows.forEach((row) => {
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(marginLeft, yPosition, descColWidth, rowHeight, 'FD');
+    pdf.rect(marginLeft + descColWidth, yPosition, valueColWidth, rowHeight, 'FD');
     
-    pdf.text(row.description, marginLeft + 3, yPosition + 1);
-    pdf.text(row.value, marginLeft + descColWidth + 3, yPosition + 1);
+    pdf.text(row.description, marginLeft + 3, yPosition + 5);
+    pdf.text(row.value, marginLeft + descColWidth + 3, yPosition + 5);
     
-    yPosition += rowHeight - 2;
+    yPosition += rowHeight;
   });
   
   return yPosition + 5;
