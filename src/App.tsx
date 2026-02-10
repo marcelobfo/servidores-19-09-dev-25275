@@ -10,6 +10,7 @@ import { SessionExpiredHandler } from "@/components/auth/SessionExpiredHandler";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/Footer";
 import { CookieConsent } from "@/components/CookieConsent";
+import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -51,6 +52,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <CookieConsent />
+          <WhatsAppButton />
           <BrowserRouter>
             <SessionExpiredHandler />
             <Routes>
