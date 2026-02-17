@@ -223,7 +223,7 @@ useEffect(() => {
         description: "Aguarde enquanto a imagem é criada.",
       });
 
-      const { data, error } = await supabase.functions.invoke('generate-course-image', {
+      const { data, error } = await supabase.functions.invoke('generate-course-image-v2', {
         body: { courseName, areaName, description }
       });
       
