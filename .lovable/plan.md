@@ -1,56 +1,49 @@
 
 
-# Plano: Criar Edge Function proxy para o webhook N8N
+# Correção do Proxy N8N - Status Code e Tratamento de Erros
 
-## Problema
+## Problema Identificado
 
-O N8N nao responde corretamente a requisicoes OPTIONS (preflight CORS), mesmo com os headers configurados. Isso e uma limitacao comum do N8N -- ele so responde a requisicoes POST no webhook, mas o navegador envia um OPTIONS antes.
+A Edge Function `n8n-image-proxy` **está funcionando corretamente** no Supabase. Porém, quando o N8N retorna um erro (404), o proxy repassa esse status diretamente ao navegador. Isso faz parecer que a Edge Function não existe, mas na verdade é o **N8N que não está respondendo**.
 
-## Solucao
+A linha responsável:
+```text
+status: response.status  // repassa o 404 do N8N para o navegador
+```
 
-Criar uma Edge Function no Supabase que atua como proxy: o frontend chama a Edge Function (que ja tem CORS configurado), e ela repassa a requisicao para o webhook N8N no servidor (onde nao existe CORS).
+## Causas do 404 no N8N
+
+O endpoint `/webhook-test/` do N8N **só funciona quando o workflow está no modo "ouvindo evento de teste"**. Se o workflow não estiver aberto nesse modo, o N8N retorna 404.
+
+**Solucao**: Usar a URL de **producao** (`/webhook/`) e ativar o workflow no N8N.
+
+## Alteracoes no Codigo
+
+### 1. Atualizar `supabase/functions/n8n-image-proxy/index.ts`
+
+- Trocar a URL de `/webhook-test/` para `/webhook/` (producao)
+- Adicionar tratamento de erro adequado: quando o N8N retornar erro, o proxy deve retornar status 502 (Bad Gateway) com uma mensagem clara, em vez de repassar o 404 diretamente
+- Isso permite que o frontend diferencie entre "funcao nao encontrada" e "servico externo com problema"
+
+### 2. Nenhuma alteracao no frontend
+
+O componente `CourseImageGenerator.tsx` ja trata erros corretamente.
+
+## Acoes Necessarias Apos a Alteracao
+
+1. Voce precisara fazer o **redeploy** da funcao via CLI ou pelo Dashboard do Supabase
+2. No N8N, **ative o workflow** (clique no toggle para deixar ativo) para que a URL `/webhook/` funcione
+
+## Detalhes Tecnicos
+
+A logica do proxy sera ajustada para:
 
 ```text
-Frontend  -->  Edge Function (proxy)  -->  N8N Webhook
-              (trata CORS)                (sem CORS)
+Se N8N retornar erro (status >= 400):
+  -> Retornar status 502 com mensagem: "Erro no servico de geracao de imagem"
+  -> Incluir detalhes do erro no corpo da resposta
+
+Se N8N retornar sucesso:
+  -> Retornar status 200 com os dados normalmente
 ```
-
-## Alteracoes
-
-### 1. Criar Edge Function `n8n-image-proxy`
-
-**Arquivo:** `supabase/functions/n8n-image-proxy/index.ts`
-
-- Recebe a requisicao do frontend com `courseName`, `areaName`, `description`
-- Trata o preflight OPTIONS com headers CORS corretos
-- Repassa o body para `https://automacao-n8n.w3lidv.easypanel.host/webhook/servidores_imagem`
-- Retorna a resposta do N8N para o frontend com headers CORS
-
-### 2. Registrar no `supabase/config.toml`
-
-Adicionar a configuracao da nova funcao:
-
-```
-[functions.n8n-image-proxy]
-verify_jwt = false
-```
-
-### 3. Atualizar `CourseImageGenerator.tsx`
-
-**Arquivo:** `src/components/admin/CourseImageGenerator.tsx`
-
-- Substituir o `fetch` direto ao N8N por `supabase.functions.invoke('n8n-image-proxy', { body: ... })`
-- Manter o tratamento de resposta igual (espera `imageUrl` no retorno)
-
-## Apos implementacao
-
-1. **Deploy da Edge Function** via CLI:
-   ```
-   supabase functions deploy n8n-image-proxy --no-verify-jwt
-   ```
-2. **Publicar o frontend** no Lovable
-
-## Secao tecnica
-
-A Edge Function roda no servidor Supabase, entao a chamada ao N8N e feita server-to-server, sem restricoes CORS. O frontend so conversa com a Edge Function, que ja tem CORS tratado nativamente. A URL do webhook N8N fica hardcoded na Edge Function (nao exposta ao frontend). O `verify_jwt` sera desabilitado para simplificar, ja que a funcao so repassa dados para o N8N.
 
