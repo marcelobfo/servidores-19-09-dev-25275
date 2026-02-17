@@ -1,4 +1,4 @@
-const N8N_WEBHOOK_URL = "https://automacao-n8n.w3lidv.easypanel.host/webhook/servidores_imagem";
+const N8N_WEBHOOK_URL = "https://automacao-n8n.w3lidv.easypanel.host/webhook-test/servidores_imagem";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
