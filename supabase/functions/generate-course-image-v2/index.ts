@@ -74,18 +74,26 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
 
     console.log('🎨 Generating image for course:', courseName);
 
-    // Chamar API do Gemini 2.5 Flash Image (Nano Banana)
-    const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent';
+    // Chamar API do Gemini 3 Pro Image Preview
+    const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:streamGenerateContent';
     
     const requestBody = {
       contents: [{
+        role: "user",
         parts: [{
           text: prompt
         }]
-      }]
+      }],
+      generationConfig: {
+        responseModalities: ["IMAGE"],
+        imageConfig: {
+          aspectRatio: "16:9",
+          imageSize: "1K"
+        }
+      }
     };
     
-    console.log('📤 Calling Gemini 2.5 Flash Image API...');
+    console.log('📤 Calling Gemini 3 Pro Image Preview API...');
 
     const response = await fetch(geminiUrl, {
       method: 'POST',
@@ -104,7 +112,7 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
       console.error('📍 Status:', response.status);
       console.error('📍 Status Text:', response.statusText);
       console.error('📍 Error Body:', errorText);
-      console.error('📍 Model:', 'imagegeneration');
+      console.error('📍 Model:', 'gemini-3-pro-image-preview');
       
       // Tentar parsear como JSON para mais detalhes
       let errorDetails;
@@ -136,7 +144,7 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
       
       if (response.status === 404) {
         return new Response(JSON.stringify({ 
-          error: 'Modelo gemini-2.5-flash-image não encontrado. Verifique se a API key tem permissões.',
+          error: 'Modelo gemini-3-pro-image-preview não encontrado. Verifique se a API key tem permissões.',
           hint: 'Verifique se a API key tem permissões para geração de imagens'
         }), {
           status: 404,
@@ -145,20 +153,33 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
       }
 
       return new Response(JSON.stringify({ 
-        error: 'Erro ao gerar imagem com Gemini 2.5 Flash Image.',
+        error: 'Erro ao gerar imagem com Gemini 3 Pro Image.',
         details: errorDetails?.error?.message || errorText || response.statusText,
         status: response.status,
-        model: 'gemini-2.5-flash-image'
+        model: 'gemini-3-pro-image-preview'
       }), {
         status: response.status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    const data = await response.json();
-    console.log('✅ Gemini 2.5 Flash Image response received');
+    // streamGenerateContent returns multiple JSON objects, parse the full response
+    const responseText = await response.text();
+    console.log('✅ Gemini 3 Pro Image response received');
+    
+    // Parse the streamed response - it may be wrapped in an array
+    let data;
+    try {
+      const parsed = JSON.parse(responseText);
+      data = Array.isArray(parsed) ? parsed[parsed.length - 1] : parsed;
+    } catch {
+      console.error('Failed to parse response:', responseText.substring(0, 500));
+      return new Response(JSON.stringify({ error: 'Erro ao processar resposta da API' }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
-    // Extrair imagem do formato do Gemini 2.5 Flash Image
+    // Extrair imagem do formato do Gemini 3 Pro Image
     const responseContent = data?.candidates?.[0]?.content?.parts || [];
     let imageBase64 = null;
     let mimeType = 'image/png';
@@ -196,12 +217,12 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
     // Adicionar prefixo data:image com mimeType correto
     const imageUrl = `data:${mimeType};base64,${imageBase64}`;
     
-    console.log('✅ Image generated successfully with Gemini 2.5 Flash Image');
+    console.log('✅ Image generated successfully with Gemini 3 Pro Image');
 
     return new Response(
       JSON.stringify({ 
         imageUrl,
-        model_used: 'gemini-2.5-flash-image'
+        model_used: 'gemini-3-pro-image-preview'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
