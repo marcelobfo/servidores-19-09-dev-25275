@@ -7,6 +7,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Sparkles, RefreshCw } from "lucide-react";
 
+const N8N_IMAGE_WEBHOOK_URL = "https://automacao-n8n.w3lidv.easypanel.host/webhook/servidores_imagem";
+
 interface CourseImageGeneratorProps {
   courseName: string;
   areaName?: string;
@@ -45,29 +47,25 @@ export function CourseImageGenerator({
     console.log('🎨 Starting image generation for:', courseName);
 
     try {
-      console.log('📤 Invoking generate-course-image-v2 function...');
-      const { data, error } = await supabase.functions.invoke('generate-course-image-v2', {
-        body: {
-          courseName,
-          areaName,
-          description
-        }
+      console.log('📤 Enviando para webhook N8N...');
+      const response = await fetch(N8N_IMAGE_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseName, areaName, description }),
       });
 
-      console.log('📥 Function response:', { data, error });
-
-      if (error) {
-        console.error('❌ Function returned error:', error);
-        throw new Error(error.message || 'Erro ao gerar imagem');
+      if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status}`);
       }
+
+      const data = await response.json();
+      console.log('📥 Resposta do webhook:', data);
 
       if (!data?.imageUrl) {
-        console.error('❌ No imageUrl in response:', data);
-        const errorMsg = data?.error || data?.details || 'Nenhuma imagem foi retornada';
-        throw new Error(errorMsg);
+        throw new Error(data?.error || 'Nenhuma imagem foi retornada pelo webhook');
       }
 
-      console.log('✅ Image generated successfully');
+      console.log('✅ Imagem gerada com sucesso via N8N');
       setGeneratedImage(data.imageUrl);
       
       toast({
@@ -75,21 +73,10 @@ export function CourseImageGenerator({
         description: "A capa foi gerada com sucesso.",
       });
     } catch (error: any) {
-      console.error('❌ Error in handleGenerate:', error);
-      
-      let errorMessage = "Não foi possível gerar a imagem. Tente novamente.";
-      
-      if (error.message?.includes('429')) {
-        errorMessage = "Limite de requisições atingido. Tente novamente em alguns instantes.";
-      } else if (error.message?.includes('402')) {
-        errorMessage = "Créditos insuficientes. Adicione créditos em Settings → Workspace → Usage.";
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
+      console.error('❌ Erro na geração:', error);
       toast({
         title: "Erro ao gerar imagem",
-        description: errorMessage,
+        description: error.message || "Não foi possível gerar a imagem. Tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -102,17 +89,25 @@ export function CourseImageGenerator({
 
     setUploading(true);
     try {
-      // Converter base64 para blob
-      const base64Data = generatedImage.split(',')[1];
-      const byteCharacters = atob(base64Data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'image/png' });
+      let blob: Blob;
 
-      // Upload para o bucket do Supabase
+      if (generatedImage.startsWith('data:')) {
+        // Base64 data URI
+        const base64Data = generatedImage.split(',')[1];
+        const mimeMatch = generatedImage.match(/data:([^;]+);/);
+        const mimeType = mimeMatch?.[1] || 'image/png';
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
+      } else {
+        // URL pública - baixar a imagem
+        const imgResponse = await fetch(generatedImage);
+        blob = await imgResponse.blob();
+      }
+
       const fileName = `course-cover-${Date.now()}.png`;
       const { error: uploadError } = await supabase.storage
         .from('documents')
@@ -120,7 +115,6 @@ export function CourseImageGenerator({
 
       if (uploadError) throw uploadError;
 
-      // Obter URL pública
       const { data } = supabase.storage
         .from('documents')
         .getPublicUrl(fileName);
