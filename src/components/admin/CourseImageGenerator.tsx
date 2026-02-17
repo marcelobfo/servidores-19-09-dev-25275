@@ -7,8 +7,6 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Sparkles, RefreshCw } from "lucide-react";
 
-const N8N_IMAGE_WEBHOOK_URL = "https://automacao-n8n.w3lidv.easypanel.host/webhook/servidores_imagem";
-
 interface CourseImageGeneratorProps {
   courseName: string;
   areaName?: string;
@@ -47,19 +45,16 @@ export function CourseImageGenerator({
     console.log('🎨 Starting image generation for:', courseName);
 
     try {
-      console.log('📤 Enviando para webhook N8N...');
-      const response = await fetch(N8N_IMAGE_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ courseName, areaName, description }),
+      console.log('📤 Enviando para proxy N8N via Edge Function...');
+      const { data, error } = await supabase.functions.invoke('n8n-image-proxy', {
+        body: { courseName, areaName, description },
       });
 
-      if (!response.ok) {
-        throw new Error(`Erro HTTP: ${response.status}`);
+      if (error) {
+        throw new Error(error.message || 'Erro ao chamar proxy N8N');
       }
 
-      const data = await response.json();
-      console.log('📥 Resposta do webhook:', data);
+      console.log('📥 Resposta do proxy:', data);
 
       if (!data?.imageUrl) {
         throw new Error(data?.error || 'Nenhuma imagem foi retornada pelo webhook');
