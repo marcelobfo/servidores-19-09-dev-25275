@@ -1,46 +1,59 @@
 
 
-# Plano: Atualizar geração de imagem para Gemini 3 Pro Image Preview
+# Plano: Migrar geracao de imagem para webhook N8N
 
-## Problema identificado
+## Resumo
 
-O erro **404** acontece porque o site publicado ainda chama a função antiga `generate-course-image` (que não existe no Supabase). O codigo fonte ja foi corrigido para chamar `generate-course-image-v2`, mas o frontend precisa ser republicado.
-
-Alem disso, o modelo atual (`gemini-2.0-flash-exp`) sera substituido pelo `gemini-3-pro-image-preview` conforme solicitado.
+Substituir toda a logica de chamada ao Gemini por uma chamada direta ao webhook N8N. O frontend vai chamar o webhook diretamente (sem passar pela Edge Function), enviando titulo e descricao do curso. O N8N processa, gera a imagem e retorna na resposta.
 
 ## Alteracoes
 
-### 1. Atualizar Edge Function `generate-course-image-v2`
+### 1. Simplificar `CourseImageGenerator.tsx`
 
-**Arquivo:** `supabase/functions/generate-course-image-v2/index.ts`
+**Arquivo:** `src/components/admin/CourseImageGenerator.tsx`
 
-- Trocar o modelo de `gemini-2.0-flash-exp` para `gemini-3-pro-image-preview`
-- Trocar o endpoint de `generateContent` para `generateContent` (mesmo endpoint, so muda o modelo na URL)
-- Manter `responseModalities: ["TEXT", "IMAGE"]` conforme o curl fornecido
-- Manter toda a logica de parsing de resposta (o formato de resposta e o mesmo)
+- Remover a chamada `supabase.functions.invoke('generate-course-image-v2')`
+- Substituir por um `fetch` direto ao webhook:
+  ```
+  POST https://automacao-n8n.w3lidv.easypanel.host/webhook/servidores_imagem
+  Body: { courseName, description, areaName }
+  ```
+- O N8N deve retornar a imagem (como URL ou base64). O componente vai tratar ambos os formatos:
+  - Se retornar uma URL publica: usar diretamente
+  - Se retornar base64: montar o data URI como ja faz hoje
+- Remover tratamento de erros especificos do Gemini (429, 402)
 
-**Mudanca principal:**
+### 2. Nenhuma alteracao na Edge Function
+
+A Edge Function `generate-course-image-v2` pode ser mantida como fallback, mas nao sera mais chamada. A chamada sera feita diretamente do frontend para o webhook.
+
+### 3. Formato esperado do webhook N8N
+
+O frontend vai enviar:
+```json
+{
+  "courseName": "Nome do Curso",
+  "areaName": "Area",
+  "description": "Descricao do curso"
+}
 ```
-Antes:  models/gemini-2.0-flash-exp:generateContent
-Depois: models/gemini-3-pro-image-preview:generateContent
+
+E espera receber do N8N:
+```json
+{
+  "imageUrl": "data:image/png;base64,..." 
+}
 ```
-
-### 2. Atualizar Edge Function `test-gemini-api-key`
-
-**Arquivo:** `supabase/functions/test-gemini-api-key/index.ts`
-
-- Atualizar o modelo de teste para `gemini-3-pro-image-preview` (atualmente usa `gemini-2.5-flash-image`)
-- Garantir consistencia com o modelo usado na geracao real
-
-## Acoes apos implementacao
-
-1. **Publicar o frontend** no Lovable (botao "Publish") para que o site use `generate-course-image-v2`
-2. **Deploy da edge function** via CLI:
-   ```
-   supabase functions deploy generate-course-image-v2
-   supabase functions deploy test-gemini-api-key
-   ```
+Ou:
+```json
+{
+  "imageUrl": "https://url-publica-da-imagem.png"
+}
+```
 
 ## Secao tecnica
 
-O modelo `gemini-3-pro-image-preview` usa o mesmo endpoint `generateContent` e retorna a imagem no mesmo formato (`inlineData` com `mimeType` e `data` base64), portanto a logica de parsing existente continua compativel. A unica mudanca e o nome do modelo na URL.
+A chamada direta do frontend para o webhook N8N elimina a necessidade da Edge Function como intermediario, simplificando o fluxo e eliminando os problemas de CORS com o Supabase. O webhook N8N precisa retornar os headers CORS adequados (`Access-Control-Allow-Origin: *`) ou, como alternativa, o N8N geralmente ja trata isso automaticamente em webhooks de resposta.
+
+O componente `handleUseImage` continua funcionando igual -- ele converte base64 para blob e faz upload ao Supabase Storage. Se o N8N retornar uma URL publica em vez de base64, o fluxo sera adaptado para baixar a imagem e fazer o upload, ou usar a URL diretamente.
+
