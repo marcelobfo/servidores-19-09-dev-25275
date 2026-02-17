@@ -1,4 +1,4 @@
-const N8N_WEBHOOK_URL = "https://automacao-n8n.w3lidv.easypanel.host/webhook-test/servidores_imagem";
+const N8N_WEBHOOK_URL = "https://automacao-n8n.w3lidv.easypanel.host/webhook/servidores_imagem";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,11 +21,25 @@ Deno.serve(async (req) => {
       body: JSON.stringify(body),
     });
 
-    const data = await response.json();
     console.log("📥 N8N response status:", response.status);
 
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error("❌ N8N returned error:", response.status, errorBody);
+      return new Response(JSON.stringify({ 
+        error: "Erro no serviço de geração de imagem (N8N)", 
+        details: errorBody,
+        n8nStatus: response.status 
+      }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const data = await response.json();
+
     return new Response(JSON.stringify(data), {
-      status: response.status,
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
