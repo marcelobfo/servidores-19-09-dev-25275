@@ -1,61 +1,46 @@
-# Plano de Melhorias: Tabela de Cronograma e Carga Horária Semanal
 
-## ✅ Status: IMPLEMENTADO
 
-Este plano foi completamente implementado com as seguintes alterações:
+# Plano: Atualizar geração de imagem para Gemini 3 Pro Image Preview
 
----
+## Problema identificado
 
-## 1. ✅ Alteração no Banco de Dados
+O erro **404** acontece porque o site publicado ainda chama a função antiga `generate-course-image` (que não existe no Supabase). O codigo fonte ja foi corrigido para chamar `generate-course-image-v2`, mas o frontend precisa ser republicado.
 
-Arquivo criado: `supabase/sql/add_weekly_hours_to_organ_types.sql`
+Alem disso, o modelo atual (`gemini-2.0-flash-exp`) sera substituido pelo `gemini-3-pro-image-preview` conforme solicitado.
 
-- Coluna `weekly_hours INTEGER DEFAULT 30` adicionada à tabela `organ_types`
-- Valores: 20h para órgãos federais, 30h para outros
+## Alteracoes
 
----
+### 1. Atualizar Edge Function `generate-course-image-v2`
 
-## 2. ✅ Interface de Gerenciamento de Tipos de Órgãos
+**Arquivo:** `supabase/functions/generate-course-image-v2/index.ts`
 
-Arquivo atualizado: `src/pages/admin/OrganTypesPage.tsx`
+- Trocar o modelo de `gemini-2.0-flash-exp` para `gemini-3-pro-image-preview`
+- Trocar o endpoint de `generateContent` para `generateContent` (mesmo endpoint, so muda o modelo na URL)
+- Manter `responseModalities: ["TEXT", "IMAGE"]` conforme o curl fornecido
+- Manter toda a logica de parsing de resposta (o formato de resposta e o mesmo)
 
-- Campo `weekly_hours` no formulário de criação/edição
-- Toggle de "É órgão federal" auto-ajusta para 20h ou 30h
-- Coluna "CH Semanal" na tabela de listagem
-
----
-
-## 3. ✅ Reformatação da Tabela de Cronograma
-
-Arquivo atualizado: `src/lib/dynamicPdfGenerator.ts`
-
-Nova estrutura multiline da tabela com 5 colunas:
-- **Data**: Período dinâmico (start_date a end_date)
-- **Horário**: 8:00 às 12:00 / 14:00 às 16:00
-- **CH Semanal**: Dinâmico do organ_type (20h ou 30h)
-- **Atividade**: Assistir vídeos, Fóruns, Avaliação
-- **Local**: Plataforma + nome da instituição
-
----
-
-## 4. ✅ Propagação do `weekly_hours`
-
-Arquivos atualizados:
-- `src/lib/dynamicPdfGenerator.ts` - Interface PreviewData com weekly_hours
-- `src/lib/pdfGenerator.ts` - Interface Course e preparePreviewData
-- `src/pages/student/DocumentsPage.tsx` - Busca weekly_hours do organ_type
-
----
-
-## Próximo passo
-
-Execute a migration SQL no Supabase para adicionar a coluna:
-
-```sql
--- supabase/sql/add_weekly_hours_to_organ_types.sql
-ALTER TABLE organ_types 
-ADD COLUMN IF NOT EXISTS weekly_hours INTEGER DEFAULT 30 NOT NULL;
-
-UPDATE organ_types SET weekly_hours = 20 WHERE is_federal = true;
-UPDATE organ_types SET weekly_hours = 30 WHERE is_federal = false;
+**Mudanca principal:**
 ```
+Antes:  models/gemini-2.0-flash-exp:generateContent
+Depois: models/gemini-3-pro-image-preview:generateContent
+```
+
+### 2. Atualizar Edge Function `test-gemini-api-key`
+
+**Arquivo:** `supabase/functions/test-gemini-api-key/index.ts`
+
+- Atualizar o modelo de teste para `gemini-3-pro-image-preview` (atualmente usa `gemini-2.5-flash-image`)
+- Garantir consistencia com o modelo usado na geracao real
+
+## Acoes apos implementacao
+
+1. **Publicar o frontend** no Lovable (botao "Publish") para que o site use `generate-course-image-v2`
+2. **Deploy da edge function** via CLI:
+   ```
+   supabase functions deploy generate-course-image-v2
+   supabase functions deploy test-gemini-api-key
+   ```
+
+## Secao tecnica
+
+O modelo `gemini-3-pro-image-preview` usa o mesmo endpoint `generateContent` e retorna a imagem no mesmo formato (`inlineData` com `mimeType` e `data` base64), portanto a logica de parsing existente continua compativel. A unica mudanca e o nome do modelo na URL.
