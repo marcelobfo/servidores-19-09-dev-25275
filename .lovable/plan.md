@@ -1,59 +1,56 @@
 
 
-# Plano: Migrar geracao de imagem para webhook N8N
+# Plano: Criar Edge Function proxy para o webhook N8N
 
-## Resumo
+## Problema
 
-Substituir toda a logica de chamada ao Gemini por uma chamada direta ao webhook N8N. O frontend vai chamar o webhook diretamente (sem passar pela Edge Function), enviando titulo e descricao do curso. O N8N processa, gera a imagem e retorna na resposta.
+O N8N nao responde corretamente a requisicoes OPTIONS (preflight CORS), mesmo com os headers configurados. Isso e uma limitacao comum do N8N -- ele so responde a requisicoes POST no webhook, mas o navegador envia um OPTIONS antes.
+
+## Solucao
+
+Criar uma Edge Function no Supabase que atua como proxy: o frontend chama a Edge Function (que ja tem CORS configurado), e ela repassa a requisicao para o webhook N8N no servidor (onde nao existe CORS).
+
+```text
+Frontend  -->  Edge Function (proxy)  -->  N8N Webhook
+              (trata CORS)                (sem CORS)
+```
 
 ## Alteracoes
 
-### 1. Simplificar `CourseImageGenerator.tsx`
+### 1. Criar Edge Function `n8n-image-proxy`
+
+**Arquivo:** `supabase/functions/n8n-image-proxy/index.ts`
+
+- Recebe a requisicao do frontend com `courseName`, `areaName`, `description`
+- Trata o preflight OPTIONS com headers CORS corretos
+- Repassa o body para `https://automacao-n8n.w3lidv.easypanel.host/webhook/servidores_imagem`
+- Retorna a resposta do N8N para o frontend com headers CORS
+
+### 2. Registrar no `supabase/config.toml`
+
+Adicionar a configuracao da nova funcao:
+
+```
+[functions.n8n-image-proxy]
+verify_jwt = false
+```
+
+### 3. Atualizar `CourseImageGenerator.tsx`
 
 **Arquivo:** `src/components/admin/CourseImageGenerator.tsx`
 
-- Remover a chamada `supabase.functions.invoke('generate-course-image-v2')`
-- Substituir por um `fetch` direto ao webhook:
-  ```
-  POST https://automacao-n8n.w3lidv.easypanel.host/webhook/servidores_imagem
-  Body: { courseName, description, areaName }
-  ```
-- O N8N deve retornar a imagem (como URL ou base64). O componente vai tratar ambos os formatos:
-  - Se retornar uma URL publica: usar diretamente
-  - Se retornar base64: montar o data URI como ja faz hoje
-- Remover tratamento de erros especificos do Gemini (429, 402)
+- Substituir o `fetch` direto ao N8N por `supabase.functions.invoke('n8n-image-proxy', { body: ... })`
+- Manter o tratamento de resposta igual (espera `imageUrl` no retorno)
 
-### 2. Nenhuma alteracao na Edge Function
+## Apos implementacao
 
-A Edge Function `generate-course-image-v2` pode ser mantida como fallback, mas nao sera mais chamada. A chamada sera feita diretamente do frontend para o webhook.
-
-### 3. Formato esperado do webhook N8N
-
-O frontend vai enviar:
-```json
-{
-  "courseName": "Nome do Curso",
-  "areaName": "Area",
-  "description": "Descricao do curso"
-}
-```
-
-E espera receber do N8N:
-```json
-{
-  "imageUrl": "data:image/png;base64,..." 
-}
-```
-Ou:
-```json
-{
-  "imageUrl": "https://url-publica-da-imagem.png"
-}
-```
+1. **Deploy da Edge Function** via CLI:
+   ```
+   supabase functions deploy n8n-image-proxy --no-verify-jwt
+   ```
+2. **Publicar o frontend** no Lovable
 
 ## Secao tecnica
 
-A chamada direta do frontend para o webhook N8N elimina a necessidade da Edge Function como intermediario, simplificando o fluxo e eliminando os problemas de CORS com o Supabase. O webhook N8N precisa retornar os headers CORS adequados (`Access-Control-Allow-Origin: *`) ou, como alternativa, o N8N geralmente ja trata isso automaticamente em webhooks de resposta.
-
-O componente `handleUseImage` continua funcionando igual -- ele converte base64 para blob e faz upload ao Supabase Storage. Se o N8N retornar uma URL publica em vez de base64, o fluxo sera adaptado para baixar a imagem e fazer o upload, ou usar a URL diretamente.
+A Edge Function roda no servidor Supabase, entao a chamada ao N8N e feita server-to-server, sem restricoes CORS. O frontend so conversa com a Edge Function, que ja tem CORS tratado nativamente. A URL do webhook N8N fica hardcoded na Edge Function (nao exposta ao frontend). O `verify_jwt` sera desabilitado para simplificar, ja que a funcao so repassa dados para o N8N.
 
