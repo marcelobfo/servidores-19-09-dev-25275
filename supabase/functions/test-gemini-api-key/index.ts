@@ -41,10 +41,10 @@ serve(async (req) => {
       );
     }
 
-    // Test API key with image generation model (gemini-2.5-flash-image)
+    // Test API key with image generation model (gemini-3-pro-image-preview)
     const startTime = Date.now();
     const response = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent',
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent',
       {
         method: 'POST',
         headers: {
@@ -122,9 +122,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `API Key válida! Modelo gemini-2.5-flash-image funcionando. Tempo: ${responseTime}ms`,
+        message: `API Key válida! Modelo gemini-3-pro-image-preview funcionando. Tempo: ${responseTime}ms`,
         details: {
-          model: 'gemini-2.5-flash-image',
+          model: 'gemini-3-pro-image-preview',
           responseTime
         }
       }),

@@ -75,7 +75,7 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
     console.log('🎨 Generating image for course:', courseName);
 
     // Chamar API do Gemini 2.0 Flash (suporta geração de imagens)
-    const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
+    const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent';
     
     const requestBody = {
       contents: [{
@@ -85,11 +85,11 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
         }]
       }],
       generationConfig: {
-        responseModalities: ["IMAGE", "TEXT"]
+        responseModalities: ["TEXT", "IMAGE"]
       }
     };
     
-    console.log('📤 Calling Gemini 2.0 Flash API for image generation...');
+    console.log('📤 Calling Gemini 3 Pro Image Preview API for image generation...');
 
     const response = await fetch(geminiUrl, {
       method: 'POST',
@@ -108,7 +108,7 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
       console.error('📍 Status:', response.status);
       console.error('📍 Status Text:', response.statusText);
       console.error('📍 Error Body:', errorText);
-      console.error('📍 Model:', 'gemini-2.0-flash-exp');
+      console.error('📍 Model:', 'gemini-3-pro-image-preview');
       
       // Tentar parsear como JSON para mais detalhes
       let errorDetails;
@@ -140,7 +140,7 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
       
       if (response.status === 404) {
         return new Response(JSON.stringify({ 
-          error: 'Modelo gemini-2.0-flash-exp não encontrado. Verifique se a API key tem permissões.',
+          error: 'Modelo gemini-3-pro-image-preview não encontrado. Verifique se a API key tem permissões.',
           hint: 'Verifique se a API key tem permissões para geração de imagens'
         }), {
           status: 404,
@@ -152,7 +152,7 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
         error: 'Erro ao gerar imagem com Gemini.',
         details: errorDetails?.error?.message || errorText || response.statusText,
         status: response.status,
-        model: 'gemini-2.0-flash-exp'
+        model: 'gemini-3-pro-image-preview'
       }), {
         status: response.status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -200,12 +200,12 @@ Estilo: Design gráfico de curso online, cores vibrantes porém elegantes, ícon
     // Adicionar prefixo data:image com mimeType correto
     const imageUrl = `data:${mimeType};base64,${imageBase64}`;
     
-    console.log('✅ Image generated successfully with Gemini 2.0 Flash');
+    console.log('✅ Image generated successfully with Gemini 3 Pro Image Preview');
 
     return new Response(
       JSON.stringify({ 
         imageUrl,
-        model_used: 'gemini-2.0-flash-exp'
+        model_used: 'gemini-3-pro-image-preview'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
