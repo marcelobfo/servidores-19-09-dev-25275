@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, UserPlus } from "lucide-react";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useUsersList } from "@/hooks/useUserManagement";
 import { UserActionsDropdown } from "@/components/admin/UserActionsDropdown";
+import { InviteUserDialog } from "@/components/admin/InviteUserDialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -66,10 +67,7 @@ export default function UsersManagementPage() {
             Gerencie permissões e acesso dos usuários do sistema
           </p>
         </div>
-        <Button variant="outline" className="gap-2">
-          <UserPlus className="h-4 w-4" />
-          Convidar Usuário
-        </Button>
+        <InviteUserDialog />
       </div>
 
       <Card>
@@ -134,6 +132,7 @@ export default function UsersManagementPage() {
                           <UserActionsDropdown
                             userId={user.id}
                             userEmail={user.email}
+                            userName={user.full_name}
                             isAdmin={user.roles.includes("admin")}
                           />
                         </TableCell>
