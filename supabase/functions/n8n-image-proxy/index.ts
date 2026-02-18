@@ -62,6 +62,13 @@ Deno.serve(async (req) => {
     // Otherwise treat as JSON
     const data = await response.json();
     console.log("📥 N8N JSON response keys:", Object.keys(data));
+    console.log("📥 N8N imageUrl starts with:", data?.imageUrl?.substring?.(0, 80));
+
+    // If imageUrl is raw base64 (no data: prefix), add it
+    if (data?.imageUrl && !data.imageUrl.startsWith("data:") && !data.imageUrl.startsWith("http")) {
+      console.log("🔧 Raw base64 detected, adding data URI prefix...");
+      data.imageUrl = `data:image/png;base64,${data.imageUrl}`;
+    }
 
     return new Response(JSON.stringify(data), {
       status: 200,
