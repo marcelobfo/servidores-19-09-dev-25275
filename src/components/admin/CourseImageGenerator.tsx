@@ -83,36 +83,47 @@ export function CourseImageGenerator({
     if (!generatedImage) return;
 
     setUploading(true);
+    console.log('🖼️ handleUseImage - generatedImage type:', typeof generatedImage);
+    console.log('🖼️ handleUseImage - starts with:', generatedImage.substring(0, 80));
+    
     try {
       let blob: Blob;
-      let imageSource = generatedImage;
 
-      // Se começa com data: mas contém uma URL dentro (ex: N8N encapsulou URL em data:)
-      if (imageSource.startsWith('data:')) {
-        try {
-          const base64Data = imageSource.split(',')[1];
-          const mimeMatch = imageSource.match(/data:([^;]+);/);
-          const mimeType = mimeMatch?.[1] || 'image/png';
+      if (generatedImage.startsWith('data:')) {
+        const base64Data = generatedImage.split(',')[1];
+        const mimeMatch = generatedImage.match(/data:([^;]+);/);
+        const mimeType = mimeMatch?.[1] || 'image/png';
+        
+        // Validate base64 before decoding
+        const isValidBase64 = base64Data && /^[A-Za-z0-9+/=]+$/.test(base64Data) && base64Data.length > 100;
+        
+        if (isValidBase64) {
+          console.log('✅ Valid base64 detected, decoding...');
           const byteCharacters = atob(base64Data);
           const byteNumbers = new Array(byteCharacters.length);
           for (let i = 0; i < byteCharacters.length; i++) {
             byteNumbers[i] = byteCharacters.charCodeAt(i);
           }
           blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
-        } catch (base64Error) {
-          console.warn('⚠️ Base64 decode failed, trying as URL fallback...');
-          // Extrair URL se estiver embutida no data URI malformado
-          const urlMatch = imageSource.match(/https?:\/\/[^\s"']+/);
+        } else {
+          // Invalid base64 - try to extract URL
+          console.warn('⚠️ Invalid base64, looking for embedded URL...');
+          const urlMatch = generatedImage.match(/https?:\/\/[^\s"']+/);
           if (urlMatch) {
-            imageSource = urlMatch[0];
+            console.log('🔗 Found embedded URL:', urlMatch[0]);
+            const imgResponse = await fetch(urlMatch[0]);
+            blob = await imgResponse.blob();
+          } else {
+            throw new Error('Formato de imagem inválido recebido do N8N. Verifique a configuração do nó "Respond to Webhook".');
           }
-          const imgResponse = await fetch(imageSource);
-          blob = await imgResponse.blob();
         }
-      } else {
-        // URL pública - baixar a imagem
-        const imgResponse = await fetch(imageSource);
+      } else if (generatedImage.startsWith('http')) {
+        // Public URL - fetch directly
+        console.log('🔗 Fetching image from URL...');
+        const imgResponse = await fetch(generatedImage);
         blob = await imgResponse.blob();
+      } else {
+        throw new Error('Formato de imagem não reconhecido. Esperado: data URI ou URL pública.');
       }
 
       const fileName = `course-cover-${Date.now()}.png`;
