@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Sparkles, RefreshCw } from "lucide-react";
 
 interface CourseImageGeneratorProps {
+  courseId?: string;
   courseName: string;
   areaName?: string;
   description?: string;
@@ -16,6 +17,7 @@ interface CourseImageGeneratorProps {
 }
 
 export function CourseImageGenerator({
+  courseId,
   courseName: initialCourseName,
   areaName: initialAreaName,
   description: initialDescription,
@@ -26,9 +28,61 @@ export function CourseImageGenerator({
   const [areaName, setAreaName] = useState(initialAreaName || "");
   const [description, setDescription] = useState(initialDescription || "");
   const [generating, setGenerating] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [waitingForImage, setWaitingForImage] = useState(false);
   const { toast } = useToast();
+
+  // Subscribe to Realtime changes on courses table to detect image_url updates
+  useEffect(() => {
+    if (!courseId || !waitingForImage) return;
+
+    console.log('👂 Subscribing to Realtime for course:', courseId);
+    
+    const channel = supabase
+      .channel(`course-image-${courseId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'courses',
+          filter: `id=eq.${courseId}`,
+        },
+        (payload) => {
+          console.log('📡 Realtime update received:', payload);
+          const newImageUrl = payload.new?.image_url;
+          if (newImageUrl && newImageUrl !== payload.old?.image_url) {
+            console.log('✅ New image detected:', newImageUrl.substring(0, 80));
+            setWaitingForImage(false);
+            setGenerating(false);
+            onImageGenerated(newImageUrl);
+            toast({
+              title: "Imagem gerada!",
+              description: "A capa foi gerada e salva com sucesso.",
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    // Timeout after 2 minutes
+    const timeout = setTimeout(() => {
+      if (waitingForImage) {
+        setWaitingForImage(false);
+        setGenerating(false);
+        toast({
+          title: "Tempo esgotado",
+          description: "A geração demorou demais. Tente novamente.",
+          variant: "destructive",
+        });
+      }
+    }, 120000);
+
+    return () => {
+      console.log('🔌 Unsubscribing from Realtime for course:', courseId);
+      supabase.removeChannel(channel);
+      clearTimeout(timeout);
+    };
+  }, [courseId, waitingForImage, onImageGenerated, toast]);
 
   const handleGenerate = async () => {
     if (!courseName.trim()) {
@@ -40,118 +94,44 @@ export function CourseImageGenerator({
       return;
     }
 
+    if (!courseId) {
+      toast({
+        title: "Salve o curso primeiro",
+        description: "É necessário salvar o curso antes de gerar a imagem.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setGenerating(true);
-    setGeneratedImage(null);
-    console.log('🎨 Starting image generation for:', courseName);
+    console.log('🎨 Starting image generation for:', courseName, 'courseId:', courseId);
 
     try {
-      console.log('📤 Enviando para proxy N8N via Edge Function...');
       const { data, error } = await supabase.functions.invoke('n8n-image-proxy', {
-        body: { courseName, areaName, description },
+        body: { courseName, areaName, description, courseId },
       });
 
       if (error) {
-        throw new Error(error.message || 'Erro ao chamar proxy N8N');
+        throw new Error(error.message || 'Erro ao enviar para N8N');
       }
 
-      console.log('📥 Resposta do proxy:', data);
+      console.log('📥 Proxy response:', data);
 
-      if (!data?.imageUrl) {
-        throw new Error(data?.error || 'Nenhuma imagem foi retornada pelo webhook');
-      }
-
-      console.log('✅ Imagem gerada com sucesso via N8N');
-      setGeneratedImage(data.imageUrl);
+      // Fire-and-forget mode: start listening for Realtime updates
+      setWaitingForImage(true);
       
       toast({
-        title: "Imagem gerada!",
-        description: "A capa foi gerada com sucesso.",
+        title: "Gerando imagem...",
+        description: "A IA está criando a capa. Você será notificado quando estiver pronta.",
       });
     } catch (error: any) {
       console.error('❌ Erro na geração:', error);
+      setGenerating(false);
       toast({
         title: "Erro ao gerar imagem",
-        description: error.message || "Não foi possível gerar a imagem. Tente novamente.",
+        description: error.message || "Não foi possível iniciar a geração. Tente novamente.",
         variant: "destructive",
       });
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const handleUseImage = async () => {
-    if (!generatedImage) return;
-
-    setUploading(true);
-    console.log('🖼️ handleUseImage - generatedImage type:', typeof generatedImage);
-    console.log('🖼️ handleUseImage - starts with:', generatedImage.substring(0, 80));
-    
-    try {
-      let blob: Blob;
-
-      if (generatedImage.startsWith('data:')) {
-        const base64Data = generatedImage.split(',')[1];
-        const mimeMatch = generatedImage.match(/data:([^;]+);/);
-        const mimeType = mimeMatch?.[1] || 'image/png';
-        
-        // Validate base64 before decoding
-        const isValidBase64 = base64Data && /^[A-Za-z0-9+/=]+$/.test(base64Data) && base64Data.length > 100;
-        
-        if (isValidBase64) {
-          console.log('✅ Valid base64 detected, decoding...');
-          const byteCharacters = atob(base64Data);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
-        } else {
-          // Invalid base64 - try to extract URL
-          console.warn('⚠️ Invalid base64, looking for embedded URL...');
-          const urlMatch = generatedImage.match(/https?:\/\/[^\s"']+/);
-          if (urlMatch) {
-            console.log('🔗 Found embedded URL:', urlMatch[0]);
-            const imgResponse = await fetch(urlMatch[0]);
-            blob = await imgResponse.blob();
-          } else {
-            throw new Error('Formato de imagem inválido recebido do N8N. Verifique a configuração do nó "Respond to Webhook".');
-          }
-        }
-      } else if (generatedImage.startsWith('http')) {
-        // Public URL - fetch directly
-        console.log('🔗 Fetching image from URL...');
-        const imgResponse = await fetch(generatedImage);
-        blob = await imgResponse.blob();
-      } else {
-        throw new Error('Formato de imagem não reconhecido. Esperado: data URI ou URL pública.');
-      }
-
-      const fileName = `course-cover-${Date.now()}.png`;
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(fileName, blob);
-
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage
-        .from('documents')
-        .getPublicUrl(fileName);
-
-      onImageGenerated(data.publicUrl);
-      
-      toast({
-        title: "Sucesso",
-        description: "Imagem salva com sucesso!"
-      });
-    } catch (error: any) {
-      console.error('Error uploading image:', error);
-      toast({
-        title: "Erro",
-        description: "Falha ao salvar imagem",
-        variant: "destructive"
-      });
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -190,16 +170,30 @@ export function CourseImageGenerator({
         </div>
       </div>
 
-      {!generatedImage && (
+      {!courseId && (
+        <p className="text-sm text-muted-foreground">
+          ⚠️ Salve o curso primeiro para poder gerar a imagem.
+        </p>
+      )}
+
+      {waitingForImage ? (
+        <div className="flex flex-col items-center gap-3 py-6">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground text-center">
+            A IA está gerando a capa do curso...<br />
+            A imagem aparecerá automaticamente quando estiver pronta.
+          </p>
+        </div>
+      ) : (
         <Button
           onClick={handleGenerate}
-          disabled={generating || !courseName.trim()}
+          disabled={generating || !courseName.trim() || !courseId}
           className="w-full"
         >
           {generating ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Gerando Capa...
+              Enviando...
             </>
           ) : (
             <>
@@ -208,43 +202,6 @@ export function CourseImageGenerator({
             </>
           )}
         </Button>
-      )}
-
-      {generatedImage && (
-        <div className="space-y-4">
-          <div className="rounded-lg border border-border overflow-hidden bg-muted">
-            <img
-              src={generatedImage}
-              alt="Capa gerada"
-              className="w-full h-auto"
-            />
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              onClick={handleUseImage}
-              disabled={uploading}
-              className="flex-1"
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                "Usar esta Imagem"
-              )}
-            </Button>
-            <Button
-              onClick={handleGenerate}
-              disabled={generating}
-              variant="outline"
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Gerar Novamente
-            </Button>
-          </div>
-        </div>
       )}
 
       <div className="flex justify-end">
