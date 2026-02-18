@@ -64,6 +64,18 @@ Deno.serve(async (req) => {
     console.log("📥 N8N JSON response keys:", Object.keys(data));
     console.log("📥 N8N imageUrl starts with:", data?.imageUrl?.substring?.(0, 80));
 
+    // Detect N8N expression not evaluated (literal template string)
+    if (data?.imageUrl && (data.imageUrl.includes("$binary") || data.imageUrl.includes("{{") || data.imageUrl.includes("}}"))) {
+      console.error("❌ N8N expression not evaluated! Received literal:", data.imageUrl);
+      return new Response(JSON.stringify({ 
+        error: "O N8N não avaliou a expressão. Ative o modo Expressão (ícone {}) no campo Response Body do nó 'Respond to Webhook'.",
+        details: data.imageUrl
+      }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // If imageUrl is raw base64 (no data: prefix), add it
     if (data?.imageUrl && !data.imageUrl.startsWith("data:") && !data.imageUrl.startsWith("http")) {
       console.log("🔧 Raw base64 detected, adding data URI prefix...");
