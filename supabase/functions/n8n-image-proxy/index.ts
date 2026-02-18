@@ -6,6 +6,15 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -22,6 +31,8 @@ Deno.serve(async (req) => {
     });
 
     console.log("📥 N8N response status:", response.status);
+    const contentType = response.headers.get("content-type") || "";
+    console.log("📥 N8N content-type:", contentType);
 
     if (!response.ok) {
       const errorBody = await response.text();
@@ -36,7 +47,21 @@ Deno.serve(async (req) => {
       });
     }
 
+    // If N8N returns binary image data directly
+    if (contentType.startsWith("image/")) {
+      console.log("🖼️ N8N returned binary image, converting to base64...");
+      const buffer = await response.arrayBuffer();
+      const base64 = arrayBufferToBase64(buffer);
+      const dataUri = `data:${contentType.split(";")[0]};base64,${base64}`;
+      return new Response(JSON.stringify({ imageUrl: dataUri }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Otherwise treat as JSON
     const data = await response.json();
+    console.log("📥 N8N JSON response keys:", Object.keys(data));
 
     return new Response(JSON.stringify(data), {
       status: 200,
