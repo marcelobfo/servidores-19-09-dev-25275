@@ -85,21 +85,33 @@ export function CourseImageGenerator({
     setUploading(true);
     try {
       let blob: Blob;
+      let imageSource = generatedImage;
 
-      if (generatedImage.startsWith('data:')) {
-        // Base64 data URI
-        const base64Data = generatedImage.split(',')[1];
-        const mimeMatch = generatedImage.match(/data:([^;]+);/);
-        const mimeType = mimeMatch?.[1] || 'image/png';
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
+      // Se começa com data: mas contém uma URL dentro (ex: N8N encapsulou URL em data:)
+      if (imageSource.startsWith('data:')) {
+        try {
+          const base64Data = imageSource.split(',')[1];
+          const mimeMatch = imageSource.match(/data:([^;]+);/);
+          const mimeType = mimeMatch?.[1] || 'image/png';
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
+        } catch (base64Error) {
+          console.warn('⚠️ Base64 decode failed, trying as URL fallback...');
+          // Extrair URL se estiver embutida no data URI malformado
+          const urlMatch = imageSource.match(/https?:\/\/[^\s"']+/);
+          if (urlMatch) {
+            imageSource = urlMatch[0];
+          }
+          const imgResponse = await fetch(imageSource);
+          blob = await imgResponse.blob();
         }
-        blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
       } else {
         // URL pública - baixar a imagem
-        const imgResponse = await fetch(generatedImage);
+        const imgResponse = await fetch(imageSource);
         blob = await imgResponse.blob();
       }
 
