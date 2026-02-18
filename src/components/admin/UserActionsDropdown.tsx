@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MoreHorizontal, Shield, ShieldOff, KeyRound, Eye } from "lucide-react";
+import { MoreHorizontal, Shield, ShieldOff, KeyRound, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,25 +18,29 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useGrantAdminRole, useRevokeAdminRole, useResetUserPassword } from "@/hooks/useUserManagement";
+import { useGrantAdminRole, useRevokeAdminRole, useResetUserPassword, useDeleteUser } from "@/hooks/useUserManagement";
 import { useAuth } from "@/hooks/useAuth";
+import { EditUserDialog } from "./EditUserDialog";
 
 interface UserActionsDropdownProps {
   userId: string;
   userEmail: string;
+  userName: string | null;
   isAdmin: boolean;
 }
 
-export function UserActionsDropdown({ userId, userEmail, isAdmin }: UserActionsDropdownProps) {
+export function UserActionsDropdown({ userId, userEmail, userName, isAdmin }: UserActionsDropdownProps) {
   const { user } = useAuth();
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
-    type: "grant" | "revoke" | "reset" | null;
+    type: "grant" | "revoke" | "reset" | "delete" | null;
   }>({ open: false, type: null });
+  const [editOpen, setEditOpen] = useState(false);
 
   const grantAdmin = useGrantAdminRole();
   const revokeAdmin = useRevokeAdminRole();
   const resetPassword = useResetUserPassword();
+  const deleteUser = useDeleteUser();
 
   const isCurrentUser = user?.id === userId;
 
@@ -47,6 +51,8 @@ export function UserActionsDropdown({ userId, userEmail, isAdmin }: UserActionsD
       revokeAdmin.mutate(userId);
     } else if (confirmDialog.type === "reset") {
       resetPassword.mutate(userEmail);
+    } else if (confirmDialog.type === "delete") {
+      deleteUser.mutate(userId);
     }
     setConfirmDialog({ open: false, type: null });
   };
@@ -56,17 +62,22 @@ export function UserActionsDropdown({ userId, userEmail, isAdmin }: UserActionsD
       case "grant":
         return {
           title: "Conceder permissão de administrador",
-          description: `Tem certeza que deseja tornar ${userEmail} um administrador? Este usuário terá acesso total ao sistema.`,
+          description: `Tem certeza que deseja tornar ${userEmail} um administrador?`,
         };
       case "revoke":
         return {
           title: "Remover permissão de administrador",
-          description: `Tem certeza que deseja remover as permissões de administrador de ${userEmail}? Este usuário perderá acesso ao painel administrativo.`,
+          description: `Tem certeza que deseja remover as permissões de administrador de ${userEmail}?`,
         };
       case "reset":
         return {
           title: "Resetar senha do usuário",
           description: `Um email será enviado para ${userEmail} com instruções para redefinir a senha.`,
+        };
+      case "delete":
+        return {
+          title: "Excluir usuário",
+          description: `Tem certeza que deseja excluir ${userEmail}? Esta ação não pode ser desfeita.`,
         };
       default:
         return { title: "", description: "" };
@@ -83,6 +94,11 @@ export function UserActionsDropdown({ userId, userEmail, isAdmin }: UserActionsD
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onClick={() => setEditOpen(true)} className="cursor-pointer">
+            <Pencil className="mr-2 h-4 w-4" />
+            Editar Perfil
+          </DropdownMenuItem>
+
           {!isAdmin && (
             <DropdownMenuItem
               onClick={() => setConfirmDialog({ open: true, type: "grant" })}
@@ -92,7 +108,7 @@ export function UserActionsDropdown({ userId, userEmail, isAdmin }: UserActionsD
               Tornar Admin
             </DropdownMenuItem>
           )}
-          
+
           {isAdmin && !isCurrentUser && (
             <DropdownMenuItem
               onClick={() => setConfirmDialog({ open: true, type: "revoke" })}
@@ -109,9 +125,9 @@ export function UserActionsDropdown({ userId, userEmail, isAdmin }: UserActionsD
               Remover Admin (você)
             </DropdownMenuItem>
           )}
-          
+
           <DropdownMenuSeparator />
-          
+
           <DropdownMenuItem
             onClick={() => setConfirmDialog({ open: true, type: "reset" })}
             className="cursor-pointer"
@@ -119,30 +135,40 @@ export function UserActionsDropdown({ userId, userEmail, isAdmin }: UserActionsD
             <KeyRound className="mr-2 h-4 w-4" />
             Resetar Senha
           </DropdownMenuItem>
-          
-          <DropdownMenuItem className="cursor-pointer">
-            <Eye className="mr-2 h-4 w-4" />
-            Ver Perfil
-          </DropdownMenuItem>
+
+          {!isCurrentUser && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setConfirmDialog({ open: true, type: "delete" })}
+                className="cursor-pointer text-destructive focus:text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Excluir Usuário
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog({ open, type: null })}>
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog({ open, type: open ? confirmDialog.type : null })}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{getDialogContent().title}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {getDialogContent().description}
-            </AlertDialogDescription>
+            <AlertDialogDescription>{getDialogContent().description}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirm}>
-              Confirmar
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleConfirm}>Confirmar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <EditUserDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        user={userId ? { id: userId, email: userEmail, full_name: userName } : null}
+      />
     </>
   );
 }
