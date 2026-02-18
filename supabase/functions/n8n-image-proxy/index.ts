@@ -6,15 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -24,65 +15,29 @@ Deno.serve(async (req) => {
     const body = await req.json();
     console.log("📤 Forwarding to N8N:", JSON.stringify(body));
 
-    const response = await fetch(N8N_WEBHOOK_URL, {
+    // Fire-and-forget: send to N8N but don't wait for image response
+    // N8N will save the image directly to Supabase storage and update the course record
+    fetch(N8N_WEBHOOK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+    }).then(response => {
+      console.log("📥 N8N response status:", response.status);
+      if (!response.ok) {
+        console.error("❌ N8N returned error:", response.status);
+      } else {
+        console.log("✅ N8N accepted the request successfully");
+      }
+    }).catch(error => {
+      console.error("❌ Error sending to N8N:", error.message);
     });
 
-    console.log("📥 N8N response status:", response.status);
-    const contentType = response.headers.get("content-type") || "";
-    console.log("📥 N8N content-type:", contentType);
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error("❌ N8N returned error:", response.status, errorBody);
-      return new Response(JSON.stringify({ 
-        error: "Erro no serviço de geração de imagem (N8N)", 
-        details: errorBody,
-        n8nStatus: response.status 
-      }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // If N8N returns binary image data directly
-    if (contentType.startsWith("image/")) {
-      console.log("🖼️ N8N returned binary image, converting to base64...");
-      const buffer = await response.arrayBuffer();
-      const base64 = arrayBufferToBase64(buffer);
-      const dataUri = `data:${contentType.split(";")[0]};base64,${base64}`;
-      return new Response(JSON.stringify({ imageUrl: dataUri }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Otherwise treat as JSON
-    const data = await response.json();
-    console.log("📥 N8N JSON response keys:", Object.keys(data));
-    console.log("📥 N8N imageUrl starts with:", data?.imageUrl?.substring?.(0, 80));
-
-    // Detect N8N expression not evaluated (literal template string)
-    if (data?.imageUrl && (data.imageUrl.includes("$binary") || data.imageUrl.includes("{{") || data.imageUrl.includes("}}"))) {
-      console.error("❌ N8N expression not evaluated! Received literal:", data.imageUrl);
-      return new Response(JSON.stringify({ 
-        error: "O N8N não avaliou a expressão. Ative o modo Expressão (ícone {}) no campo Response Body do nó 'Respond to Webhook'.",
-        details: data.imageUrl
-      }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // If imageUrl is raw base64 (no data: prefix), add it
-    if (data?.imageUrl && !data.imageUrl.startsWith("data:") && !data.imageUrl.startsWith("http")) {
-      console.log("🔧 Raw base64 detected, adding data URI prefix...");
-      data.imageUrl = `data:image/png;base64,${data.imageUrl}`;
-    }
-
-    return new Response(JSON.stringify(data), {
+    // Return immediately - N8N will update the course record directly in the database
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: "Solicitação enviada. A imagem será gerada e salva automaticamente.",
+      courseId: body.courseId 
+    }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

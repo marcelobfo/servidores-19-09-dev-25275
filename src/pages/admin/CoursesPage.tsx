@@ -745,6 +745,7 @@ setEditingCourse(null);
                         <DialogTitle>Gerar Capa com IA</DialogTitle>
                       </DialogHeader>
                       <CourseImageGenerator
+                        courseId={editingCourse?.id}
                         courseName={formData.name}
                         areaName={areas.find(a => a.id === formData.area_id)?.name}
                         description={formData.brief_description.replace(/<[^>]*>/g, '')}
