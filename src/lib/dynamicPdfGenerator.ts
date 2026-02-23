@@ -1306,6 +1306,8 @@ export const getActiveTemplate = async (type: string): Promise<DocumentTemplate 
   const { supabase } = await import('@/integrations/supabase/client');
   
   try {
+    console.log(`📋 Fetching default template for type: ${type}`);
+    
     const { data, error } = await (supabase as any)
       .from('document_templates')
       .select('*')
@@ -1315,12 +1317,16 @@ export const getActiveTemplate = async (type: string): Promise<DocumentTemplate 
       .maybeSingle();
 
     if (error) {
-      console.error('Error fetching default template:', error);
+      console.error('❌ Error fetching default template:', error.message, error.details, error.hint);
+      // Don't return null yet - try fallback
     }
 
     if (data) {
+      console.log(`✅ Found default template: "${data.name}" (id: ${data.id})`);
       return parseTemplateData(data);
     }
+
+    console.log(`⚠️ No default template found for type: ${type}, trying any active template...`);
 
     // Try to get any active template if no default found
     const { data: anyTemplate, error: anyError } = await (supabase as any)
@@ -1328,19 +1334,24 @@ export const getActiveTemplate = async (type: string): Promise<DocumentTemplate 
       .select('*')
       .eq('type', type)
       .eq('is_active', true)
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (anyError) {
-      console.error('Error fetching any template:', anyError);
+      console.error('❌ Error fetching any template:', anyError.message, anyError.details);
       return null;
     }
 
-    if (!anyTemplate) return null;
+    if (!anyTemplate) {
+      console.log(`ℹ️ No active templates found for type: ${type}`);
+      return null;
+    }
     
+    console.log(`✅ Found fallback template: "${anyTemplate.name}" (id: ${anyTemplate.id})`);
     return parseTemplateData(anyTemplate);
   } catch (error) {
-    console.error('Error in getActiveTemplate:', error);
+    console.error('❌ Error in getActiveTemplate:', error);
     return null;
   }
 };
