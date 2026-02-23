@@ -899,9 +899,7 @@ const PreEnrollmentPage = () => {
                     <SelectContent className="z-50">
                       {organTypes.map((organType) => (
                         <SelectItem key={organType.id} value={organType.id}>
-                          {organType.name}{" "}
-                          {organType.is_federal &&
-                            `(${Math.round(organType.hours_multiplier * 100)}% da carga horária)`}
+                          {organType.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
