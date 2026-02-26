@@ -1045,6 +1045,11 @@ const calculateDaysBetween = (startDateStr: string, endDateStr: string): number 
       if (parts.length === 3) {
         return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
       }
+      // Parse YYYY-MM-DD locally to avoid UTC timezone issues
+      const dashParts = str.split('-');
+      if (dashParts.length === 3) {
+        return new Date(parseInt(dashParts[0]), parseInt(dashParts[1]) - 1, parseInt(dashParts[2]));
+      }
       return new Date(str);
     };
     const start = parseDate(startDateStr);
@@ -1063,7 +1068,13 @@ const addDaysToDate = (dateStr: string, days: number): string => {
     if (parts.length === 3) {
       date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
     } else {
-      date = new Date(dateStr);
+      // Parse YYYY-MM-DD locally to avoid UTC timezone issues
+      const dashParts = dateStr.split('-');
+      if (dashParts.length === 3) {
+        date = new Date(parseInt(dashParts[0]), parseInt(dashParts[1]) - 1, parseInt(dashParts[2]));
+      } else {
+        date = new Date(dateStr);
+      }
     }
     date.setDate(date.getDate() + days);
     return date.toLocaleDateString('pt-BR');
