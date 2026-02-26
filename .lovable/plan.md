@@ -1,94 +1,68 @@
 
 
-# Plano: Sistema Completo de Gerenciamento de Usuarios pelo Admin
+# Plano: Corrigir Datas nos Documentos + Atualizar/Regenerar + Admin Baixar Todos
 
-## Problemas Identificados
-
-1. **Botao "Convidar Usuario" nao faz nada** -- e apenas visual, sem logica
-2. **Nao existe funcionalidade de excluir usuario**
-3. **Nao existe funcionalidade de editar perfil pelo admin**
-4. **Convite de usuario requer uma Edge Function** -- o Supabase Auth nao permite criar usuarios pelo client-side com `supabase.auth.admin`; isso so funciona com a `service_role_key` no servidor
+## Problema
+As datas nos documentos PDF estao sendo geradas com 1 dia a menos. Causa raiz: `new Date("2026-01-12")` interpreta a string como UTC, e `toLocaleDateString('pt-BR')` converte para fuso local (UTC-3), resultando no dia anterior.
 
 ## Solucao
 
-### 1. Edge Function: `admin-invite-user`
+### 1. Corrigir parsing de datas (causa raiz)
 
-Criar uma nova Edge Function que usa a `service_role_key` para:
-- **Convidar usuario por email** (cria conta + envia email de convite)
-- **Excluir usuario** (remove de `auth.users`, cascata para `profiles` e `user_roles`)
+**`src/lib/pdfGenerator.ts`** -- linhas 43-51 e 145-153:
+Substituir `new Date(dateStr)` por parsing manual que evita conversao UTC:
+```typescript
+const formatDateForPreview = (dateStr?: string): string => {
+  if (!dateStr) return 'a definir';
+  try {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    if (year && month && day) {
+      return new Date(year, month - 1, day).toLocaleDateString('pt-BR');
+    }
+    return new Date(dateStr).toLocaleDateString('pt-BR');
+  } catch { return dateStr; }
+};
+```
+Aplicar mesma logica em `formatDate` (linha 145).
 
-A funcao valida que o chamador e admin antes de executar qualquer acao.
-
-Acoes suportadas:
-- `invite` -- recebe email, nome, e role opcional; cria o usuario via `supabase.auth.admin.createUser` com `email_confirm: false` (envia convite)
-- `delete` -- recebe userId; remove via `supabase.auth.admin.deleteUser`
-
-### 2. Hook `useUserManagement.tsx` -- Novos Hooks
-
-Adicionar:
-- `useInviteUser` -- chama a edge function com acao `invite`
-- `useDeleteUser` -- chama a edge function com acao `delete`
-- `useUpdateUserProfile` -- atualiza nome, email e whatsapp na tabela `profiles` diretamente (admin ja tem permissao via RLS)
-
-### 3. Modal de Convite de Usuario
-
-Criar componente `InviteUserDialog` com formulario:
-- Email (obrigatorio)
-- Nome completo (obrigatorio)
-- Role inicial (admin ou aluno, padrao: aluno)
-
-Acionado pelo botao "Convidar Usuario" ja existente na pagina.
-
-### 4. Atualizar `UserActionsDropdown`
-
-Adicionar novas opcoes ao menu de acoes:
-- **Editar Perfil** -- abre dialog para editar nome/email
-- **Excluir Usuario** -- com confirmacao, chama edge function
-
-### 5. Atualizar `UsersManagementPage`
-
-- Conectar o botao "Convidar Usuario" ao novo dialog
-- Passar callbacks necessarios aos componentes filhos
-
----
-
-## Detalhes Tecnicos
-
-### Edge Function `admin-invite-user`
-
-```text
-POST /admin-invite-user
-Headers: Authorization: Bearer <user_token>
-Body: { action: "invite" | "delete", email?, fullName?, role?, userId? }
+**`src/pages/student/DocumentsPage.tsx`** -- linha 240-242:
+Substituir `new Date(enrollment.enrollment_date)` e `toISOString().split('T')[0]`:
+```typescript
+const [y, m, d] = enrollment.enrollment_date.split('-').map(Number);
+const endDateObj = new Date(y, m - 1, d);
+endDateObj.setDate(endDateObj.getDate() + preEnrollment.courses.duration_days);
+const ey = endDateObj.getFullYear();
+const em = String(endDateObj.getMonth() + 1).padStart(2, '0');
+const ed = String(endDateObj.getDate()).padStart(2, '0');
+endDate = `${ey}-${em}-${ed}`;
 ```
 
-Fluxo:
-1. Extrai token JWT do header
-2. Verifica se o usuario e admin via `has_role`
-3. Executa acao com `supabase.auth.admin.*` usando `service_role_key`
-4. Para `invite`: cria usuario + insere na `user_roles` se role = admin
-5. Para `delete`: impede auto-exclusao, remove usuario
+**`src/lib/dynamicPdfGenerator.ts`** -- linha 1066:
+Na funcao `addDaysToDate`, o fallback `new Date(dateStr)` tambem precisa do parsing local.
 
-### Arquivos a Criar
+### 2. Botao "Atualizar e Regenerar" para alunos
 
-| Arquivo | Descricao |
-|---------|-----------|
-| `supabase/functions/admin-invite-user/index.ts` | Edge function para invite/delete |
-| `src/components/admin/InviteUserDialog.tsx` | Modal de convite |
-| `src/components/admin/EditUserDialog.tsx` | Modal de edicao de perfil |
+**`src/pages/student/DocumentsPage.tsx`**:
+- Adicionar funcao `handleRegenerateDocuments` que deleta documentos existentes (declarations + study_plans) e re-invoca a edge function `generate-enrollment-documents`, forcando regeneracao com dados atualizados.
+- Adicionar botao "Atualizar Documentos" (icone RefreshCw) ao lado de "Gerar Documentos".
 
-### Arquivos a Modificar
+**`supabase/sql/fix_documents_rls_delete.sql`**:
+- Criar politica RLS de DELETE para que usuarios autenticados possam deletar seus proprios documentos (via pre_enrollment_id -> user_id).
+
+### 3. Admin: Baixar todos os documentos do usuario
+
+**`src/pages/admin/EnrollmentsPage.tsx`**:
+- Adicionar botao "Baixar Todos Documentos" no dialog de detalhes da pre-matricula.
+- Funcao `handleDownloadAllDocuments(enrollment)` que gera sequencialmente: Declaracao + Plano de Estudos + Orcamento (se template existir), baixando cada um.
+- Usar a mesma logica de `handleDownloadStudyPlan` e `handleDownloadDeclaration` ja existentes, agrupando em uma unica acao.
+
+## Arquivos a Modificar
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/hooks/useUserManagement.tsx` | Adicionar `useInviteUser`, `useDeleteUser`, `useUpdateUserProfile` |
-| `src/components/admin/UserActionsDropdown.tsx` | Adicionar opcoes "Editar" e "Excluir" |
-| `src/pages/admin/UsersManagementPage.tsx` | Conectar botao "Convidar" ao dialog |
-
-### Seguranca
-
-- A edge function valida o papel de admin no servidor usando `has_role` antes de qualquer operacao
-- Nenhuma credencial administrativa e exposta ao client
-- Auto-exclusao e bloqueada
-- Auto-remocao de admin e bloqueada (ja implementado no dropdown)
+| `src/lib/pdfGenerator.ts` | Fix `formatDateForPreview` e `formatDate` com parsing local |
+| `src/lib/dynamicPdfGenerator.ts` | Fix `addDaysToDate` fallback |
+| `src/pages/student/DocumentsPage.tsx` | Fix calculo endDate + botao regenerar |
+| `src/pages/admin/EnrollmentsPage.tsx` | Botao "Baixar Todos Documentos" |
+| `supabase/sql/fix_documents_rls_delete.sql` | RLS para DELETE em declarations e study_plans |
 
