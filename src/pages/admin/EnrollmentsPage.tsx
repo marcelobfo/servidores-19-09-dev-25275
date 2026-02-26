@@ -148,7 +148,7 @@ const EnrollmentsPage = () => {
         .from("pre_enrollments")
         .select(`
           *,
-          courses (name, duration_hours, pre_enrollment_fee),
+          courses (name, duration_hours, pre_enrollment_fee, enrollment_fee, start_date, end_date, modules, description),
           payments!payments_pre_enrollment_id_fkey (status, kind)
         `)
         .order("created_at", { ascending: false });
