@@ -1005,7 +1005,10 @@ const renderCronogramaTable = (
     modules.forEach((module, index) => {
       // Calculate date range for this module
       const moduleStartDate = addDaysToDate(data.start_date, index * daysPerModule);
-      const moduleEndDate = addDaysToDate(data.start_date, (index + 1) * daysPerModule - 1);
+      // Last module must end exactly on the end_date to avoid rounding issues
+      const moduleEndDate = index === modules.length - 1 
+        ? data.end_date 
+        : addDaysToDate(data.start_date, (index + 1) * daysPerModule - 1);
       
       const dateRange = `${moduleStartDate} a ${moduleEndDate}`;
       const moduleName = module.name.toUpperCase();
