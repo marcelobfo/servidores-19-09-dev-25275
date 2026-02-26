@@ -877,7 +877,8 @@ const EnrollmentsPage = () => {
                             </div>
                           )}
 
-                          {/* Documentos - sempre visíveis para o admin */}
+                          {/* Documentos - visíveis apenas para pré-matrículas aprovadas (manual ou pagamento confirmado) */}
+                          {(selectedEnrollment.status === 'approved' || selectedEnrollment.status === 'payment_confirmed' || selectedEnrollment.manual_approval) && (
                           <div className="space-y-2 pt-2 border-t">
                             <p className="text-xs text-muted-foreground font-medium">Documentos do Aluno</p>
                             <Button 
@@ -907,6 +908,7 @@ const EnrollmentsPage = () => {
                               {downloadingAll.has(selectedEnrollment.id) ? 'Baixando...' : '📦 Baixar Todos Documentos'}
                             </Button>
                           </div>
+                          )}
                         </div>
                       )}
                     </DialogContent>
