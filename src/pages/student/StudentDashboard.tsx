@@ -21,6 +21,8 @@ interface PreEnrollment {
   organization?: string;
   email?: string;
   phone?: string;
+  license_start_date?: string;
+  license_end_date?: string;
   organ_approval_status?: string;
   organ_approval_date?: string;
   organ_approval_notes?: string;
@@ -72,6 +74,8 @@ export default function StudentDashboard() {
           organ_approval_date,
           organ_approval_notes,
           organ_approval_confirmed,
+          license_start_date,
+          license_end_date,
           courses (
             name,
             brief_description,
@@ -377,12 +381,14 @@ export default function StudentDashboard() {
         organization: enrollment.organization,
         email: enrollment.email,
         phone: enrollment.phone,
+        license_start_date: enrollment.license_start_date,
+        license_end_date: enrollment.license_end_date,
         course: {
           name: enrollment.courses.name,
           description: enrollment.courses.description,
           duration_hours: enrollment.courses.duration_hours,
-          start_date: enrollment.courses.start_date || '',
-          end_date: enrollment.courses.end_date || '',
+          start_date: enrollment.license_start_date || enrollment.courses.start_date || '',
+          end_date: enrollment.license_end_date || enrollment.courses.end_date || '',
           modules: enrollment.courses.modules,
         }
       };

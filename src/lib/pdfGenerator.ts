@@ -36,6 +36,8 @@ interface PreEnrollment {
   organization?: string;
   phone?: string;
   email?: string;
+  license_start_date?: string;
+  license_end_date?: string;
   course: Course;
 }
 
@@ -96,8 +98,8 @@ const preparePreviewData = (enrollment: PreEnrollment, settings: SystemSettings,
     course_hours: enrollment.course.duration_hours,
     effective_hours: effectiveHours,
     weekly_hours: enrollment.course.weekly_hours || 30, // NEW: Include weekly hours
-    start_date: formatDateForPreview(enrollment.course.start_date),
-    end_date: formatDateForPreview(enrollment.course.end_date),
+    start_date: formatDateForPreview(enrollment.license_start_date || enrollment.course.start_date),
+    end_date: formatDateForPreview(enrollment.license_end_date || enrollment.course.end_date),
     current_date: formattedCurrentDate,
     enrollment_fee: formatCurrency(enrollment.course.enrollment_fee || 0),
     pre_enrollment_credit: extraData?.preEnrollmentCredit || '0,00',
@@ -296,8 +298,8 @@ export const generateEnrollmentDeclaration = async (
   pdf.setFont('helvetica', 'normal');
 
   const effectiveHours = enrollment.course.effective_hours || enrollment.course.duration_hours || 390;
-  const startDate = formatDate(enrollment.course.start_date);
-  const endDate = formatDate(enrollment.course.end_date);
+  const startDate = formatDate(enrollment.license_start_date || enrollment.course.start_date);
+  const endDate = formatDate(enrollment.license_end_date || enrollment.course.end_date);
   const orgText = enrollment.organization ? `, ${enrollment.organization}` : '';
   
   const declarationText = `Declaramos que ${enrollment.full_name.toUpperCase()}, CPF: ${formatCPF(enrollment.cpf || '')}${orgText}, está matriculada no curso de ${enrollment.course.name}. O curso será iniciado em ${startDate} com término previsto para ${endDate} e será realizado de forma não presencial, on-line com carga Horária de ${effectiveHours} horas e estará sob a supervisão de um tutor qualificado.`;
@@ -411,8 +413,8 @@ export const generateStudyPlan = async (
   pdf.text(`${effectiveHours} horas`, 51, yPosition);
   
   yPosition += 6;
-  const startDate = formatDate(enrollment.course.start_date);
-  const endDate = formatDate(enrollment.course.end_date);
+  const startDate = formatDate(enrollment.license_start_date || enrollment.course.start_date);
+  const endDate = formatDate(enrollment.license_end_date || enrollment.course.end_date);
   pdf.setFont('helvetica', 'bold');
   pdf.text('Período: ', 20, yPosition);
   pdf.setFont('helvetica', 'normal');
@@ -537,9 +539,9 @@ export const generateStudyPlan = async (
   pdf.setFont('helvetica', 'normal');
   
   // Generate cronograma rows based on modules and dates
-  if (enrollment.course.start_date && enrollment.course.end_date && modules.length > 0) {
-    const startDateObj = new Date(enrollment.course.start_date);
-    const endDateObj = new Date(enrollment.course.end_date);
+  if ((enrollment.license_start_date || enrollment.course.start_date) && (enrollment.license_end_date || enrollment.course.end_date) && modules.length > 0) {
+    const startDateObj = new Date(enrollment.license_start_date || enrollment.course.start_date!);
+    const endDateObj = new Date(enrollment.license_end_date || enrollment.course.end_date!);
     const totalDays = Math.ceil((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24));
     const daysPerModule = Math.floor(totalDays / modules.length);
     
@@ -735,8 +737,8 @@ export const generateQuote = async (
   pdf.text(`${effectiveHours} horas`, 51, yPosition);
   
   yPosition += 6;
-  const startDate = formatDate(enrollment.course.start_date);
-  const endDate = formatDate(enrollment.course.end_date);
+  const startDate = formatDate(enrollment.license_start_date || enrollment.course.start_date);
+  const endDate = formatDate(enrollment.license_end_date || enrollment.course.end_date);
   pdf.setFont('helvetica', 'bold');
   pdf.text('Período: ', 20, yPosition);
   pdf.setFont('helvetica', 'normal');

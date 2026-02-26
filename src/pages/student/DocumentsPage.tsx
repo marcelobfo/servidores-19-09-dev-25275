@@ -309,11 +309,13 @@ export function DocumentsPage() {
       organization: preEnrollment.organization,
       phone: preEnrollment.phone,
       email: preEnrollment.email,
+      license_start_date: enrollmentData.license_start_date,
+      license_end_date: enrollmentData.license_end_date,
       course: {
         name: preEnrollment.courses.name,
         duration_hours: preEnrollment.courses.duration_hours,
         effective_hours: effectiveHours,
-        weekly_hours: weeklyHours, // NEW: Include weekly hours from organ_type
+        weekly_hours: weeklyHours,
         start_date: startDate,
         end_date: endDate,
         modules: preEnrollment.courses.modules,
