@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Copy, CheckCircle, Clock, X, CreditCard, Mail, ExternalLink, Loader2 } from "lucide-react";
+import { Copy, CheckCircle, Clock, X, CreditCard, Mail, ExternalLink, Loader2, QrCode } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -47,6 +47,7 @@ export function PaymentModal({
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showQrCode, setShowQrCode] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [studentEmail, setStudentEmail] = useState<string>("");
@@ -375,6 +376,28 @@ export function PaymentModal({
                     {copied ? <CheckCircle className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
                     {copied ? "Copiado!" : "Copiar Código PIX"}
                   </Button>
+                  
+                  {paymentData.pix_qr_code && (
+                    <div className="space-y-3 mt-3">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setShowQrCode(!showQrCode)} 
+                        className="w-full"
+                      >
+                        <QrCode className="h-4 w-4 mr-2" />
+                        {showQrCode ? "Ocultar QR Code" : "Mostrar QR Code"}
+                      </Button>
+                      {showQrCode && (
+                        <div className="flex justify-center p-4 bg-white rounded-lg border">
+                          <img 
+                            src={`data:image/png;base64,${paymentData.pix_qr_code}`} 
+                            alt="QR Code PIX" 
+                            className="w-48 h-48"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               
