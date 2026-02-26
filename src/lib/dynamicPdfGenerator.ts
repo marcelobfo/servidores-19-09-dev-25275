@@ -959,35 +959,43 @@ const renderCronogramaTable = (
     // If no modules, show a single row with the course name
     xPos = startX;
     const dateText = `${data.start_date} a ${data.end_date}`;
+    const courseName = (data.course_name || 'Curso').toUpperCase();
     
-    // Draw cells
-    pdf.rect(xPos, yPosition, colWidths[0], rowHeight);
-    pdf.text(dateText, xPos + colWidths[0] / 2, yPosition + rowHeight / 2, { align: 'center' });
+    // Calculate dynamic font size and row height for full name
+    const actFontSize = courseName.length > 50 ? 4.5 : courseName.length > 35 ? 5 : 6;
+    pdf.setFontSize(actFontSize);
+    const actLines = pdf.splitTextToSize(courseName, colWidths[3] - 4);
+    const actRowHeight = Math.max(rowHeight, actLines.length * (actFontSize * 0.6) + 4);
+    pdf.setFontSize(6);
+    
+    // Draw cells with dynamic height
+    pdf.rect(xPos, yPosition, colWidths[0], actRowHeight);
+    pdf.text(dateText, xPos + colWidths[0] / 2, yPosition + actRowHeight / 2, { align: 'center' });
     xPos += colWidths[0];
     
-    // Horário - multiline
-    pdf.rect(xPos, yPosition, colWidths[1], rowHeight);
-    pdf.text(horarioLine1, xPos + colWidths[1] / 2, yPosition + 3, { align: 'center' });
-    pdf.text(horarioLine2, xPos + colWidths[1] / 2, yPosition + 7, { align: 'center' });
+    pdf.rect(xPos, yPosition, colWidths[1], actRowHeight);
+    pdf.text(horarioLine1, xPos + colWidths[1] / 2, yPosition + actRowHeight / 2 - 2, { align: 'center' });
+    pdf.text(horarioLine2, xPos + colWidths[1] / 2, yPosition + actRowHeight / 2 + 2, { align: 'center' });
     xPos += colWidths[1];
     
-    // CH Semanal
-    pdf.rect(xPos, yPosition, colWidths[2], rowHeight);
-    pdf.text(weeklyHours.toString(), xPos + colWidths[2] / 2, yPosition + rowHeight / 2, { align: 'center' });
+    pdf.rect(xPos, yPosition, colWidths[2], actRowHeight);
+    pdf.text(weeklyHours.toString(), xPos + colWidths[2] / 2, yPosition + actRowHeight / 2, { align: 'center' });
     xPos += colWidths[2];
     
-    // Atividade
-    pdf.rect(xPos, yPosition, colWidths[3], rowHeight);
-    const courseName = (data.course_name || 'Curso').toUpperCase();
-    const truncatedCourse = courseName.length > 40 ? courseName.substring(0, 37) + '...' : courseName;
-    pdf.text(truncatedCourse, xPos + colWidths[3] / 2, yPosition + rowHeight / 2, { align: 'center' });
+    // Atividade - full name with auto-sizing
+    pdf.rect(xPos, yPosition, colWidths[3], actRowHeight);
+    pdf.setFontSize(actFontSize);
+    const actTextY = yPosition + (actRowHeight - actLines.length * (actFontSize * 0.6)) / 2 + actFontSize * 0.5;
+    actLines.forEach((line: string, li: number) => {
+      pdf.text(line, xPos + colWidths[3] / 2, actTextY + li * (actFontSize * 0.6), { align: 'center' });
+    });
+    pdf.setFontSize(6);
     xPos += colWidths[3];
     
-    // Local
-    pdf.rect(xPos, yPosition, colWidths[4], rowHeight);
-    pdf.text(localText, xPos + colWidths[4] / 2, yPosition + rowHeight / 2, { align: 'center' });
+    pdf.rect(xPos, yPosition, colWidths[4], actRowHeight);
+    pdf.text(localText, xPos + colWidths[4] / 2, yPosition + actRowHeight / 2, { align: 'center' });
     
-    yPosition += rowHeight;
+    yPosition += actRowHeight;
   } else {
     // Calculate date ranges for each module
     const totalDays = data.start_date && data.end_date ? 
@@ -1001,36 +1009,47 @@ const renderCronogramaTable = (
       
       const dateRange = `${moduleStartDate} a ${moduleEndDate}`;
       const moduleName = module.name.toUpperCase();
-      const truncatedModule = moduleName.length > 40 ? moduleName.substring(0, 37) + '...' : moduleName;
+      
+      // Calculate dynamic font size and row height for full module name
+      const modFontSize = moduleName.length > 50 ? 4.5 : moduleName.length > 35 ? 5 : 6;
+      pdf.setFontSize(modFontSize);
+      const modLines = pdf.splitTextToSize(moduleName, colWidths[3] - 4);
+      const modRowHeight = Math.max(rowHeight, modLines.length * (modFontSize * 0.6) + 4);
+      pdf.setFontSize(6);
       
       xPos = startX;
       
       // Data
-      pdf.rect(xPos, yPosition, colWidths[0], rowHeight);
-      pdf.text(dateRange, xPos + colWidths[0] / 2, yPosition + rowHeight / 2, { align: 'center' });
+      pdf.rect(xPos, yPosition, colWidths[0], modRowHeight);
+      pdf.text(dateRange, xPos + colWidths[0] / 2, yPosition + modRowHeight / 2, { align: 'center' });
       xPos += colWidths[0];
       
       // Horário - multiline
-      pdf.rect(xPos, yPosition, colWidths[1], rowHeight);
-      pdf.text(horarioLine1, xPos + colWidths[1] / 2, yPosition + 3, { align: 'center' });
-      pdf.text(horarioLine2, xPos + colWidths[1] / 2, yPosition + 7, { align: 'center' });
+      pdf.rect(xPos, yPosition, colWidths[1], modRowHeight);
+      pdf.text(horarioLine1, xPos + colWidths[1] / 2, yPosition + modRowHeight / 2 - 2, { align: 'center' });
+      pdf.text(horarioLine2, xPos + colWidths[1] / 2, yPosition + modRowHeight / 2 + 2, { align: 'center' });
       xPos += colWidths[1];
       
       // CH Semanal
-      pdf.rect(xPos, yPosition, colWidths[2], rowHeight);
-      pdf.text(weeklyHours.toString(), xPos + colWidths[2] / 2, yPosition + rowHeight / 2, { align: 'center' });
+      pdf.rect(xPos, yPosition, colWidths[2], modRowHeight);
+      pdf.text(weeklyHours.toString(), xPos + colWidths[2] / 2, yPosition + modRowHeight / 2, { align: 'center' });
       xPos += colWidths[2];
       
-      // Atividade
-      pdf.rect(xPos, yPosition, colWidths[3], rowHeight);
-      pdf.text(truncatedModule, xPos + colWidths[3] / 2, yPosition + rowHeight / 2, { align: 'center' });
+      // Atividade - full name with auto-sizing
+      pdf.rect(xPos, yPosition, colWidths[3], modRowHeight);
+      pdf.setFontSize(modFontSize);
+      const modTextY = yPosition + (modRowHeight - modLines.length * (modFontSize * 0.6)) / 2 + modFontSize * 0.5;
+      modLines.forEach((line: string, li: number) => {
+        pdf.text(line, xPos + colWidths[3] / 2, modTextY + li * (modFontSize * 0.6), { align: 'center' });
+      });
+      pdf.setFontSize(6);
       xPos += colWidths[3];
       
       // Local
-      pdf.rect(xPos, yPosition, colWidths[4], rowHeight);
-      pdf.text(localText, xPos + colWidths[4] / 2, yPosition + rowHeight / 2, { align: 'center' });
+      pdf.rect(xPos, yPosition, colWidths[4], modRowHeight);
+      pdf.text(localText, xPos + colWidths[4] / 2, yPosition + modRowHeight / 2, { align: 'center' });
       
-      yPosition += rowHeight;
+      yPosition += modRowHeight;
     });
   }
   
