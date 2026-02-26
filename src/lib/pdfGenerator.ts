@@ -43,8 +43,11 @@ interface PreEnrollment {
 const formatDateForPreview = (dateStr?: string): string => {
   if (!dateStr) return 'a definir';
   try {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('pt-BR');
+    const [year, month, day] = dateStr.split('-').map(Number);
+    if (year && month && day) {
+      return new Date(year, month - 1, day).toLocaleDateString('pt-BR');
+    }
+    return new Date(dateStr).toLocaleDateString('pt-BR');
   } catch {
     return dateStr;
   }
@@ -145,8 +148,11 @@ const formatCPF = (cpf: string): string => {
 const formatDate = (dateStr?: string): string => {
   if (!dateStr) return 'a definir';
   try {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('pt-BR');
+    const [year, month, day] = dateStr.split('-').map(Number);
+    if (year && month && day) {
+      return new Date(year, month - 1, day).toLocaleDateString('pt-BR');
+    }
+    return new Date(dateStr).toLocaleDateString('pt-BR');
   } catch {
     return dateStr;
   }

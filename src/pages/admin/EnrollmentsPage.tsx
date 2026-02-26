@@ -66,6 +66,7 @@ const EnrollmentsPage = () => {
   const [downloadingDeclarations, setDownloadingDeclarations] = useState<Set<string>>(new Set());
   const [downloadingPlans, setDownloadingPlans] = useState<Set<string>>(new Set());
   const [generatingCertificates, setGeneratingCertificates] = useState<Set<string>>(new Set());
+  const [downloadingAll, setDownloadingAll] = useState<Set<string>>(new Set());
   const [settings, setSettings] = useState<any>(null);
   
   // Additional filter states
@@ -524,6 +525,60 @@ const EnrollmentsPage = () => {
     }
   };
 
+  const handleDownloadAllDocuments = async (enrollment: PreEnrollment) => {
+    setDownloadingAll(prev => new Set([...prev, enrollment.id]));
+    try {
+      if (!settings) throw new Error('Configurações do sistema não encontradas');
+
+      const enrollmentData = {
+        ...enrollment,
+        course: {
+          name: enrollment.courses?.name || '',
+          duration_hours: enrollment.courses?.duration_hours || 0,
+          start_date: enrollment.courses?.start_date || '',
+          end_date: enrollment.courses?.end_date || '',
+          modules: enrollment.courses?.modules,
+          description: enrollment.courses?.description,
+          pre_enrollment_fee: enrollment.courses?.pre_enrollment_fee,
+          enrollment_fee: enrollment.courses?.enrollment_fee,
+        }
+      };
+
+      const downloadBlob = (blob: Blob, filename: string) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      };
+
+      // Declaration
+      try {
+        const declBlob = await generateEnrollmentDeclaration(enrollmentData, settings);
+        downloadBlob(declBlob, `declaracao-${enrollment.full_name.replace(/\s+/g, '-')}.pdf`);
+      } catch (e) { console.error('Erro declaração:', e); }
+
+      // Study Plan
+      try {
+        const planBlob = await generateStudyPlan(enrollmentData, settings);
+        downloadBlob(planBlob, `plano-estudos-${enrollment.full_name.replace(/\s+/g, '-')}.pdf`);
+      } catch (e) { console.error('Erro plano:', e); }
+
+      toast({ title: 'Sucesso', description: 'Documentos baixados com sucesso!' });
+    } catch (error: any) {
+      toast({ title: 'Erro', description: error.message || 'Falha ao baixar documentos', variant: 'destructive' });
+    } finally {
+      setDownloadingAll(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(enrollment.id);
+        return newSet;
+      });
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       pending: { label: "Pendente", variant: "secondary" as const },
@@ -826,6 +881,15 @@ const EnrollmentsPage = () => {
                 >
                   <Download className="h-4 w-4 mr-2" />
                   {downloadingDeclarations.has(selectedEnrollment.id) ? 'Gerando...' : 'Download Declaração de Matrícula'}
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => handleDownloadAllDocuments(selectedEnrollment)}
+                  className="w-full"
+                  disabled={downloadingAll.has(selectedEnrollment.id)}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  {downloadingAll.has(selectedEnrollment.id) ? 'Baixando...' : '📦 Baixar Todos Documentos'}
                 </Button>
                             </div>
                           )}

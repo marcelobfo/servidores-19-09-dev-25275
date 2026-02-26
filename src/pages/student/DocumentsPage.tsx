@@ -187,6 +187,60 @@ export function DocumentsPage() {
     }
   };
 
+  const handleRegenerateDocuments = async () => {
+    setGenerating(true);
+    try {
+      const { data: preEnrollments, error: preError } = await supabase
+        .from('pre_enrollments')
+        .select('id')
+        .eq('user_id', user?.id)
+        .eq('status', 'approved');
+
+      if (preError) throw preError;
+      if (!preEnrollments?.length) {
+        toast.error('Não há pré-matrículas aprovadas para atualizar documentos');
+        return;
+      }
+
+      let updatedCount = 0;
+      for (const preEnrollment of preEnrollments) {
+        // Delete existing documents
+        await supabase
+          .from('enrollment_declarations')
+          .delete()
+          .eq('pre_enrollment_id', preEnrollment.id);
+
+        await supabase
+          .from('study_plans')
+          .delete()
+          .eq('pre_enrollment_id', preEnrollment.id);
+
+        // Regenerate
+        const { error } = await supabase.functions.invoke('generate-enrollment-documents', {
+          body: { preEnrollmentId: preEnrollment.id }
+        });
+
+        if (error) {
+          console.error('Error regenerating documents:', preEnrollment.id, error);
+        } else {
+          updatedCount++;
+        }
+      }
+
+      if (updatedCount > 0) {
+        toast.success(`${updatedCount} documento(s) atualizado(s) com sucesso!`);
+        setTimeout(() => fetchDocuments(), 1000);
+      } else {
+        toast.error('Erro ao atualizar documentos');
+      }
+    } catch (error: any) {
+      console.error('Error regenerating documents:', error);
+      toast.error('Erro ao atualizar documentos: ' + error.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   // Busca dados completos da pré-matrícula para gerar documento com template
   const fetchPreEnrollmentData = async (preEnrollmentId: string) => {
     const { data: preEnrollment, error } = await supabase
@@ -237,9 +291,13 @@ export function DocumentsPage() {
     let endDate: string | undefined;
     if (enrollment?.enrollment_date && preEnrollment.courses.duration_days) {
       startDate = enrollment.enrollment_date;
-      const endDateObj = new Date(enrollment.enrollment_date);
+      const [y, m, d] = enrollment.enrollment_date.split('-').map(Number);
+      const endDateObj = new Date(y, m - 1, d);
       endDateObj.setDate(endDateObj.getDate() + preEnrollment.courses.duration_days);
-      endDate = endDateObj.toISOString().split('T')[0];
+      const ey = endDateObj.getFullYear();
+      const em = String(endDateObj.getMonth() + 1).padStart(2, '0');
+      const ed = String(endDateObj.getDate()).padStart(2, '0');
+      endDate = `${ey}-${em}-${ed}`;
     }
 
     const effectiveHours = enrollmentData.custom_hours || 
@@ -400,6 +458,15 @@ export function DocumentsPage() {
           className="whitespace-nowrap"
         >
           {generating ? "Gerando..." : "Gerar Documentos"}
+        </Button>
+        <Button
+          onClick={handleRegenerateDocuments}
+          disabled={generating}
+          variant="outline"
+          className="whitespace-nowrap"
+        >
+          <RefreshCw className="h-4 w-4 mr-1" />
+          {generating ? "Atualizando..." : "Atualizar Documentos"}
         </Button>
       </div>
 
