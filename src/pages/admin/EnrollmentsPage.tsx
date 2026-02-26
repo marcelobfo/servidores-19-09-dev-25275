@@ -866,33 +866,47 @@ const EnrollmentsPage = () => {
                           {selectedEnrollment.status === 'approved' && (
                             <div className="space-y-2">
                               <Button 
-                                onClick={() => handleDownloadStudyPlan(selectedEnrollment)}
+                                onClick={() => handleGenerateCertificate(selectedEnrollment)}
                                 className="w-full"
-                                disabled={downloadingPlans.has(selectedEnrollment.id)}
+                                variant="outline"
+                                disabled={generatingCertificates.has(selectedEnrollment.id)}
                               >
-                                <Download className="h-4 w-4 mr-2" />
-                                {downloadingPlans.has(selectedEnrollment.id) ? 'Gerando...' : 'Download Plano de Estudos'}
+                                <FileText className="h-4 w-4 mr-2" />
+                                {generatingCertificates.has(selectedEnrollment.id) ? 'Gerando...' : 'Gerar Certificado'}
                               </Button>
-                <Button 
-                  variant="secondary"
-                  onClick={() => handleDownloadDeclaration(selectedEnrollment)}
-                  className="w-full"
-                  disabled={downloadingDeclarations.has(selectedEnrollment.id)}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  {downloadingDeclarations.has(selectedEnrollment.id) ? 'Gerando...' : 'Download Declaração de Matrícula'}
-                </Button>
-                <Button 
-                  variant="outline"
-                  onClick={() => handleDownloadAllDocuments(selectedEnrollment)}
-                  className="w-full"
-                  disabled={downloadingAll.has(selectedEnrollment.id)}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  {downloadingAll.has(selectedEnrollment.id) ? 'Baixando...' : '📦 Baixar Todos Documentos'}
-                </Button>
                             </div>
                           )}
+
+                          {/* Documentos - sempre visíveis para o admin */}
+                          <div className="space-y-2 pt-2 border-t">
+                            <p className="text-xs text-muted-foreground font-medium">Documentos do Aluno</p>
+                            <Button 
+                              onClick={() => handleDownloadStudyPlan(selectedEnrollment)}
+                              className="w-full"
+                              disabled={downloadingPlans.has(selectedEnrollment.id)}
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              {downloadingPlans.has(selectedEnrollment.id) ? 'Gerando...' : 'Download Plano de Estudos'}
+                            </Button>
+                            <Button 
+                              variant="secondary"
+                              onClick={() => handleDownloadDeclaration(selectedEnrollment)}
+                              className="w-full"
+                              disabled={downloadingDeclarations.has(selectedEnrollment.id)}
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              {downloadingDeclarations.has(selectedEnrollment.id) ? 'Gerando...' : 'Download Declaração de Matrícula'}
+                            </Button>
+                            <Button 
+                              variant="outline"
+                              onClick={() => handleDownloadAllDocuments(selectedEnrollment)}
+                              className="w-full"
+                              disabled={downloadingAll.has(selectedEnrollment.id)}
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              {downloadingAll.has(selectedEnrollment.id) ? 'Baixando...' : '📦 Baixar Todos Documentos'}
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </DialogContent>
